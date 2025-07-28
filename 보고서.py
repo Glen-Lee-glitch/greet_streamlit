@@ -3,20 +3,31 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-# --- 0. 데이터프레임(df) 생성 ---
-df = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="DOA 박민정", header=1)
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+df = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="DOA 박민정", header=1)
 df.drop(columns=['인도일', '알림톡'], inplace=True)
 df.rename(columns={'인도일.1': '인도일'}, inplace=True)
 
-df_1 = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="EV", header=1)
-df_time = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="EV", header=0)
+df_1 = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="EV", header=1)
+df_time = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="EV", header=0)
 update_time_str = df_time.columns[1]
 
-df_2 = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
-df_3 = pd.read_excel(r"C:\Users\HP\Downloads\Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
-df_4 = pd.read_excel(r"C:\Users\HP\Downloads\Ent x Greet Lounge Subsidy.xlsx", sheet_name="지급신청", header=1)
+df_2 = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="지급신청", header=3)
+df_3 = pd.read_excel(os.path.join(current_dir, "Ent x Greet Lounge Subsidy.xlsx"), sheet_name="지원신청", header=0)
+df_4 = pd.read_excel(os.path.join(current_dir, "Ent x Greet Lounge Subsidy.xlsx"), sheet_name="지급신청", header=1)
 
-df_5 = pd.read_excel(r"C:\Users\HP\Desktop\GyeonggooLee\greetlounge\greetlounge\피드백\data\pipeline.xlsx")
+df_5 = pd.read_excel(os.path.join(current_dir, "pipeline.xlsx"))
+
+# --- 모든 날짜 컬럼 전처리 ---
+# 스크립트 전반에서 사용되는 날짜 컬럼들을 한 번에 datetime 형태로 변환합니다.
+# 이렇게 하면 각 섹션에서 데이터 타입을 다시 변환할 필요가 없어져 오류를 방지할 수 있습니다.
+df_5['날짜'] = pd.to_datetime(df_5['날짜'], errors='coerce')
+df_1['신청일자'] = pd.to_datetime(df_1['신청일자'], errors='coerce')
+df_2['배분일'] = pd.to_datetime(df_2['배분일'], errors='coerce')
+df_1['지급신청일자_날짜'] = pd.to_datetime(df_1['지급신청일자'], errors='coerce')
 
 # --- 모든 날짜 컬럼 전처리 ---
 # 스크립트 전반에서 사용되는 날짜 컬럼들을 한 번에 datetime 형태로 변환합니다.
