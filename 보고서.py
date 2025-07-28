@@ -5,21 +5,63 @@ import altair as alt
 
 import os
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
+@st.cache_data
+def load_excel_data(filename, sheet_name=None, header=0):
+    """
+    지정된 Excel 파일과 시트에서 데이터를 로드하는 함수.
+    경로: 앱 파일과 같은 디렉토리 또는 하위 디렉토리에 파일이 있어야 합니다.
+    """
+    try:
+        # 파일이 app.py(보고서.py)와 같은 디렉토리에 있다고 가정합니다.
+        # 만약 파일들이 'data'라는 하위 폴더에 있다면 "data/" + filename 으로 경로를 수정하세요.
+        file_path = filename
+        # 예시: 'data' 폴더에 있다면 file_path = f"data/{filename}"
 
-df = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="DOA 박민정", header=1)
-df.drop(columns=['인도일', '알림톡'], inplace=True)
-df.rename(columns={'인도일.1': '인도일'}, inplace=True)
+        if sheet_name:
+            df = pd.read_excel(file_path, sheet_name=sheet_name, header=header)
+        else:
+            df = pd.read_excel(file_path, header=header)
+        return df
+    except FileNotFoundError:
+        st.error(f"오류: '{filename}' 파일을 찾을 수 없습니다. 파일이 GitHub 저장소에 올바르게 업로드되었고, 경로가 정확한지 확인해주세요.")
+        return pd.DataFrame() # 빈 DataFrame 반환하여 앱이 중단되지 않도록 함
+    except Exception as e:
+        st.error(f"오류 발생 중 '{filename}' 로드: {e}")
+        return pd.DataFrame()
 
-df_1 = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="EV", header=1)
-df_time = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="EV", header=0)
-update_time_str = df_time.columns[1]
+# --------------------------------------------------------------------------------
+# 이제 위에서 정의한 함수를 사용하여 각 DataFrame을 로드합니다.
+# --------------------------------------------------------------------------------
 
-df_2 = pd.read_excel(os.path.join(current_dir, "Greet_Subsidy.xlsx"), sheet_name="지급신청", header=3)
-df_3 = pd.read_excel(os.path.join(current_dir, "Ent x Greet Lounge Subsidy.xlsx"), sheet_name="지원신청", header=0)
-df_4 = pd.read_excel(os.path.join(current_dir, "Ent x Greet Lounge Subsidy.xlsx"), sheet_name="지급신청", header=1)
+# 1. Greet_Subsidy.xlsx - DOA 박민정 시트
+df = load_excel_data("Greet_Subsidy.xlsx", sheet_name="DOA 박민정", header=1)
+if not df.empty: # 오류 없이 로드되었을 경우에만 처리
+    df.drop(columns=['인도일', '알림톡'], inplace=True, errors='ignore') # errors='ignore'를 추가하여 없는 컬럼 삭제 시 오류 방지
+    df.rename(columns={'인도일.1': '인도일'}, inplace=True)
 
-df_5 = pd.read_excel(os.path.join(current_dir, "pipeline.xlsx"))
+# 2. Greet_Subsidy.xlsx - EV 시트 (df_1)
+df_1 = load_excel_data("Greet_Subsidy.xlsx", sheet_name="EV", header=1)
+
+# 3. Greet_Subsidy.xlsx - EV 시트 (업데이트 시간)
+# header=0으로 읽어온 후 두 번째 열 (인덱스 1)의 첫 번째 셀 값을 사용합니다.
+df_time = load_excel_data("Greet_Subsidy.xlsx", sheet_name="EV", header=0)
+update_time_str = ""
+if not df_time.empty and len(df_time.columns) > 1:
+    update_time_str = df_time.columns[1] # 두 번째 컬럼 이름 자체가 업데이트 시간일 수 있음
+    # 만약 업데이트 시간이 첫 번째 행의 두 번째 셀 값이라면:
+    # update_time_str = df_time.iloc[0, 1]
+
+# 4. Greet_Subsidy.xlsx - 지급신청 시트
+df_2 = load_excel_data("Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
+
+# 5. Ent x Greet Lounge Subsidy.xlsx - 지원신청 시트
+df_3 = load_excel_data("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
+
+# 6. Ent x Greet Lounge Subsidy.xlsx - 지급신청 시트
+df_4 = load_excel_data("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지급신청", header=1)
+
+# 7. pipeline.xlsx
+df_5 = load_excel_data("pipeline.xlsx") # 기본 header=0 사용
 
 # --- 모든 날짜 컬럼 전처리 ---
 # 스크립트 전반에서 사용되는 날짜 컬럼들을 한 번에 datetime 형태로 변환합니다.
