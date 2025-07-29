@@ -44,7 +44,7 @@ today_kst = datetime.now(KST).date()
 col1, col2 = st.columns(2)
 with col1:
     # 분기 선택 (전체, 3분기, 2분기)
-    selected_quarter = st.selectbox('분기를 선택하세요', ['전체', '3분기', '2분기'])
+    selected_quarter = st.selectbox('분기를 선택하세요', ['3분기', '2분기', '전체'])
 with col2:
     selected_date = st.date_input('기준 날짜를 선택하세요 (기본값: 금일)', value=today_kst)
 
