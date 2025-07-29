@@ -244,9 +244,22 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     # DataFrame을 HTML로 변환하고, st.markdown을 사용해 출력합니다.
     # escape=False를 설정하여 HTML 태그가 그대로 렌더링되도록 합니다.
     html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
+
+    # --- 헤더에 툴팁 추가 ---
+    header_tooltips = {
+        '메일 건수': '테슬라 측에서 요청한 지원 신청 건',
+        '신청 불가': 'EV로 신청하지 못한 건',
+        '신청 건수': '해당 날짜에 EV에서 신청된 전체 건수',
+        '이전 건': '신청일자와 파이프라인 날짜가 다른 신청 건수',
+        '지급 배분건': '지급 처리 해야 할 건',
+        '지급신청 건수': '지급 처리 완료 건'
+    }
+    for header, tooltip in header_tooltips.items():
+        html_table = html_table.replace(f'<th>{header}</th>', f'<th title="{tooltip}">{header}</th>')
+
     st.markdown(html_table, unsafe_allow_html=True)
 
-    # --- 콜아웃(설명 박스) 추가 ---
+    # --- 콜아웃(설명 박스) 추가 (내용 업데이트) ---
     st.markdown("""
     <style>
     .callout {
@@ -259,11 +272,11 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     }
     </style>
     <div class="callout">
-    ※ 영업일 기준<br>
+    ※ 영업일 기준 (각 헤더에 마우스를 올리면 상세 설명을 볼 수 있습니다.)<br>
     ※ 메일 건수: 테슬라 측에서 요청한 지원 신청 건<br>
     ※ 신청 불가: EV로 신청하지 못한 건<br>
-    ※ 신청 건수: (금일 파이프라인 중) 실제로 EV에서 신청한 건<br>
-    ※ 이전 건: (이전 일자 파이프라인 중) 실제로 EV에서 신청한 건<br>
+    ※ 신청 건수: 해당 날짜에 EV에서 신청된 전체 건수<br>
+    ※ 이전 건: 신청일자와 파이프라인 날짜가 다른 신청 건수<br>
     ※ 지급 배분건: 지급 처리 해야 할 건<br>
     ※ 지급신청 건수: 지급 처리 완료 건
     </div>
