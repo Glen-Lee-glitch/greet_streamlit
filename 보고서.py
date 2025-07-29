@@ -603,6 +603,7 @@ if has_all_cols:
 
     df_total.loc['벌크', ('지원', '신청(건)', '누계')] = new_bulk_count
     df_total.loc['낱개', ('지원', '신청(건)', '누계')] = new_single_sum
+    df_total.loc['TTL', ('지원', '신청(건)', '누계')] = new_bulk_count + new_single_sum
      
     # 지급 데이터 채우기
     df_total.loc['벌크', ('지급', '파이프라인', '대수')] = give_bulk_sum
@@ -615,6 +616,7 @@ if has_all_cols:
 
     df_total.loc['벌크', ('지급', '신청(건)', '누계')] = give_bulk_count
     df_total.loc['낱개', ('지급', '신청(건)', '누계')] = give_single_sum
+    df_total.loc['TTL', ('지급', '신청(건)', '누계')] = give_bulk_count + give_single_sum
      
     # '당일' 컬럼은 manager.py에 계산 로직이 없으므로 0으로 유지됩니다.
      
