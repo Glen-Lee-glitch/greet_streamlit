@@ -124,16 +124,42 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     df_matched_total = df[df['RN'].isin(rns_total)]
     cnt_ineligible_total = int(df_matched_total.loc[~df_matched_total['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
 
-    # '신청 불가' 셀을 클릭 가능한 링크로 만들기 위한 함수
-    def create_ineligible_link(count, day_identifier):
+    # --- 툴팁 및 링크 생성 로직 ---
+    def format_tooltip_text(ineligible_df):
+        """툴팁에 표시할 문자열을 생성합니다."""
+        if ineligible_df.empty:
+            return "내역 없음"
+        # 툴팁에 표시할 최대 항목 수
+        df_limited = ineligible_df.head(5)
+        # HTML title 속성에서 줄바꿈은 &#10; 사용, 따옴표는 &quot;로 변환
+        tooltip_lines = []
+        for _, row in df_limited.iterrows():
+            rn = str(row['RN']).replace('"', '&quot;')
+            note = str(row['Greet Note']).replace('"', '&quot;')
+            tooltip_lines.append(f"{rn}: {note}")
+        
+        tooltip_text = "&#10;".join(tooltip_lines)
+        if len(ineligible_df) > 5:
+            tooltip_text += f"&#10;...외 {len(ineligible_df) - 5}건 더 보기 (클릭)"
+        return tooltip_text
+
+    # 툴팁에 표시할 데이터프레임 생성
+    ineligible_df_yesterday = df_matched_yesterday.loc[~df_matched_yesterday['Greet Note'].astype(str).str.contains('#', na=False), ['RN', 'Greet Note']]
+    ineligible_df_today = df_matched_today.loc[~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False), ['RN', 'Greet Note']]
+
+    # 툴팁 텍스트 생성
+    tooltip_yesterday = format_tooltip_text(ineligible_df_yesterday)
+    tooltip_today = format_tooltip_text(ineligible_df_today)
+
+    # '신청 불가' 셀을 클릭 가능한 링크(툴팁 포함)로 만들기
+    def create_ineligible_link_with_tooltip(count, day_identifier, tooltip=""):
         if count > 0:
-            # st.query_params를 사용하여 상태를 URL에 저장합니다.
-            return f'<a href="?show_ineligible={day_identifier}" target="_self" style="color: blue; text-decoration: underline;">{count}</a>'
+            return f'<a href="?show_ineligible={day_identifier}" target="_self" title="{tooltip}" style="color: blue; text-decoration: underline;">{count}</a>'
         return str(count)
 
     # HTML 링크 생성
-    ineligible_yesterday_html = create_ineligible_link(cnt_ineligible_yesterday, 'yesterday')
-    ineligible_today_html = create_ineligible_link(cnt_ineligible_today, 'today')
+    ineligible_yesterday_html = create_ineligible_link_with_tooltip(cnt_ineligible_yesterday, 'yesterday', tooltip_yesterday)
+    ineligible_today_html = create_ineligible_link_with_tooltip(cnt_ineligible_today, 'today', tooltip_today)
 
     # '변동' 행 계산
     delta_mail = cnt_today_mail - cnt_yesterday_mail
