@@ -10,6 +10,21 @@ def preprocess_and_save_data():
         # --- 1. 데이터 로딩 ---
         df = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="DOA 박민정", header=1)
         df_1 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=1)
+
+        # EV_Q2.xlsx (2분기 데이터) 병합 로직
+        try:
+            df_1_q2 = pd.read_excel("EV_Q2.xlsx")
+            # df_1에 있는 '제조수입사\n관리번호'를 기준으로 중복 제거
+            existing_ids = df_1['제조수입사\n관리번호'].dropna().unique()
+            df_1_q2_filtered = df_1_q2[~df_1_q2['제조수입사\n관리번호'].isin(existing_ids)]
+            
+            # 필터링된 2분기 데이터를 기존 df_1에 추가
+            df_1 = pd.concat([df_1, df_1_q2_filtered], ignore_index=True)
+            print("EV_Q2.xlsx 데이터를 성공적으로 병합하였습니다.")
+        except FileNotFoundError:
+            # EV_Q2.xlsx 파일이 없는 경우를 대비하여 경고 메시지만 출력하고 계속 진행
+            print("경고: EV_Q2.xlsx 파일을 찾을 수 없습니다. 해당 파일 없이 전처리를 계속합니다.")
+
         df_time = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=0)
         df_2 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
         df_3 = pd.read_excel("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
