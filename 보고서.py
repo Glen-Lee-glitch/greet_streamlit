@@ -361,8 +361,41 @@ if '날짜' in df_5.columns and '신청일자' in df_1.columns:
 else:
     st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
+# --- 4. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
+st.write("---") # 구분선
+st.write("### 4. 최근 5 영업일 메일/신청 건수 (주말 제외)")
+if '날짜' in df_5.columns and '신청일자' in df_1.columns:
+    last_5_bdays_index = pd.bdate_range(end=pd.Timestamp(selected_date), periods=5)
+    last_5_bdays_list = last_5_bdays_index.to_list()
+    # 메일 건수
+    df_recent = df_5[df_5['날짜'].dt.normalize().isin(last_5_bdays_list)]
+    mail_counts = df_recent['날짜'].dt.normalize().value_counts().reindex(last_5_bdays_index, fill_value=0).sort_index()
+    # 신청 건수
+    df1_recent = df_1[df_1['신청일자'].dt.normalize().isin(last_5_bdays_list)]
+    apply_counts = df1_recent['신청일자'].dt.normalize().value_counts().reindex(last_5_bdays_index, fill_value=0).sort_index()
+    # 날짜 인덱스 문자열 변환
+    idx_str = pd.to_datetime(last_5_bdays_index).strftime('%Y-%m-%d')
+    # DataFrame for bar chart
+    chart_df = pd.DataFrame({
+        '날짜': idx_str,
+        '메일 건수': mail_counts.values,
+        '신청 건수': apply_counts.values
+    })
+    # melt로 long-form 변환
+    chart_long = chart_df.melt(id_vars='날짜', var_name='구분', value_name='건수')
+    # Altair 그룹형(날짜별 두 막대) 막대그래프
+    bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
+        x=alt.X('날짜:N', title='날짜', axis=alt.Axis(labelAngle=-45)),
+        xOffset='구분:N',  # 날짜별로 두 막대가 나란히!
+        y=alt.Y('건수:Q', title='건수'),
+        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+        tooltip=['날짜', '구분', '건수']
+    ).properties(width=200)
+    st.altair_chart(bar_chart, use_container_width=True)
+else:
+    st.warning("'접수메일\\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
-# --- 4. 현재 EV 신청단계 별 건수 ---
+# --- 5. 현재 EV 신청단계 별 건수 ---
 st.write("---") # 구분선
 st.write("### 5. 현재 EV 신청단계 별 건수")
 st.write(f"**업데이트 시간: {update_time_str}**")
