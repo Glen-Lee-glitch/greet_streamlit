@@ -2,21 +2,28 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
+import pickle
+import sys
 
 # --- 0. 데이터프레임(df) 생성 ---
-df = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="DOA 박민정", header=1)
-df.drop(columns=['인도일', '알림톡'], inplace=True)
-df.rename(columns={'인도일.1': '인도일'}, inplace=True)
+# 전처리된 데이터를 로드합니다.
+try:
+    with open("preprocessed_data.pkl", "rb") as f:
+        data = pickle.load(f)
+    
+    df = data["df"]
+    df_1 = data["df_1"]
+    df_2 = data["df_2"]
+    df_3 = data["df_3"]
+    df_4 = data["df_4"]
+    df_5 = data["df_5"]
+    update_time_str = data["update_time_str"]
+except FileNotFoundError:
+    st.error("전처리된 데이터 파일(preprocessed_data.pkl)을 찾을 수 없습니다.")
+    st.info("먼저 '전처리.py'를 실행하여 데이터 파일을 생성해주세요.")
+    # 앱 실행을 중단하여 더 이상 진행되지 않도록 함
+    sys.exit()
 
-df_1 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=1)
-df_time = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=0)
-update_time_str = df_time.columns[1]
-
-df_2 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
-df_3 = pd.read_excel("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
-df_4 = pd.read_excel("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지급신청", header=1)
-
-df_5 = pd.read_excel("pipeline.xlsx")
 
 # --- 모든 날짜 컬럼 전처리 ---
 # 스크립트 전반에서 사용되는 날짜 컬럼들을 한 번에 datetime 형태로 변환합니다.
