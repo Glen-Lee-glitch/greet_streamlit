@@ -113,6 +113,15 @@ def preprocess_and_save_data():
         update_time_str = df_time.columns[1]
 
         # 날짜 컬럼 타입 변환
+
+        # 'MM월 DD일' 같은 비표준 날짜 형식을 pandas가 인식할 수 있도록 표준화합니다.
+        if '날짜' in df_5.columns:
+            # 먼저 컬럼을 문자열 타입으로 변환하여 안전하게 문자열 함수를 사용합니다.
+            df_5['날짜'] = df_5['날짜'].astype(str)
+            # 정규표현식을 사용하여 'MM월 DD일' 패턴을 'MM-DD'로 변경합니다.
+            # 예: '04월 04일' -> '04-04'
+            df_5['날짜'] = df_5['날짜'].str.replace(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일', r'\1-\2', regex=True)
+
         df_5['날짜'] = pd.to_datetime(df_5['날짜'], errors='coerce')
         df_1['신청일자'] = pd.to_datetime(df_1['신청일자'], errors='coerce')
         df_2['배분일'] = pd.to_datetime(df_2['배분일'], errors='coerce')
