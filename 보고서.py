@@ -319,79 +319,56 @@ else:
 st.write("---") # 구분선
 st.write("### 3. 월별 데이터 4월(2분기) 부터")
 
-# --- 월별 데이터 차트 ---
+# --- 월별 데이터 차트 (월간 합계) ---
 if '날짜' in df_5.columns and '신청일자' in df_1.columns:
-    # 선택된 날짜가 속한 월의 데이터만 필터링
-    selected_month = selected_date.month
-    selected_year = selected_date.year
     
-    # 분기 선택에 따라 데이터 필터링 (df_5, df_1)
-    if selected_quarter == '전체':
-        df_5_monthly = df_5[(df_5['날짜'].dt.month == selected_month) & (df_5['날짜'].dt.year == selected_year)]
-        df_1_monthly = df_1[(df_1['신청일자'].dt.month == selected_month) & (df_1['신청일자'].dt.year == selected_year)]
-    else:
-        df_5_monthly = df_5[(df_5['분기'] == selected_quarter) & (df_5['날짜'].dt.month == selected_month) & (df_5['날짜'].dt.year == selected_year)]
-        df_1_monthly = df_1[(df_1['분기'] == selected_quarter) & (df_1['신청일자'].dt.month == selected_month) & (df_1['신청일자'].dt.year == selected_year)]
+    # 분기 선택에 따라 집계할 월 결정
+    if selected_quarter == '2분기':
+        months_to_show = [4, 5, 6]
+        chart_title = f"{selected_date.year}년 2분기 월별 합계"
+    elif selected_quarter == '3분기':
+        months_to_show = [7, 8, 9]
+        chart_title = f"{selected_date.year}년 3분기 월별 합계"
+    else: # '전체'
+        # 4월부터 데이터가 있는 모든 월을 포함
+        all_months = pd.concat([df_5['날짜'].dt.month, df_1['신청일자'].dt.month]).dropna().unique()
+        months_to_show = sorted([m for m in all_months if m >= 4])
+        chart_title = f"{selected_date.year}년 월별 합계 (4월~)"
 
-    # 일자별로 데이터 집계
-    mail_counts = df_5_monthly['날짜'].dt.date.value_counts().sort_index()
-    apply_counts = df_1_monthly['신청일자'].dt.date.value_counts().sort_index()
+    # 해당 월 데이터 필터링
+    df_5_filtered_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
+    df_1_filtered_monthly = df_1[(df_1['신청일자'].dt.year == selected_date.year) & (df_1['신청일자'].dt.month.isin(months_to_show))]
+
+    # 월별 합계 계산
+    mail_counts = df_5_filtered_monthly.groupby(df_5_filtered_monthly['날짜'].dt.month).size()
+    apply_counts = df_1_filtered_monthly.groupby(df_1_filtered_monthly['신청일자'].dt.month).size()
 
     # 차트용 데이터프레임 생성
-    chart_df = pd.DataFrame({'메일 건수': mail_counts, '신청 건수': apply_counts}).fillna(0).astype(int).reset_index()
-    chart_df = chart_df.rename(columns={'index': '날짜'})
+    chart_df = pd.DataFrame(
+        {'메일 건수': mail_counts, '신청 건수': apply_counts},
+        index=pd.Index(months_to_show, name='월')
+    ).fillna(0).astype(int).reset_index()
     
+    # '월' 컬럼을 '4월', '5월' 형태로 변환
+    chart_df['월'] = chart_df['월'].astype(str) + '월'
+
     # melt로 long-form 변환
-    chart_long = chart_df.melt(id_vars='날짜', var_name='구분', value_name='건수')
-    chart_long['날짜'] = chart_long['날짜'].astype(str) # Altair가 날짜를 올바르게 인식하도록 형변환
+    chart_long = chart_df.melt(id_vars='월', var_name='구분', value_name='건수')
 
     # Altair 그룹형 막대그래프 생성
-    bar_chart = alt.Chart(chart_long).mark_bar(size=15).encode(
-        x=alt.X('날짜:N', title='날짜', axis=alt.Axis(labelAngle=-45)),
+    bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
+        x=alt.X('월:N', title='월', sort=[f"{m}월" for m in months_to_show]),
+        xOffset='구분:N',
         y=alt.Y('건수:Q', title='건수'),
         color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
-        tooltip=['날짜', '구분', '건수']
+        tooltip=['월', '구분', '건수']
     ).properties(
-        title=f"{selected_year}년 {selected_month}월 데이터"
+        title=chart_title
     )
-
     st.altair_chart(bar_chart, use_container_width=True)
 else:
     st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
-# --- 4. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
-st.write("---") # 구분선
-st.write("### 4. 최근 5 영업일 메일/신청 건수 (주말 제외)")
-if '날짜' in df_5.columns and '신청일자' in df_1.columns:
-    last_5_bdays_index = pd.bdate_range(end=pd.Timestamp(selected_date), periods=5)
-    last_5_bdays_list = last_5_bdays_index.to_list()
-    # 메일 건수
-    df_recent = df_5[df_5['날짜'].dt.normalize().isin(last_5_bdays_list)]
-    mail_counts = df_recent['날짜'].dt.normalize().value_counts().reindex(last_5_bdays_index, fill_value=0).sort_index()
-    # 신청 건수
-    df1_recent = df_1[df_1['신청일자'].dt.normalize().isin(last_5_bdays_list)]
-    apply_counts = df1_recent['신청일자'].dt.normalize().value_counts().reindex(last_5_bdays_index, fill_value=0).sort_index()
-    # 날짜 인덱스 문자열 변환
-    idx_str = pd.to_datetime(last_5_bdays_index).strftime('%Y-%m-%d')
-    # DataFrame for bar chart
-    chart_df = pd.DataFrame({
-        '날짜': idx_str,
-        '메일 건수': mail_counts.values,
-        '신청 건수': apply_counts.values
-    })
-    # melt로 long-form 변환
-    chart_long = chart_df.melt(id_vars='날짜', var_name='구분', value_name='건수')
-    # Altair 그룹형(날짜별 두 막대) 막대그래프
-    bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
-        x=alt.X('날짜:N', title='날짜', axis=alt.Axis(labelAngle=-45)),
-        xOffset='구분:N',  # 날짜별로 두 막대가 나란히!
-        y=alt.Y('건수:Q', title='건수'),
-        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
-        tooltip=['날짜', '구분', '건수']
-    ).properties(width=200)
-    st.altair_chart(bar_chart, use_container_width=True)
-else:
-    st.warning("'접수메일\\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
 # --- 4. 현재 EV 신청단계 별 건수 ---
 st.write("---") # 구분선
