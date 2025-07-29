@@ -350,7 +350,7 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
         st.markdown(period_html_table, unsafe_allow_html=True)
 
 else:
-    st.warning("필요한 컬럼('접수메일\\n도착일', 'RN', '신청일자', '배분일', '지급신청일자')을 찾을 수 없습니다.")
+    st.warning("필요한 컬럼('접수메일\n도착일', 'RN', '신청일자', '배분일', '지급신청일자')을 찾을 수 없습니다.")
 
 # --- 3. 월별 데이터 (4월~) ---
 st.write("---") # 구분선
@@ -471,7 +471,7 @@ if '날짜' in df_5.columns and '신청일자' in df_1.columns:
     ).properties(width=200)
     st.altair_chart(bar_chart, use_container_width=True)
 else:
-    st.warning("'접수메일\\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
+    st.warning("'접수메일\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
 # --- 6. 현재 EV 신청단계 별 건수 ---
 st.write("---") # 구분선

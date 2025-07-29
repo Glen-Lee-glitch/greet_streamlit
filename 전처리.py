@@ -25,12 +25,12 @@ def preprocess_and_save_data():
         ]
         
         # 3분기 데이터에서 예외 RN들을 먼저 제거
-        df_1_q3 = df_1_q3[~df_1_q3['제조수입사\\n관리번호'].isin(forced_q2_rns)]
+        df_1_q3 = df_1_q3[~df_1_q3['제조수입사\n관리번호'].isin(forced_q2_rns)]
         print(f"3분기 데이터에서 예외 처리 RN {len(forced_q2_rns)}건을 제거했습니다.")
         
         # 나머지 중복 제거 로직 수행
-        existing_ids = df_1_q3['제조수입사\\n관리번호'].dropna().unique()
-        df_1_q2_filtered = df_1_q2[~df_1_q2['제조수입사\\n관리번호'].isin(existing_ids)]
+        existing_ids = df_1_q3['제조수입사\n관리번호'].dropna().unique()
+        df_1_q2_filtered = df_1_q2[~df_1_q2['제조수입사\n관리번호'].isin(existing_ids)]
         df_1 = pd.concat([df_1_q3, df_1_q2_filtered], ignore_index=True)
         print("EV 데이터를 중복 제거 후 병합하였습니다.")
 
