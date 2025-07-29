@@ -513,10 +513,16 @@ if has_all_cols:
         df_cumulative = df[df[date_col].notna() & (df[date_col].dt.date <= end_date)]
         # '접수 완료' 필터
         df_cumulative = df_cumulative[df_cumulative['접수 완료'].astype(str).str.strip().isin(['O', 'ㅇ'])]
-        # 'Greet Note'에 '취소'가 포함된 경우 제외
-        if '그리트 노트' in df_cumulative.columns:
-            df_cumulative = df_cumulative[~df_cumulative['그리트 노트'].astype(str).str.contains('취소', na=False)]
         
+        # '그리트 노트'에 '취소'가 포함된 경우 제외 (단, '취소 후 재신청'은 포함)
+        if '그리트 노트' in df_cumulative.columns:
+            # '취소'는 포함하지만 '취소 후 재신청'은 포함하지 않는 경우를 찾음
+            is_cancelled = df_cumulative['그리트 노트'].astype(str).str.contains('취소', na=False)
+            is_reapplied = df_cumulative['그리트 노트'].astype(str).str.contains('취소 후 재신청', na=False)
+            
+            # '취소'만 있고 '취소 후 재신청'이 없는 행만 제외
+            df_cumulative = df_cumulative[~(is_cancelled & ~is_reapplied)]
+            
         # 기타 필터
         b_col_name = df_cumulative.columns[1]
         df_cumulative = df_cumulative[df_cumulative[b_col_name].notna() & (df_cumulative[b_col_name] != "")]
