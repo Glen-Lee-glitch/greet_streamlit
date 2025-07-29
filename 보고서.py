@@ -78,26 +78,19 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     df1_yesterday = df_1_filtered[df_1_filtered['신청일자'].dt.date == day1]
     rns_from_df5_yesterday = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day1, 'RN']
     cnt_yesterday_apply = df1_yesterday.loc[df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
-    
-    # '이전 건' 계산 시에는 전체 df_1을 사용해야 하므로 별도 필터링
-    df1_yesterday_full = df_1[df_1['신청일자'].dt.date == day1]
-    cnt_yesterday_previous = df1_yesterday_full.loc[~df1_yesterday_full['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
+    cnt_yesterday_previous = df1_yesterday.loc[~df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
 
     # 금일 (df_1_filtered 사용)
     df1_today = df_1_filtered[df_1_filtered['신청일자'].dt.date == day0]
     rns_from_df5_today = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day0, 'RN']
     cnt_today_apply = df1_today.loc[df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
-
-    df1_today_full = df_1[df_1['신청일자'].dt.date == day0]
-    cnt_today_previous = df1_today_full.loc[~df1_today_full['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
+    cnt_today_previous = df1_today.loc[~df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
 
     # 누적 (df_1_filtered 사용)
     df1_total = df_1_filtered[df_1_filtered['신청일자'].dt.date <= day0]
     rns_from_df5_total = df_5_filtered.loc[df_5_filtered['날짜'].dt.date <= day0, 'RN']
     cnt_total_apply = df1_total.loc[df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
-
-    df1_total_full = df_1[df_1['신청일자'].dt.date <= day0]
-    cnt_total_previous = df1_total_full.loc[~df1_total_full['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
+    cnt_total_previous = df1_total.loc[~df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
 
     # 지급/요청 건수 계산 (df_2_filtered, df_1_filtered 사용)
     cnt_today_distribute = (df_2_filtered['배분일'].dt.date == day0).sum()
