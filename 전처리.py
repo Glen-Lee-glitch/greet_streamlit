@@ -24,7 +24,7 @@ def preprocess_and_save_data():
 
         # 2분기 데이터 로드
         try:
-            df_1_q2 = pd.read_excel("EV_Q2.xlsx")
+            df_1_q2 = pd.read_excel("EV_Q2.xlsx") # header=1 제거
             df_1_q2['분기'] = '2분기'
             print("EV_Q2.xlsx(2분기)를 성공적으로 로드했습니다.")
         except FileNotFoundError:
