@@ -24,12 +24,39 @@ def preprocess_and_save_data():
         except FileNotFoundError:
             # EV_Q2.xlsx 파일이 없는 경우를 대비하여 경고 메시지만 출력하고 계속 진행
             print("경고: EV_Q2.xlsx 파일을 찾을 수 없습니다. 해당 파일 없이 전처리를 계속합니다.")
+        except Exception as e:
+            print(f"EV_Q2.xlsx 처리 중 오류가 발생했습니다: {e}")
 
         df_time = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=0)
         df_2 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
         df_3 = pd.read_excel("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
         df_4 = pd.read_excel("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지급신청", header=1)
-        df_5 = pd.read_excel("pipeline.xlsx")
+        
+        # pipeline.xlsx의 두 시트(3분기, 2분기)를 읽어와 병합
+        df_5_list = []
+        try:
+            df_5_q3 = pd.read_excel("pipeline.xlsx", sheet_name='Sheet1')
+            df_5_q3['분기'] = '3분기'
+            df_5_list.append(df_5_q3)
+            print("pipeline.xlsx의 Sheet1(3분기)을 성공적으로 로드했습니다.")
+        except Exception as e:
+            print(f"경고: pipeline.xlsx의 Sheet1을 읽는 중 오류가 발생했습니다: {e}")
+
+        try:
+            df_5_q2 = pd.read_excel("pipeline.xlsx", sheet_name='Sheet2')
+            df_5_q2['분기'] = '2분기'
+            df_5_list.append(df_5_q2)
+            print("pipeline.xlsx의 Sheet2(2분기)를 성공적으로 로드했습니다.")
+        except Exception as e:
+            print(f"정보: pipeline.xlsx에 Sheet2가 없습니다. ({e})")
+        
+        if df_5_list:
+            df_5 = pd.concat(df_5_list, ignore_index=True)
+        else:
+            # 파일을 전혀 읽지 못한 경우, 오류 방지를 위해 빈 데이터프레임 생성
+            df_5 = pd.DataFrame(columns=['날짜', 'RN', '분기'])
+            print("경고: pipeline.xlsx에서 데이터를 읽지 못했습니다.")
+
         print("엑셀 파일 로딩 완료.")
 
         # --- 2. 데이터 전처리 ---

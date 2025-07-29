@@ -39,7 +39,14 @@ import pytz
 
 KST = pytz.timezone('Asia/Seoul')
 today_kst = datetime.now(KST).date()
-selected_date = st.date_input('기준 날짜를 선택하세요 (기본값: 금일)', value=today_kst)
+
+# --- 분기 및 날짜 선택 UI ---
+col1, col2 = st.columns(2)
+with col1:
+    # 분기 선택 (전체, 3분기, 2분기)
+    selected_quarter = st.selectbox('분기를 선택하세요', ['전체', '3분기', '2분기'])
+with col2:
+    selected_date = st.date_input('기준 날짜를 선택하세요 (기본값: 금일)', value=today_kst)
 
 # --- 1. 전날, 금일 메일/신청/지급 배분 건수 ---
 st.write("### 1. 전날, 금일 메일/신청/지급 배분 건수")
@@ -47,31 +54,37 @@ st.write("### 1. 전날, 금일 메일/신청/지급 배분 건수")
 # 컬럼 존재 여부 확인
 if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.columns and '배분일' in df_2.columns and '지급신청일자' in df_1.columns:
     
+    # --- 선택된 분기에 따라 df_5 필터링 ---
+    if selected_quarter == '전체':
+        df_5_filtered = df_5
+    else:
+        df_5_filtered = df_5[df_5['분기'] == selected_quarter]
+
     # 날짜 변수 설정
     day0 = selected_date
     # '전일'을 주말을 제외한 가장 최근의 영업일로 계산합니다.
     day1 = (pd.to_datetime(selected_date) - pd.tseries.offsets.BDay(1)).date()
 
-    # 날짜별 건수 계산 (파이프라인: df_5)
-    cnt_today_mail = (df_5['날짜'].dt.date == day0).sum()
-    cnt_yesterday_mail = (df_5['날짜'].dt.date == day1).sum()
-    cnt_total_mail = (df_5['날짜'].dt.date <= day0).sum()
+    # 날짜별 건수 계산 (파이프라인: df_5_filtered 사용)
+    cnt_today_mail = (df_5_filtered['날짜'].dt.date == day0).sum()
+    cnt_yesterday_mail = (df_5_filtered['날짜'].dt.date == day1).sum()
+    cnt_total_mail = (df_5_filtered['날짜'].dt.date <= day0).sum()
 
     # 전일
     df1_yesterday = df_1[df_1['신청일자'].dt.date == day1]
-    rns_from_df5_yesterday = df_5.loc[df_5['날짜'].dt.date == day1, 'RN']
+    rns_from_df5_yesterday = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day1, 'RN']
     cnt_yesterday_apply = df1_yesterday.loc[df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
     cnt_yesterday_previous = df1_yesterday.loc[~df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
 
     # 금일
     df1_today = df_1[df_1['신청일자'].dt.date == day0]
-    rns_from_df5_today = df_5.loc[df_5['날짜'].dt.date == day0, 'RN']
+    rns_from_df5_today = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day0, 'RN']
     cnt_today_apply = df1_today.loc[df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
     cnt_today_previous = df1_today.loc[~df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
 
     # 누적
     df1_total = df_1[df_1['신청일자'].dt.date <= day0]
-    rns_from_df5_total = df_5.loc[df_5['날짜'].dt.date <= day0, 'RN']
+    rns_from_df5_total = df_5_filtered.loc[df_5_filtered['날짜'].dt.date <= day0, 'RN']
     cnt_total_apply = df1_total.loc[df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
     cnt_total_previous = df1_total.loc[~df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
 
@@ -86,17 +99,17 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     
     # '신청 불가' 건수 계산
     # 전일
-    rns_yesterday = df_5.loc[df_5['날짜'].dt.date == day1, 'RN']
+    rns_yesterday = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day1, 'RN']
     df_matched_yesterday = df[df['RN'].isin(rns_yesterday)]
     cnt_ineligible_yesterday = int(df_matched_yesterday.loc[~df_matched_yesterday['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
 
     # 금일
-    rns_today = df_5.loc[df_5['날짜'].dt.date == day0, 'RN']
+    rns_today = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day0, 'RN']
     df_matched_today = df[df['RN'].isin(rns_today)]
     cnt_ineligible_today = int(df_matched_today.loc[~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
 
     # 누적
-    rns_total = df_5.loc[df_5['날짜'].dt.date <= day0, 'RN']
+    rns_total = df_5_filtered.loc[df_5_filtered['날짜'].dt.date <= day0, 'RN']
     df_matched_total = df[df['RN'].isin(rns_total)]
     cnt_ineligible_total = int(df_matched_total.loc[~df_matched_total['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
 
