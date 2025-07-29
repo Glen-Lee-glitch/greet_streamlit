@@ -26,8 +26,6 @@ except FileNotFoundError:
 
 
 # --- 모든 날짜 컬럼 전처리 ---
-# 스크립트 전반에서 사용되는 날짜 컬럼들을 한 번에 datetime 형태로 변환합니다.
-# 이렇게 하면 각 섹션에서 데이터 타입을 다시 변환할 필요가 없어져 오류를 방지할 수 있습니다.
 df_5['날짜'] = pd.to_datetime(df_5['날짜'], errors='coerce')
 df_1['신청일자'] = pd.to_datetime(df_1['신청일자'], errors='coerce')
 df_2['배분일'] = pd.to_datetime(df_2['배분일'], errors='coerce')
@@ -361,9 +359,50 @@ if '날짜' in df_5.columns and '신청일자' in df_1.columns:
 else:
     st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
-# --- 4. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
+# --- 4. 분기별 메일/신청 건수 ---
 st.write("---") # 구분선
-st.write("### 4. 최근 5 영업일 메일/신청 건수 (주말 제외)")
+st.write("### 4. 분기별 메일/신청 건수")
+
+if '날짜' in df_5.columns and '신청일자' in df_1.columns:
+    # 분기 구분 기준 날짜 설정
+    quarter_split_date = pd.to_datetime('2025-06-23').date()
+
+    # 메일 건수 분기별 집계
+    q2_mail_count = df_5[df_5['날짜'].dt.date < quarter_split_date].shape[0]
+    q3_mail_count = df_5[df_5['날짜'].dt.date >= quarter_split_date].shape[0]
+
+    # 신청 건수 분기별 집계
+    q2_apply_count = df_1[df_1['신청일자'].dt.date < quarter_split_date].shape[0]
+    q3_apply_count = df_1[df_1['신청일자'].dt.date >= quarter_split_date].shape[0]
+    
+    # 차트용 데이터프레임 생성
+    quarter_chart_df = pd.DataFrame({
+        '분기': ['2분기', '3분기'],
+        '메일 건수': [q2_mail_count, q3_mail_count],
+        '신청 건수': [q2_apply_count, q3_apply_count]
+    })
+    
+    # melt로 long-form 변환
+    quarter_chart_long = quarter_chart_df.melt(id_vars='분기', var_name='구분', value_name='건수')
+    
+    # Altair 그룹형 막대그래프 생성
+    quarter_bar_chart = alt.Chart(quarter_chart_long).mark_bar(size=40).encode(
+        x=alt.X('분기:N', title='분기'),
+        xOffset='구분:N',
+        y=alt.Y('건수:Q', title='건수'),
+        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+        tooltip=['분기', '구분', '건수']
+    ).properties(
+        title='분기별 메일/신청 건수 합계'
+    )
+    
+    st.altair_chart(quarter_bar_chart, use_container_width=True)
+else:
+    st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
+
+# --- 5. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
+st.write("---") # 구분선
+st.write("### 5. 최근 5 영업일 메일/신청 건수 (주말 제외)")
 if '날짜' in df_5.columns and '신청일자' in df_1.columns:
     last_5_bdays_index = pd.bdate_range(end=pd.Timestamp(selected_date), periods=5)
     last_5_bdays_list = last_5_bdays_index.to_list()
@@ -395,9 +434,9 @@ if '날짜' in df_5.columns and '신청일자' in df_1.columns:
 else:
     st.warning("'접수메일\\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
-# --- 5. 현재 EV 신청단계 별 건수 ---
+# --- 6. 현재 EV 신청단계 별 건수 ---
 st.write("---") # 구분선
-st.write("### 5. 현재 EV 신청단계 별 건수")
+st.write("### 6. 현재 EV 신청단계 별 건수")
 st.write(f"**업데이트 시간: {update_time_str}**")
 
 # df_1 (EV 시트)에 필요한 컬럼들이 있는지 확인
@@ -420,9 +459,9 @@ if '신청단계' in df_1.columns and '지역구분' in df_1.columns:
 else:
     st.warning("EV 시트(df_1)에서 '신청단계' 또는 '지역구분' 컬럼을 찾을 수 없습니다.")
 
-# --- 6. 법인팀 요약 ---
+# --- 7. 법인팀 요약 ---
 st.write("---") # 구분선
-st.write("### 6. 법인팀 요약")
+st.write("### 7. 법인팀 요약")
 
 # 필요한 컬럼 목록 정의
 required_cols_df3 = ['신청 요청일', '접수 완료', '신청대수']
