@@ -246,14 +246,17 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
 
     # --- 헤더에 툴팁 추가 ---
+    # 툴팁 및 설명 텍스트를 한 곳에서 정의하여 중복을 줄입니다.
     header_tooltips = {
         '메일 건수': '테슬라 측에서 요청한 지원 신청 건',
         '신청 불가': 'EV로 신청하지 못한 건',
         '신청 건수': '해당 날짜에 EV에서 신청된 전체 건수',
-        '이전 건': '당일 파이프라인이 아닌 이전 날짜에 신청한 건',
+        '이전 건': '당일 파이프라인이 아닌 이전 날짜에 신청한 건\nEX) 7월 28일 파이프라인 건 -> 지자체 오픈 7월 29일 -> 7월 29일 신청',
         '지급 배분건': '지급 처리 해야 할 건',
         '지급신청 건수': '지급 처리 완료 건'
     }
+
+    # 헤더에 툴팁 추가
     for header, tooltip in header_tooltips.items():
         html_table = html_table.replace(f'<th>{header}</th>', f'<th title="{tooltip}">{header}</th>')
 
@@ -261,20 +264,19 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
 
     # --- 콜아웃(설명 박스)을 토글 방식으로 변경 ---
     with st.expander("설명 보기/숨기기 (클릭)"):
-        st.markdown("""
-        - **메일 건수**: 테슬라 측에서 요청한 지원 신청 건
-        - **신청 불가**: EV로 신청하지 못한 건
-        - **신청 건수**: 해당 날짜에 EV에서 신청된 전체 건수
-        - **이전 건**: 당일 파이프라인이 아닌 이전 날짜에 신청한 건
-        - **지급 배분건**: 지급 처리 해야 할 건
-        - **지급신청 건수**: 지급 처리 완료 건
+        # header_tooltips를 활용하여 설명을 자동 생성
+        설명_리스트 = "\n".join(
+            [f"- **{header}**: {tooltip.replace(chr(10), '<br>')}" for header, tooltip in header_tooltips.items()]
+        )
+        st.markdown(f"""
+        {설명_리스트}
         
         *각 표의 헤더에 마우스를 올리면 더 상세한 설명을 볼 수 있습니다.*
-        """)
+        """, unsafe_allow_html=True)
 
-    # --- 1-2. 기간별 합계 테이블 ---
+    # --- 2. 기간별 합계 테이블 ---
     st.write("---") # 구분선
-    st.write("### 1-1. 기간별 합계")
+    st.write("### 2. 기간별 합계")
     
     # 기간 선택 UI
     col1, col2 = st.columns(2)
@@ -313,9 +315,9 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
 else:
     st.warning("필요한 컬럼('접수메일\\n도착일', 'RN', '신청일자', '배분일', '지급신청일자')을 찾을 수 없습니다.")
 
-# --- 2. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
+# --- 3. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
 st.write("---") # 구분선
-st.write("### 2. 최근 5 영업일 메일/신청 건수 (주말 제외)")
+st.write("### 3. 최근 5 영업일 메일/신청 건수 (주말 제외)")
 if '날짜' in df_5.columns and '신청일자' in df_1.columns:
     last_5_bdays_index = pd.bdate_range(end=pd.Timestamp(selected_date), periods=5)
     last_5_bdays_list = last_5_bdays_index.to_list()
@@ -347,74 +349,6 @@ if '날짜' in df_5.columns and '신청일자' in df_1.columns:
 else:
     st.warning("'접수메일\\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
 
-
-# --- 3. 월간 요일별 메일/신청 건수 ---
-st.write("---") # 구분선
-st.write("### 3. 월간 요일별 메일/신청 건수")
-if '날짜' in df_5.columns and '신청일자' in df_1.columns:
-
-    # 선택된 날짜가 속한 월의 데이터만 필터링
-    df_monthly = df_5[df_5['날짜'].dt.month == selected_date.month].copy()
-    df1_monthly = df_1[df_1['신청일자'].dt.month == selected_date.month].copy()
-
-    # 요일 정보 추가 (0=월, 1=화, ..., 6=일)
-    df_monthly['요일'] = df_monthly['날짜'].dt.dayofweek
-    df1_monthly['요일'] = df1_monthly['신청일자'].dt.dayofweek
-
-    # 월요일(0)부터 금요일(4)까지의 데이터만 필터링
-    df_monthly_weekday = df_monthly[df_monthly['요일'] <= 4]
-    df1_monthly_weekday = df1_monthly[df1_monthly['요일'] <= 4]
-    
-    # 요일별 건수 계산
-    mail_counts = df_monthly_weekday['요일'].value_counts()
-    apply_counts = df1_monthly_weekday['요일'].value_counts()
-    
-    # 요일 순서대로 정렬하고, 없는 요일은 0으로 채우기 위한 데이터프레임 생성
-    day_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금'}
-    weekdays_str = ['월', '화', '수', '목', '금']
-    
-    summary_data = pd.DataFrame({
-        '메일 건수': mail_counts,
-        '신청 건수': apply_counts
-    })
-    summary_data.index = summary_data.index.map(day_map)
-    summary_data = summary_data.reindex(weekdays_str, fill_value=0).reset_index().rename(columns={'index': '요일'})
-    
-    # melt로 long-form 변환
-    chart_long = summary_data.melt(id_vars='요일', var_name='구분', value_name='건수')
-
-    # Altair 그룹형 막대그래프
-    # Layer 1: Bars
-    bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
-        x=alt.X('요일:N', title='요일', sort=weekdays_str), # 요일 순서 고정
-        xOffset='구분:N',
-        y=alt.Y('건수:Q', title='건수'),
-        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
-        tooltip=['요일', '구분', '건수']
-    )
-
-    # ✨✨✨ 핵심 변경사항: 텍스트 레이블을 막대 '위'에 표시하도록 수정 ✨✨✨
-    # Layer 2: Text labels OUTSIDE the bars, at the top
-    text = bar_chart.mark_text(
-        align='center',
-        baseline='bottom', # 텍스트의 하단을 기준으로 정렬 (막대 상단에 위치)
-        dy=-5,  # 막대 상단에서 5px 위로 오프셋하여 공간 확보
-        color='black' # 배경과 대비되는 색상으로 변경
-    ).encode(
-        text=alt.Text('건수:Q', format='.0f')
-    ).transform_filter(
-        alt.datum.건수 > 0 # 건수가 0인 막대에는 텍스트를 표시하지 않음
-    )
-    
-    # Combine layers and set properties
-    final_chart = (bar_chart + text).properties(
-        width=alt.Step(40)  # 막대 그룹 간의 간격 조절
-    )
-    
-    st.altair_chart(final_chart, use_container_width=True)
-else:
-    st.warning("'접수메일\\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
-
 # --- 4. 현재 EV 신청단계 별 건수 ---
 st.write("---") # 구분선
 st.write("### 4. 현재 EV 신청단계 별 건수")
@@ -442,7 +376,7 @@ else:
 
 # --- 5. 법인팀 요약 ---
 st.write("---") # 구분선
-st.write("### 4. 법인팀 요약")
+st.write("### 5. 법인팀 요약")
 
 # 필요한 컬럼 목록 정의
 required_cols_df3 = ['신청 요청일', '접수 완료', '신청대수']
