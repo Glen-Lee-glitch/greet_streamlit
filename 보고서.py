@@ -69,28 +69,43 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     # '전일'을 주말을 제외한 가장 최근의 영업일로 계산합니다.
     day1 = (pd.to_datetime(selected_date) - pd.tseries.offsets.BDay(1)).date()
 
-    # 날짜별 건수 계산 (파이프라인: df_5_filtered 사용)
-    cnt_today_mail = (df_5_filtered['날짜'].dt.date == day0).sum()
-    cnt_yesterday_mail = (df_5_filtered['날짜'].dt.date == day1).sum()
-    cnt_total_mail = (df_5_filtered['날짜'].dt.date <= day0).sum()
+    # --- 1. '신청 건수' 계산 (새로운 로직) ---
+    # '신청 건수'는 해당 날짜에 EV에서 신청된 전체 건수입니다.
+    cnt_today_apply = (df_1_filtered['신청일자'].dt.date == day0).sum()
+    cnt_yesterday_apply = (df_1_filtered['신청일자'].dt.date == day1).sum()
+    cnt_total_apply = (df_1_filtered['신청일자'].dt.date <= day0).sum()
 
-    # 전일 (df_1_filtered 사용)
+    # --- 2. '이전 건' 계산 (새로운 로직) ---
+    # '이전 건'은 파이프라인 날짜와 신청일자가 다른 건수입니다.
+    
+    # 전일 이전 건
     df1_yesterday = df_1_filtered[df_1_filtered['신청일자'].dt.date == day1]
-    rns_from_df5_yesterday = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day1, 'RN']
-    cnt_yesterday_apply = df1_yesterday.loc[df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
-    cnt_yesterday_previous = df1_yesterday.loc[~df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
+    if not df1_yesterday.empty:
+        rns_in_df1_yesterday = df1_yesterday['제조수입사\n관리번호'].unique()
+        pipeline_for_yesterday_apps = df_5_filtered[df_5_filtered['RN'].isin(rns_in_df1_yesterday)]
+        merged_yesterday = pd.merge(df1_yesterday, pipeline_for_yesterday_apps, left_on='제조수입사\n관리번호', right_on='RN')
+        cnt_yesterday_previous = merged_yesterday[merged_yesterday['신청일자'].dt.date != merged_yesterday['날짜'].dt.date].shape[0]
+    else:
+        cnt_yesterday_previous = 0
 
-    # 금일 (df_1_filtered 사용)
+    # 금일 이전 건
     df1_today = df_1_filtered[df_1_filtered['신청일자'].dt.date == day0]
-    rns_from_df5_today = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day0, 'RN']
-    cnt_today_apply = df1_today.loc[df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
-    cnt_today_previous = df1_today.loc[~df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
+    if not df1_today.empty:
+        rns_in_df1_today = df1_today['제조수입사\n관리번호'].unique()
+        pipeline_for_today_apps = df_5_filtered[df_5_filtered['RN'].isin(rns_in_df1_today)]
+        merged_today = pd.merge(df1_today, pipeline_for_today_apps, left_on='제조수입사\n관리번호', right_on='RN')
+        cnt_today_previous = merged_today[merged_today['신청일자'].dt.date != merged_today['날짜'].dt.date].shape[0]
+    else:
+        cnt_today_previous = 0
 
-    # 누적 (df_1_filtered 사용)
+    # 누적 이전 건
     df1_total = df_1_filtered[df_1_filtered['신청일자'].dt.date <= day0]
-    rns_from_df5_total = df_5_filtered.loc[df_5_filtered['날짜'].dt.date <= day0, 'RN']
-    cnt_total_apply = df1_total.loc[df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
-    cnt_total_previous = df1_total.loc[~df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
+    if not df1_total.empty:
+        merged_total = pd.merge(df1_total, df_5_filtered, left_on='제조수입사\n관리번호', right_on='RN', how='inner')
+        mismatched_total = merged_total[merged_total['신청일자'].dt.date != merged_total['날짜'].dt.date]
+        cnt_total_previous = mismatched_total['RN'].nunique()
+    else:
+        cnt_total_previous = 0
 
     # 지급/요청 건수 계산 (df_2_filtered, df_1_filtered 사용)
     cnt_today_distribute = (df_2_filtered['배분일'].dt.date == day0).sum()
