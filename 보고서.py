@@ -69,6 +69,11 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     # '전일'을 주말을 제외한 가장 최근의 영업일로 계산합니다.
     day1 = (pd.to_datetime(selected_date) - pd.tseries.offsets.BDay(1)).date()
 
+    # --- 메일 건수 계산 ---
+    cnt_today_mail = (df_5_filtered['날짜'].dt.date == day0).sum()
+    cnt_yesterday_mail = (df_5_filtered['날짜'].dt.date == day1).sum()
+    cnt_total_mail = (df_5_filtered['날짜'].dt.date <= day0).sum()
+
     # --- 1. '신청 건수' 계산 (새로운 로직) ---
     # '신청 건수'는 해당 날짜에 EV에서 신청된 전체 건수입니다.
     cnt_today_apply = (df_1_filtered['신청일자'].dt.date == day0).sum()
