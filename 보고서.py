@@ -35,6 +35,35 @@ df_1['지급신청일자_날짜'] = pd.to_datetime(df_1['지급신청일자'], e
 from datetime import datetime, timedelta
 import pytz
 
+# --- 인쇄용 스타일 추가 ---
+st.markdown("""
+<style>
+@media print {
+    /* 인쇄 시 적용될 스타일 */
+    .main .block-container {
+        max-width: 100%;
+        padding: 1rem;
+    }
+    /* Streamlit의 불필요한 UI 요소들을 숨깁니다. */
+    header, .stToolbar, .stActionButton, .stDeployButton {
+        display: none !important;
+    }
+    /* 페이지가 어색하게 나뉘는 것을 방지합니다. */
+    .stApp > div {
+        page-break-inside: avoid;
+    }
+    /* 모든 텍스트를 검은색으로 강제하여 가독성을 높입니다. */
+    * {
+        color: black !important;
+    }
+    /* 차트 크기 조정 */
+    .stAltairChart {
+        width: 100% !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 KST = pytz.timezone('Asia/Seoul')
 today_kst = datetime.now(KST).date()
 
