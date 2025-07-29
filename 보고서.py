@@ -87,9 +87,19 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
         df_2_filtered = df_2
         df_1_filtered = df_1
     else:
+        # 지원(파이프라인) 기준으로 분기 필터링
         df_5_filtered = df_5[df_5['분기'] == selected_quarter]
-        df_2_filtered = df_2[df_2['분기'] == selected_quarter]
-        df_1_filtered = df_1[df_1['분기'] == selected_quarter]
+        
+        # 해당 분기의 지원 RN 목록 가져오기
+        rns_in_quarter = df_5_filtered['RN'].unique()
+
+        # 지원 RN 기준으로 지급 데이터 필터링
+        # df_1과 df_2의 '분기' 컬럼을 사용하지 않고, 지원 분기에 해당하는 RN으로 필터링합니다.
+        df_2_filtered = df_2[df_2['RN'].isin(rns_in_quarter)]
+        # '신청'과 '지급' 데이터가 모두 있는 df_1은 두 가지 역할을 모두 수행하므로,
+        # 지원 분기 RN 기준으로 필터링하여 '지급' 관련 집계가 올바르게 되도록 합니다.
+        # '신청' 관련 집계는 '신청일자'로 날짜 필터링되므로 영향이 없습니다.
+        df_1_filtered = df_1[df_1['제조수입사\\n관리번호'].isin(rns_in_quarter)]
 
     # 날짜 변수 설정
     day0 = selected_date
