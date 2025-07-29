@@ -16,8 +16,21 @@ def preprocess_and_save_data():
         df_1_q2 = pd.read_excel("EV_Q2.xlsx")
         print("EV_Q2.xlsx(2분기)를 성공적으로 로드했습니다.")
         
-        existing_ids = df_1_q3['제조수입사\n관리번호'].dropna().unique()
-        df_1_q2_filtered = df_1_q2[~df_1_q2['제조수입사\n관리번호'].isin(existing_ids)]
+        # 예외 처리: 무조건 2분기로 처리해야 할 RN 리스트
+        forced_q2_rns = [
+            'RN124283213',
+            'RN124341831',
+            'RN124366419',
+            'RN124360770'
+        ]
+        
+        # 3분기 데이터에서 예외 RN들을 먼저 제거
+        df_1_q3 = df_1_q3[~df_1_q3['제조수입사\\n관리번호'].isin(forced_q2_rns)]
+        print(f"3분기 데이터에서 예외 처리 RN {len(forced_q2_rns)}건을 제거했습니다.")
+        
+        # 나머지 중복 제거 로직 수행
+        existing_ids = df_1_q3['제조수입사\\n관리번호'].dropna().unique()
+        df_1_q2_filtered = df_1_q2[~df_1_q2['제조수입사\\n관리번호'].isin(existing_ids)]
         df_1 = pd.concat([df_1_q3, df_1_q2_filtered], ignore_index=True)
         print("EV 데이터를 중복 제거 후 병합하였습니다.")
 
