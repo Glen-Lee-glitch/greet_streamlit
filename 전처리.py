@@ -9,23 +9,42 @@ def preprocess_and_save_data():
     try:
         # --- 1. 데이터 로딩 ---
         df = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="DOA 박민정", header=1)
-        df_1 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=1)
 
-        # EV_Q2.xlsx (2분기 데이터) 병합 로직
+        # --- 'EV' 데이터(df_1) 처리 ---
+        df_1_q3 = None
+        df_1_q2 = None
+
+        # 3분기 데이터 로드
+        try:
+            df_1_q3 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=1)
+            df_1_q3['분기'] = '3분기'
+            print("Greet_Subsidy.xlsx의 'EV'(3분기)을 성공적으로 로드했습니다.")
+        except Exception as e:
+            print(f"경고: Greet_Subsidy.xlsx의 'EV' 시트를 읽는 중 오류가 발생했습니다: {e}")
+
+        # 2분기 데이터 로드
         try:
             df_1_q2 = pd.read_excel("EV_Q2.xlsx")
-            # df_1에 있는 '제조수입사\n관리번호'를 기준으로 중복 제거
-            existing_ids = df_1['제조수입사\n관리번호'].dropna().unique()
-            df_1_q2_filtered = df_1_q2[~df_1_q2['제조수입사\n관리번호'].isin(existing_ids)]
-            
-            # 필터링된 2분기 데이터를 기존 df_1에 추가
-            df_1 = pd.concat([df_1, df_1_q2_filtered], ignore_index=True)
-            print("EV_Q2.xlsx 데이터를 성공적으로 병합하였습니다.")
+            df_1_q2['분기'] = '2분기'
+            print("EV_Q2.xlsx(2분기)를 성공적으로 로드했습니다.")
         except FileNotFoundError:
-            # EV_Q2.xlsx 파일이 없는 경우를 대비하여 경고 메시지만 출력하고 계속 진행
-            print("경고: EV_Q2.xlsx 파일을 찾을 수 없습니다. 해당 파일 없이 전처리를 계속합니다.")
+            print("정보: EV_Q2.xlsx 파일을 찾을 수 없습니다.")
         except Exception as e:
-            print(f"EV_Q2.xlsx 처리 중 오류가 발생했습니다: {e}")
+            print(f"경고: EV_Q2.xlsx를 읽는 중 오류가 발생했습니다: {e}")
+
+        # 데이터 병합
+        if df_1_q3 is not None and df_1_q2 is not None:
+            existing_ids = df_1_q3['제조수입사\n관리번호'].dropna().unique()
+            df_1_q2_filtered = df_1_q2[~df_1_q2['제조수입사\n관리번호'].isin(existing_ids)]
+            df_1 = pd.concat([df_1_q3, df_1_q2_filtered], ignore_index=True)
+            print("EV 데이터를 중복 제거 후 병합하였습니다.")
+        elif df_1_q3 is not None:
+            df_1 = df_1_q3
+        elif df_1_q2 is not None:
+            df_1 = df_1_q2
+        else:
+            df_1 = pd.DataFrame(columns=['신청일자', '지급신청일자', '제조수입사\n관리번호', '분기'])
+            print("경고: 'EV' 데이터를 읽지 못했습니다.")
 
         df_time = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=0)
         
