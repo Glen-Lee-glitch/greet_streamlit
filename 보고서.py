@@ -3,73 +3,20 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-import os
+# --- 0. 데이터프레임(df) 생성 ---
+df = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="DOA 박민정", header=1)
+df.drop(columns=['인도일', '알림톡'], inplace=True)
+df.rename(columns={'인도일.1': '인도일'}, inplace=True)
 
-@st.cache_data
-def load_excel_data(filename, sheet_name=None, header=0):
-    """
-    지정된 Excel 파일과 시트에서 데이터를 로드하는 함수.
-    경로: 앱 파일과 같은 디렉토리 또는 하위 디렉토리에 파일이 있어야 합니다.
-    """
-    try:
-        # 파일이 app.py(보고서.py)와 같은 디렉토리에 있다고 가정합니다.
-        # 만약 파일들이 'data'라는 하위 폴더에 있다면 "data/" + filename 으로 경로를 수정하세요.
-        file_path = filename
-        # 예시: 'data' 폴더에 있다면 file_path = f"data/{filename}"
+df_1 = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="EV", header=1)
+df_time = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="EV", header=0)
+update_time_str = df_time.columns[1]
 
-        if sheet_name:
-            df = pd.read_excel(file_path, sheet_name=sheet_name, header=header)
-        else:
-            df = pd.read_excel(file_path, header=header)
-        return df
-    except FileNotFoundError:
-        st.error(f"오류: '{filename}' 파일을 찾을 수 없습니다. 파일이 GitHub 저장소에 올바르게 업로드되었고, 경로가 정확한지 확인해주세요.")
-        return pd.DataFrame() # 빈 DataFrame 반환하여 앱이 중단되지 않도록 함
-    except Exception as e:
-        st.error(f"오류 발생 중 '{filename}' 로드: {e}")
-        return pd.DataFrame()
+df_2 = pd.read_excel(r"C:\Users\HP\Downloads\Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
+df_3 = pd.read_excel(r"C:\Users\HP\Downloads\Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
+df_4 = pd.read_excel(r"C:\Users\HP\Downloads\Ent x Greet Lounge Subsidy.xlsx", sheet_name="지급신청", header=1)
 
-# --------------------------------------------------------------------------------
-# 이제 위에서 정의한 함수를 사용하여 각 DataFrame을 로드합니다.
-# --------------------------------------------------------------------------------
-
-# 1. Greet_Subsidy.xlsx - DOA 박민정 시트
-df = load_excel_data("Greet_Subsidy.xlsx", sheet_name="DOA 박민정", header=1)
-if not df.empty: # 오류 없이 로드되었을 경우에만 처리
-    df.drop(columns=['인도일', '알림톡'], inplace=True, errors='ignore') # errors='ignore'를 추가하여 없는 컬럼 삭제 시 오류 방지
-    df.rename(columns={'인도일.1': '인도일'}, inplace=True)
-
-# 2. Greet_Subsidy.xlsx - EV 시트 (df_1)
-df_1 = load_excel_data("Greet_Subsidy.xlsx", sheet_name="EV", header=1)
-
-# 3. Greet_Subsidy.xlsx - EV 시트 (업데이트 시간)
-# header=0으로 읽어온 후 두 번째 열 (인덱스 1)의 첫 번째 셀 값을 사용합니다.
-df_time = load_excel_data("Greet_Subsidy.xlsx", sheet_name="EV", header=0)
-update_time_str = ""
-if not df_time.empty and len(df_time.columns) > 1:
-    update_time_str = df_time.columns[1] # 두 번째 컬럼 이름 자체가 업데이트 시간일 수 있음
-    # 만약 업데이트 시간이 첫 번째 행의 두 번째 셀 값이라면:
-    # update_time_str = df_time.iloc[0, 1]
-
-# 4. Greet_Subsidy.xlsx - 지급신청 시트
-df_2 = load_excel_data("Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
-
-# 5. Ent x Greet Lounge Subsidy.xlsx - 지원신청 시트
-df_3 = load_excel_data("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
-
-# 6. Ent x Greet Lounge Subsidy.xlsx - 지급신청 시트
-df_4 = load_excel_data("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지급신청", header=1)
-
-# 7. pipeline.xlsx
-df_5 = load_excel_data("pipeline.xlsx") # 기본 header=0 사용
-
-# --- 모든 날짜 컬럼 전처리 ---
-# 스크립트 전반에서 사용되는 날짜 컬럼들을 한 번에 datetime 형태로 변환합니다.
-# 이렇게 하면 각 섹션에서 데이터 타입을 다시 변환할 필요가 없어져 오류를 방지할 수 있습니다.
-df_5['날짜'] = pd.to_datetime(df_5['날짜'], errors='coerce')
-df_1['신청일자'] = pd.to_datetime(df_1['신청일자'], errors='coerce')
-df_2['배분일'] = pd.to_datetime(df_2['배분일'], errors='coerce')
-df_1['지급신청일자_날짜'] = pd.to_datetime(df_1['지급신청일자'], errors='coerce')
+df_5 = pd.read_excel(r"C:\Users\HP\Desktop\GyeonggooLee\greetlounge\greetlounge\피드백\data\pipeline.xlsx")
 
 # --- 모든 날짜 컬럼 전처리 ---
 # 스크립트 전반에서 사용되는 날짜 컬럼들을 한 번에 datetime 형태로 변환합니다.
@@ -103,11 +50,25 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     cnt_yesterday_mail = (df_5['날짜'].dt.date == day1).sum()
     cnt_total_mail = (df_5['날짜'].dt.date <= day0).sum()
 
-    # 나머지 건수 계산
-    cnt_today_apply = (df_1['신청일자'].dt.date == day0).sum()
-    cnt_yesterday_apply = (df_1['신청일자'].dt.date == day1).sum()
-    cnt_total_apply = (df_1['신청일자'].dt.date <= day0).sum()
+    # 전일
+    df1_yesterday = df_1[df_1['신청일자'].dt.date == day1]
+    rns_from_df5_yesterday = df_5.loc[df_5['날짜'].dt.date == day1, 'RN']
+    cnt_yesterday_apply = df1_yesterday.loc[df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
+    cnt_yesterday_previous = df1_yesterday.loc[~df1_yesterday['제조수입사\n관리번호'].isin(rns_from_df5_yesterday)].shape[0]
 
+    # 금일
+    df1_today = df_1[df_1['신청일자'].dt.date == day0]
+    rns_from_df5_today = df_5.loc[df_5['날짜'].dt.date == day0, 'RN']
+    cnt_today_apply = df1_today.loc[df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
+    cnt_today_previous = df1_today.loc[~df1_today['제조수입사\n관리번호'].isin(rns_from_df5_today)].shape[0]
+
+    # 누적
+    df1_total = df_1[df_1['신청일자'].dt.date <= day0]
+    rns_from_df5_total = df_5.loc[df_5['날짜'].dt.date <= day0, 'RN']
+    cnt_total_apply = df1_total.loc[df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
+    cnt_total_previous = df1_total.loc[~df1_total['제조수입사\n관리번호'].isin(rns_from_df5_total)].shape[0]
+
+    # 지급/요청 건수 계산
     cnt_today_distribute = (df_2['배분일'].dt.date == day0).sum()
     cnt_yesterday_distribute = (df_2['배분일'].dt.date == day1).sum()
     cnt_total_distribute = (df_2['배분일'].dt.date <= day0).sum()
@@ -116,13 +77,57 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     cnt_yesterday_request = (df_1['지급신청일자_날짜'].dt.date == day1).sum()
     cnt_total_request = (df_1['지급신청일자_날짜'].dt.date <= day0).sum()
     
+    # '신청 불가' 건수 계산
+    # 전일
+    rns_yesterday = df_5.loc[df_5['날짜'].dt.date == day1, 'RN']
+    df_matched_yesterday = df[df['RN'].isin(rns_yesterday)]
+    cnt_ineligible_yesterday = int(df_matched_yesterday.loc[~df_matched_yesterday['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
+
+    # 금일
+    rns_today = df_5.loc[df_5['날짜'].dt.date == day0, 'RN']
+    df_matched_today = df[df['RN'].isin(rns_today)]
+    cnt_ineligible_today = int(df_matched_today.loc[~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
+
+    # 누적
+    rns_total = df_5.loc[df_5['날짜'].dt.date <= day0, 'RN']
+    df_matched_total = df[df['RN'].isin(rns_total)]
+    cnt_ineligible_total = int(df_matched_total.loc[~df_matched_total['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
+
+    # '변동' 행 계산
+    delta_mail = cnt_today_mail - cnt_yesterday_mail
+    delta_ineligible = cnt_ineligible_today - cnt_ineligible_yesterday
+    delta_apply = cnt_today_apply - cnt_yesterday_apply
+    delta_previous = cnt_today_previous - cnt_yesterday_previous
+    delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
+    delta_request = cnt_today_request - cnt_yesterday_request
+
+    # '변동' 값에 대한 스타일링 함수
+    def format_delta(value):
+        if value > 0:
+            return f'<span style="color:blue;">+{value}</span>'
+        elif value < 0:
+            return f'<span style="color:red;">{value}</span>'
+        return str(value)
+
     # 3단 멀티인덱스 헤더 구조로 데이터프레임 생성
     table_data = pd.DataFrame({
         ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
+        ('지원', '파이프라인', '신청 불가'): [cnt_ineligible_yesterday, cnt_ineligible_today, cnt_ineligible_total],
         ('지원', '신청완료', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
+        ('지원', '신청완료', '이전 건'): [cnt_yesterday_previous, cnt_today_previous, cnt_total_previous],
         ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
         ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request]
     }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계'])
+
+    # 스타일이 적용된 '변동' 행 추가
+    table_data.loc['변동'] = [
+        format_delta(delta_mail),
+        format_delta(delta_ineligible),
+        format_delta(delta_apply),
+        format_delta(delta_previous),
+        format_delta(delta_distribute),
+        format_delta(delta_request)
+    ]
     
     # CSS 스타일을 정의하여 테이블을 꾸밉니다.
     st.markdown("""
@@ -154,8 +159,9 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     </style>
     """, unsafe_allow_html=True)
 
-        # DataFrame을 HTML로 변환하고, st.markdown을 사용해 출력합니다.
-    html_table = table_data.to_html(classes='custom_table', border=0)
+    # DataFrame을 HTML로 변환하고, st.markdown을 사용해 출력합니다.
+    # escape=False를 설정하여 HTML 태그가 그대로 렌더링되도록 합니다.
+    html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
     st.markdown(html_table, unsafe_allow_html=True)
 
     # --- 콜아웃(설명 박스) 추가 ---
@@ -173,13 +179,29 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     <div class="callout">
     ※ 영업일 기준<br>
     ※ 메일 건수: 테슬라 측에서 요청한 지원 신청 건<br>
-    ※ 신청 건수: 실제로 EV에서 신청한 건<br>
+    ※ 신청 불가: EV로 신청하지 못한 건<br>
+    ※ 신청 건수: (금일 파이프라인 중) 실제로 EV에서 신청한 건<br>
+    ※ 이전 건: (이전 일자 파이프라인 중) 실제로 EV에서 신청한 건<br>
     ※ 지급 배분건: 지급 처리 해야 할 건<br>
     ※ 지급신청 건수: 지급 처리 완료 건
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 1-1. 기간별 합계 테이블 ---
+    # --- 1-1. 금일 신청 불가 내역 (토글) ---
+    with st.expander("금일 신청 불가 내역 보기"):
+        # 'Greet Note'에 '#'이 없는 데이터 필터링 및 필요한 컬럼('RN', 'Greet Note') 선택
+        ineligible_notes_today = df_matched_today.loc[
+            ~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False),
+            ['RN', 'Greet Note']
+        ].reset_index(drop=True)
+
+        # 결과가 비어있는지 확인 후, 데이터프레임 또는 안내 메시지 출력
+        if not ineligible_notes_today.empty:
+            st.dataframe(ineligible_notes_today)
+        else:
+            st.info("금일 신청 불가 내역이 없습니다.")
+
+    # --- 1-2. 기간별 합계 테이블 ---
     st.write("---") # 구분선
     st.write("### 1-1. 기간별 합계")
     
