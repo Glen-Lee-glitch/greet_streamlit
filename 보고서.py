@@ -322,20 +322,12 @@ st.write("### 3. 월별 데이터 4월(2분기) 부터")
 # --- 월별 데이터 차트 (월간 합계) ---
 if '날짜' in df_5.columns and '신청일자' in df_1.columns:
     
-    # 분기 선택에 따라 집계할 월 결정
-    if selected_quarter == '2분기':
-        months_to_show = [4, 5, 6]
-        chart_title = f"{selected_date.year}년 2분기 월별 합계"
-    elif selected_quarter == '3분기':
-        months_to_show = [7, 8, 9]
-        chart_title = f"{selected_date.year}년 3분기 월별 합계"
-    else: # '전체'
-        # 4월부터 현재 선택된 날짜의 월까지 모든 월을 포함
-        current_month = selected_date.month
-        months_to_show = list(range(4, current_month + 1))
-        chart_title = f"{selected_date.year}년 월별 합계 (4월~{current_month}월)"
+    # 분기 선택과 상관없이 항상 4월부터 현재 월까지의 데이터를 집계
+    current_month = selected_date.month
+    months_to_show = list(range(4, current_month + 1))
+    chart_title = f"{selected_date.year}년 월별 합계 (4월~{current_month}월)"
 
-    # 해당 월 데이터 필터링
+    # 해당 월 데이터 필터링 (분기 필터링 제거)
     df_5_filtered_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
     df_1_filtered_monthly = df_1[(df_1['신청일자'].dt.year == selected_date.year) & (df_1['신청일자'].dt.month.isin(months_to_show))]
 
