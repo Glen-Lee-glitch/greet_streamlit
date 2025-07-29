@@ -99,7 +99,7 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
         # '신청'과 '지급' 데이터가 모두 있는 df_1은 두 가지 역할을 모두 수행하므로,
         # 지원 분기 RN 기준으로 필터링하여 '지급' 관련 집계가 올바르게 되도록 합니다.
         # '신청' 관련 집계는 '신청일자'로 날짜 필터링되므로 영향이 없습니다.
-        df_1_filtered = df_1[df_1['제조수입사\\n관리번호'].isin(rns_in_quarter)]
+        df_1_filtered = df_1[df_1['제조수입사\n관리번호'].isin(rns_in_quarter)]
 
     # 날짜 변수 설정
     day0 = selected_date
