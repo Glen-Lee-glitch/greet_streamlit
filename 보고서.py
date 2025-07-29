@@ -513,6 +513,10 @@ if has_all_cols:
         df_cumulative = df[df[date_col].notna() & (df[date_col].dt.date <= end_date)]
         # '접수 완료' 필터
         df_cumulative = df_cumulative[df_cumulative['접수 완료'].astype(str).str.strip().isin(['O', 'ㅇ'])]
+        # 'Greet Note'에 '취소'가 포함된 경우 제외
+        if 'Greet Note' in df_cumulative.columns:
+            df_cumulative = df_cumulative[~df_cumulative['Greet Note'].astype(str).str.contains('취소', na=False)]
+        
         # 기타 필터
         b_col_name = df_cumulative.columns[1]
         df_cumulative = df_cumulative[df_cumulative[b_col_name].notna() & (df_cumulative[b_col_name] != "")]
