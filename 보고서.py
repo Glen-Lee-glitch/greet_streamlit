@@ -129,8 +129,8 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
         """툴팁에 표시할 문자열을 생성합니다."""
         if ineligible_df.empty:
             return "내역 없음"
-        # 툴팁에 표시할 최대 항목 수
-        df_limited = ineligible_df.head(5)
+        # 툴팁에 표시할 최대 항목 수를 10개로 늘림
+        df_limited = ineligible_df.head(10)
         # HTML title 속성에서 줄바꿈은 &#10; 사용, 따옴표는 &quot;로 변환
         tooltip_lines = []
         for _, row in df_limited.iterrows():
@@ -139,8 +139,8 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
             tooltip_lines.append(f"{rn}: {note}")
         
         tooltip_text = "&#10;".join(tooltip_lines)
-        if len(ineligible_df) > 5:
-            tooltip_text += f"&#10;...외 {len(ineligible_df) - 5}건 더 보기 (클릭)"
+        if len(ineligible_df) > 10:
+            tooltip_text += f"&#10;...외 {len(ineligible_df) - 10}건의 내역이 더 있습니다."
         return tooltip_text
 
     # 툴팁에 표시할 데이터프레임 생성
@@ -151,15 +151,16 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     tooltip_yesterday = format_tooltip_text(ineligible_df_yesterday)
     tooltip_today = format_tooltip_text(ineligible_df_today)
 
-    # '신청 불가' 셀을 클릭 가능한 링크(툴팁 포함)로 만들기
-    def create_ineligible_link_with_tooltip(count, day_identifier, tooltip=""):
+    # '신청 불가' 셀을 툴팁을 포함한 텍스트로 만들기 (클릭 기능 제거)
+    def create_cell_with_tooltip(count, tooltip=""):
         if count > 0:
-            return f'<a href="?show_ineligible={day_identifier}" target="_self" title="{tooltip}" style="color: blue; text-decoration: underline;">{count}</a>'
+            # <a> 태그를 <span>으로 변경하여 링크 기능 제거
+            return f'<span title="{tooltip}">{count}</span>'
         return str(count)
 
-    # HTML 링크 생성
-    ineligible_yesterday_html = create_ineligible_link_with_tooltip(cnt_ineligible_yesterday, 'yesterday', tooltip_yesterday)
-    ineligible_today_html = create_ineligible_link_with_tooltip(cnt_ineligible_today, 'today', tooltip_today)
+    # HTML 생성
+    ineligible_yesterday_html = create_cell_with_tooltip(cnt_ineligible_yesterday, tooltip_yesterday)
+    ineligible_today_html = create_cell_with_tooltip(cnt_ineligible_today, tooltip_today)
 
     # '변동' 행 계산
     delta_mail = cnt_today_mail - cnt_yesterday_mail
@@ -255,37 +256,7 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 1-1. 클릭된 '신청 불가' 내역 표시 (기존 expander 대체) ---
-    show_ineligible_param = st.query_params.get("show_ineligible")
-
-    if show_ineligible_param in ['today', 'yesterday']:
-        st.write("---") # 구분선
-        
-        ineligible_notes = pd.DataFrame() # 초기화
-        
-        if show_ineligible_param == 'today':
-            st.write(f"#### 금일({day0}) 신청 불가 내역")
-            ineligible_notes = df_matched_today.loc[
-                ~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False),
-                ['RN', 'Greet Note']
-            ].reset_index(drop=True)
-            
-        elif show_ineligible_param == 'yesterday':
-            st.write(f"#### 전일({day1}) 신청 불가 내역")
-            ineligible_notes = df_matched_yesterday.loc[
-                ~df_matched_yesterday['Greet Note'].astype(str).str.contains('#', na=False),
-                ['RN', 'Greet Note']
-            ].reset_index(drop=True)
-
-        if not ineligible_notes.empty:
-            st.dataframe(ineligible_notes)
-        else:
-            st.info("해당 날짜의 신청 불가 내역이 없습니다.")
-        
-        # 내역을 닫기 위한 버튼
-        if st.button("내역 닫기"):
-            st.query_params.clear()
-            st.rerun()
+    # --- 클릭으로 내역 보던 기능은 완전히 제거됨 ---
 
     # --- 1-2. 기간별 합계 테이블 ---
     st.write("---") # 구분선
