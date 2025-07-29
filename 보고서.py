@@ -330,10 +330,10 @@ if '날짜' in df_5.columns and '신청일자' in df_1.columns:
         months_to_show = [7, 8, 9]
         chart_title = f"{selected_date.year}년 3분기 월별 합계"
     else: # '전체'
-        # 4월부터 데이터가 있는 모든 월을 포함
-        all_months = pd.concat([df_5['날짜'].dt.month, df_1['신청일자'].dt.month]).dropna().unique()
-        months_to_show = sorted([m for m in all_months if m >= 4])
-        chart_title = f"{selected_date.year}년 월별 합계 (4월~)"
+        # 4월부터 현재 선택된 날짜의 월까지 모든 월을 포함
+        current_month = selected_date.month
+        months_to_show = list(range(4, current_month + 1))
+        chart_title = f"{selected_date.year}년 월별 합계 (4월~{current_month}월)"
 
     # 해당 월 데이터 필터링
     df_5_filtered_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
