@@ -392,17 +392,17 @@ else:
 st.write("---") # 구분선
 st.write("### 4. 분기별 메일/신청 건수")
 
-if '날짜' in df_5.columns and '신청일자' in df_1.columns:
-    # 분기 구분 기준 날짜 설정
-    quarter_split_date = pd.to_datetime('2025-06-23').date()
+if '날짜' in df_5.columns and '신청일자' in df_1.columns and '분기' in df_5.columns and '분기' in df_1.columns:
+    
+    # 메일 건수 분기별 집계 (전처리된 '분기' 컬럼 사용)
+    mail_counts_by_quarter = df_5.groupby('분기').size()
+    q2_mail_count = mail_counts_by_quarter.get('2분기', 0)
+    q3_mail_count = mail_counts_by_quarter.get('3분기', 0)
 
-    # 메일 건수 분기별 집계
-    q2_mail_count = df_5[df_5['날짜'].dt.date < quarter_split_date].shape[0]
-    q3_mail_count = df_5[df_5['날짜'].dt.date >= quarter_split_date].shape[0]
-
-    # 신청 건수 분기별 집계
-    q2_apply_count = df_1[df_1['신청일자'].dt.date < quarter_split_date].shape[0]
-    q3_apply_count = df_1[df_1['신청일자'].dt.date >= quarter_split_date].shape[0]
+    # 신청 건수 분기별 집계 (전처리된 '분기' 컬럼 사용)
+    apply_counts_by_quarter = df_1.groupby('분기').size()
+    q2_apply_count = apply_counts_by_quarter.get('2분기', 0)
+    q3_apply_count = apply_counts_by_quarter.get('3분기', 0)
     
     # 차트용 데이터프레임 생성
     quarter_chart_df = pd.DataFrame({
@@ -427,7 +427,7 @@ if '날짜' in df_5.columns and '신청일자' in df_1.columns:
     
     st.altair_chart(quarter_bar_chart, use_container_width=True)
 else:
-    st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
+    st.warning("차트를 표시하는 데 필요한 '날짜', '신청일자' 또는 '분기' 컬럼을 찾을 수 없습니다.")
 
 # --- 5. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
 st.write("---") # 구분선
