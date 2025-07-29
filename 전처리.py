@@ -28,7 +28,33 @@ def preprocess_and_save_data():
             print(f"EV_Q2.xlsx 처리 중 오류가 발생했습니다: {e}")
 
         df_time = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="EV", header=0)
-        df_2 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name="지급신청", header=3)
+        
+        # '지급신청' 데이터(df_2) 로딩 및 분기 병합
+        df_2_list = []
+        try:
+            df_2_q3 = pd.read_excel("Greet_Subsidy.xlsx", sheet_name='지급신청', header=3)
+            df_2_q3['분기'] = '3분기'
+            df_2_list.append(df_2_q3)
+            print("Greet_Subsidy.xlsx의 '지급신청'(3분기)을 성공적으로 로드했습니다.")
+        except Exception as e:
+            print(f"경고: Greet_Subsidy.xlsx의 '지급신청' 시트를 읽는 중 오류가 발생했습니다: {e}")
+
+        try:
+            df_2_q2 = pd.read_excel("Greet_Subsidy_2Q.xlsx", sheet_name='지급신청', header=3)
+            df_2_q2['분기'] = '2분기'
+            df_2_list.append(df_2_q2)
+            print("Greet_Subsidy_2Q.xlsx의 '지급신청'(2분기)을 성공적으로 로드했습니다.")
+        except FileNotFoundError:
+            print("정보: Greet_Subsidy_2Q.xlsx 파일을 찾을 수 없습니다.")
+        except Exception as e:
+            print(f"경고: Greet_Subsidy_2Q.xlsx의 '지급신청' 시트를 읽는 중 오류가 발생했습니다: {e}")
+            
+        if df_2_list:
+            df_2 = pd.concat(df_2_list, ignore_index=True)
+        else:
+            df_2 = pd.DataFrame(columns=['배분일', '분기'])
+            print("경고: '지급신청' 데이터를 읽지 못했습니다.")
+
         df_3 = pd.read_excel("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지원신청", header=0)
         df_4 = pd.read_excel("Ent x Greet Lounge Subsidy.xlsx", sheet_name="지급신청", header=1)
         
