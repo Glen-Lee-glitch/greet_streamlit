@@ -315,9 +315,53 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
 else:
     st.warning("필요한 컬럼('접수메일\\n도착일', 'RN', '신청일자', '배분일', '지급신청일자')을 찾을 수 없습니다.")
 
-# --- 3. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
+# --- 3. 월별 데이터 (4월~) ---
 st.write("---") # 구분선
-st.write("### 3. 최근 5 영업일 메일/신청 건수 (주말 제외)")
+st.write("### 3. 월별 데이터 4월(2분기) 부터")
+
+# --- 월별 데이터 차트 ---
+if '날짜' in df_5.columns and '신청일자' in df_1.columns:
+    # 선택된 날짜가 속한 월의 데이터만 필터링
+    selected_month = selected_date.month
+    selected_year = selected_date.year
+    
+    # 분기 선택에 따라 데이터 필터링 (df_5, df_1)
+    if selected_quarter == '전체':
+        df_5_monthly = df_5[(df_5['날짜'].dt.month == selected_month) & (df_5['날짜'].dt.year == selected_year)]
+        df_1_monthly = df_1[(df_1['신청일자'].dt.month == selected_month) & (df_1['신청일자'].dt.year == selected_year)]
+    else:
+        df_5_monthly = df_5[(df_5['분기'] == selected_quarter) & (df_5['날짜'].dt.month == selected_month) & (df_5['날짜'].dt.year == selected_year)]
+        df_1_monthly = df_1[(df_1['분기'] == selected_quarter) & (df_1['신청일자'].dt.month == selected_month) & (df_1['신청일자'].dt.year == selected_year)]
+
+    # 일자별로 데이터 집계
+    mail_counts = df_5_monthly['날짜'].dt.date.value_counts().sort_index()
+    apply_counts = df_1_monthly['신청일자'].dt.date.value_counts().sort_index()
+
+    # 차트용 데이터프레임 생성
+    chart_df = pd.DataFrame({'메일 건수': mail_counts, '신청 건수': apply_counts}).fillna(0).astype(int).reset_index()
+    chart_df = chart_df.rename(columns={'index': '날짜'})
+    
+    # melt로 long-form 변환
+    chart_long = chart_df.melt(id_vars='날짜', var_name='구분', value_name='건수')
+    chart_long['날짜'] = chart_long['날짜'].astype(str) # Altair가 날짜를 올바르게 인식하도록 형변환
+
+    # Altair 그룹형 막대그래프 생성
+    bar_chart = alt.Chart(chart_long).mark_bar(size=15).encode(
+        x=alt.X('날짜:N', title='날짜', axis=alt.Axis(labelAngle=-45)),
+        y=alt.Y('건수:Q', title='건수'),
+        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+        tooltip=['날짜', '구분', '건수']
+    ).properties(
+        title=f"{selected_year}년 {selected_month}월 데이터"
+    )
+
+    st.altair_chart(bar_chart, use_container_width=True)
+else:
+    st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
+
+# --- 4. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
+st.write("---") # 구분선
+st.write("### 4. 최근 5 영업일 메일/신청 건수 (주말 제외)")
 if '날짜' in df_5.columns and '신청일자' in df_1.columns:
     last_5_bdays_index = pd.bdate_range(end=pd.Timestamp(selected_date), periods=5)
     last_5_bdays_list = last_5_bdays_index.to_list()
@@ -351,7 +395,7 @@ else:
 
 # --- 4. 현재 EV 신청단계 별 건수 ---
 st.write("---") # 구분선
-st.write("### 4. 현재 EV 신청단계 별 건수")
+st.write("### 5. 현재 EV 신청단계 별 건수")
 st.write(f"**업데이트 시간: {update_time_str}**")
 
 # df_1 (EV 시트)에 필요한 컬럼들이 있는지 확인
@@ -374,9 +418,9 @@ if '신청단계' in df_1.columns and '지역구분' in df_1.columns:
 else:
     st.warning("EV 시트(df_1)에서 '신청단계' 또는 '지역구분' 컬럼을 찾을 수 없습니다.")
 
-# --- 5. 법인팀 요약 ---
+# --- 6. 법인팀 요약 ---
 st.write("---") # 구분선
-st.write("### 5. 법인팀 요약")
+st.write("### 6. 법인팀 요약")
 
 # 필요한 컬럼 목록 정의
 required_cols_df3 = ['신청 요청일', '접수 완료', '신청대수']
