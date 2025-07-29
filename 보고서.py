@@ -124,6 +124,17 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     df_matched_total = df[df['RN'].isin(rns_total)]
     cnt_ineligible_total = int(df_matched_total.loc[~df_matched_total['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
 
+    # '신청 불가' 셀을 클릭 가능한 링크로 만들기 위한 함수
+    def create_ineligible_link(count, day_identifier):
+        if count > 0:
+            # st.query_params를 사용하여 상태를 URL에 저장합니다.
+            return f'<a href="?show_ineligible={day_identifier}" target="_self" style="color: blue; text-decoration: underline;">{count}</a>'
+        return str(count)
+
+    # HTML 링크 생성
+    ineligible_yesterday_html = create_ineligible_link(cnt_ineligible_yesterday, 'yesterday')
+    ineligible_today_html = create_ineligible_link(cnt_ineligible_today, 'today')
+
     # '변동' 행 계산
     delta_mail = cnt_today_mail - cnt_yesterday_mail
     delta_ineligible = cnt_ineligible_today - cnt_ineligible_yesterday
@@ -143,7 +154,7 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     # 3단 멀티인덱스 헤더 구조로 데이터프레임 생성
     table_data = pd.DataFrame({
         ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
-        ('지원', '파이프라인', '신청 불가'): [cnt_ineligible_yesterday, cnt_ineligible_today, cnt_ineligible_total],
+        ('지원', '파이프라인', '신청 불가'): [ineligible_yesterday_html, ineligible_today_html, cnt_ineligible_total],
         ('지원', '신청완료', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
         ('지원', '신청완료', '이전 건'): [cnt_yesterday_previous, cnt_today_previous, cnt_total_previous],
         ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
@@ -218,19 +229,37 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 1-1. 금일 신청 불가 내역 (토글) ---
-    with st.expander("금일 신청 불가 내역 보기"):
-        # 'Greet Note'에 '#'이 없는 데이터 필터링 및 필요한 컬럼('RN', 'Greet Note') 선택
-        ineligible_notes_today = df_matched_today.loc[
-            ~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False),
-            ['RN', 'Greet Note']
-        ].reset_index(drop=True)
+    # --- 1-1. 클릭된 '신청 불가' 내역 표시 (기존 expander 대체) ---
+    show_ineligible_param = st.query_params.get("show_ineligible")
 
-        # 결과가 비어있는지 확인 후, 데이터프레임 또는 안내 메시지 출력
-        if not ineligible_notes_today.empty:
-            st.dataframe(ineligible_notes_today)
+    if show_ineligible_param in ['today', 'yesterday']:
+        st.write("---") # 구분선
+        
+        ineligible_notes = pd.DataFrame() # 초기화
+        
+        if show_ineligible_param == 'today':
+            st.write(f"#### 금일({day0}) 신청 불가 내역")
+            ineligible_notes = df_matched_today.loc[
+                ~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False),
+                ['RN', 'Greet Note']
+            ].reset_index(drop=True)
+            
+        elif show_ineligible_param == 'yesterday':
+            st.write(f"#### 전일({day1}) 신청 불가 내역")
+            ineligible_notes = df_matched_yesterday.loc[
+                ~df_matched_yesterday['Greet Note'].astype(str).str.contains('#', na=False),
+                ['RN', 'Greet Note']
+            ].reset_index(drop=True)
+
+        if not ineligible_notes.empty:
+            st.dataframe(ineligible_notes)
         else:
-            st.info("금일 신청 불가 내역이 없습니다.")
+            st.info("해당 날짜의 신청 불가 내역이 없습니다.")
+        
+        # 내역을 닫기 위한 버튼
+        if st.button("내역 닫기"):
+            st.query_params.clear()
+            st.rerun()
 
     # --- 1-2. 기간별 합계 테이블 ---
     st.write("---") # 구분선
