@@ -5,6 +5,17 @@ import altair as alt
 import pickle
 import sys
 
+# --- 메모 파일 경로 및 로딩 ---
+MEMO_FILE = "memo.txt"
+
+# 세션 상태에 메모가 없으면 파일에서 로드
+if 'memo_content' not in st.session_state:
+    try:
+        with open(MEMO_FILE, "r", encoding="utf-8") as f:
+            st.session_state.memo_content = f.read()
+    except FileNotFoundError:
+        st.session_state.memo_content = "" # 파일이 없으면 빈 문자열로 시작
+
 # --- 0. 데이터프레임(df) 생성 ---
 # 전처리된 데이터를 로드합니다.
 try:
@@ -25,16 +36,13 @@ except FileNotFoundError:
     sys.exit()
 
 
-# --- 모든 날짜 컬럼 전처리 ---
-df_5['날짜'] = pd.to_datetime(df_5['날짜'], errors='coerce')
-df_1['신청일자'] = pd.to_datetime(df_1['신청일자'], errors='coerce')
-df_2['배분일'] = pd.to_datetime(df_2['배분일'], errors='coerce')
-df_1['지급신청일자_날짜'] = pd.to_datetime(df_1['지급신청일자'], errors='coerce')
+# (이전 날짜 컬럼 전처리 로직 삭제)
 
 # --- 기준일(필터) UI: 맨 위에 한 번만 배치 ---
 from datetime import datetime, timedelta
 import pytz
 
+st.set_page_config(layout="wide")
 # --- 인쇄용 스타일 추가 ---
 st.markdown("""
 <style>
@@ -75,269 +83,226 @@ with col1:
 with col2:
     selected_date = st.date_input('기준 날짜를 선택하세요 (기본값: 금일)', value=today_kst)
 
-# --- 1. 전날, 금일 메일/신청/지급 배분 건수 ---
-st.write("### 1. 전날, 금일 메일/신청/지급 배분 건수")
+# 구분선
+st.write("---")
 
-# 컬럼 존재 여부 확인
-if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.columns and '배분일' in df_2.columns and '지급신청일자' in df_1.columns:
+# --- 1. 전날, 금일 메일/신청/지급 배분 건수 & 3. 법인팀 요약 ---
+# 컬럼 존재 여부 확인 (새 구조)
+if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.columns:
     
-    # --- 선택된 분기에 따라 df_5, df_2, df_1 필터링 ---
+    # --- 선택된 분기에 따라 df_5, df_1, df_2 필터링 (새 구조) ---
     if selected_quarter == '전체':
         df_5_filtered = df_5
-        df_2_filtered = df_2
         df_1_filtered = df_1
+        df_2_filtered = df_2
     else:
-        # 지원(파이프라인) 기준으로 분기 필터링
         df_5_filtered = df_5[df_5['분기'] == selected_quarter]
-        
-        # 해당 분기의 지원 RN 목록 가져오기
-        rns_in_quarter = df_5_filtered['RN'].unique()
-
-        # 지원 RN 기준으로 지급 데이터 필터링
-        # df_1과 df_2의 '분기' 컬럼을 사용하지 않고, 지원 분기에 해당하는 RN으로 필터링합니다.
-        df_2_filtered = df_2[df_2['RN'].isin(rns_in_quarter)]
-        # '신청'과 '지급' 데이터가 모두 있는 df_1은 두 가지 역할을 모두 수행하므로,
-        # 지원 분기 RN 기준으로 필터링하여 '지급' 관련 집계가 올바르게 되도록 합니다.
-        # '신청' 관련 집계는 '신청일자'로 날짜 필터링되므로 영향이 없습니다.
-        df_1_filtered = df_1[df_1['제조수입사\n관리번호'].isin(rns_in_quarter)]
+        df_1_filtered = df_1[df_1['분기'] == selected_quarter]
+        df_2_filtered = df_2[df_2['분기'] == selected_quarter]
 
     # 날짜 변수 설정
     day0 = selected_date
     # '전일'을 주말을 제외한 가장 최근의 영업일로 계산합니다.
     day1 = (pd.to_datetime(selected_date) - pd.tseries.offsets.BDay(1)).date()
 
-    # --- 메일 건수 계산 ---
-    cnt_today_mail = (df_5_filtered['날짜'].dt.date == day0).sum()
-    cnt_yesterday_mail = (df_5_filtered['날짜'].dt.date == day1).sum()
-    cnt_total_mail = (df_5_filtered['날짜'].dt.date <= day0).sum()
+    col1, col2 = st.columns([6, 4])
 
-    # --- 1. '신청 건수' 계산 (새로운 로직) ---
-    # '신청 건수'는 해당 날짜에 EV에서 신청된 전체 건수입니다.
-    cnt_today_apply = (df_1_filtered['신청일자'].dt.date == day0).sum()
-    cnt_yesterday_apply = (df_1_filtered['신청일자'].dt.date == day1).sum()
-    cnt_total_apply = (df_1_filtered['신청일자'].dt.date <= day0).sum()
-
-    # --- 2. '이전 건' 계산 (새로운 로직) ---
-    # '이전 건'은 파이프라인 날짜와 신청일자가 다른 건수입니다.
-    
-    # 전일 이전 건
-    df1_yesterday = df_1_filtered[df_1_filtered['신청일자'].dt.date == day1]
-    if not df1_yesterday.empty:
-        rns_in_df1_yesterday = df1_yesterday['제조수입사\n관리번호'].unique()
-        pipeline_for_yesterday_apps = df_5_filtered[df_5_filtered['RN'].isin(rns_in_df1_yesterday)]
-        merged_yesterday = pd.merge(df1_yesterday, pipeline_for_yesterday_apps, left_on='제조수입사\n관리번호', right_on='RN')
-        cnt_yesterday_previous = merged_yesterday[merged_yesterday['신청일자'].dt.date != merged_yesterday['날짜'].dt.date].shape[0]
-    else:
-        cnt_yesterday_previous = 0
-
-    # 금일 이전 건
-    df1_today = df_1_filtered[df_1_filtered['신청일자'].dt.date == day0]
-    if not df1_today.empty:
-        rns_in_df1_today = df1_today['제조수입사\n관리번호'].unique()
-        pipeline_for_today_apps = df_5_filtered[df_5_filtered['RN'].isin(rns_in_df1_today)]
-        merged_today = pd.merge(df1_today, pipeline_for_today_apps, left_on='제조수입사\n관리번호', right_on='RN')
-        cnt_today_previous = merged_today[merged_today['신청일자'].dt.date != merged_today['날짜'].dt.date].shape[0]
-    else:
-        cnt_today_previous = 0
-
-    # 누적 이전 건
-    df1_total = df_1_filtered[df_1_filtered['신청일자'].dt.date <= day0]
-    if not df1_total.empty:
-        merged_total = pd.merge(df1_total, df_5_filtered, left_on='제조수입사\n관리번호', right_on='RN', how='inner')
-        mismatched_total = merged_total[merged_total['신청일자'].dt.date != merged_total['날짜'].dt.date]
-        cnt_total_previous = mismatched_total['RN'].nunique()
-    else:
-        cnt_total_previous = 0
-
-    # 지급/요청 건수 계산 (df_2_filtered, df_1_filtered 사용)
-    cnt_today_distribute = (df_2_filtered['배분일'].dt.date == day0).sum()
-    cnt_yesterday_distribute = (df_2_filtered['배분일'].dt.date == day1).sum()
-    cnt_total_distribute = (df_2_filtered['배분일'].dt.date <= day0).sum()
-
-    cnt_today_request = (df_1_filtered['지급신청일자_날짜'].dt.date == day0).sum()
-    cnt_yesterday_request = (df_1_filtered['지급신청일자_날짜'].dt.date == day1).sum()
-    cnt_total_request = (df_1_filtered['지급신청일자_날짜'].dt.date <= day0).sum()
-    
-    # '신청 불가' 건수 계산
-    # 전일
-    rns_yesterday = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day1, 'RN']
-    df_matched_yesterday = df[df['RN'].isin(rns_yesterday)]
-    cnt_ineligible_yesterday = int(df_matched_yesterday.loc[~df_matched_yesterday['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
-
-    # 금일
-    rns_today = df_5_filtered.loc[df_5_filtered['날짜'].dt.date == day0, 'RN']
-    df_matched_today = df[df['RN'].isin(rns_today)]
-    cnt_ineligible_today = int(df_matched_today.loc[~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
-
-    # 누적
-    rns_total = df_5_filtered.loc[df_5_filtered['날짜'].dt.date <= day0, 'RN']
-    df_matched_total = df[df['RN'].isin(rns_total)]
-    cnt_ineligible_total = int(df_matched_total.loc[~df_matched_total['Greet Note'].astype(str).str.contains('#', na=False), 'RN'].count())
-
-    # --- 툴팁 및 링크 생성 로직 ---
-    def format_tooltip_text(ineligible_df):
-        """툴팁에 표시할 문자열을 생성합니다."""
-        if ineligible_df.empty:
-            return "내역 없음"
-        # 툴팁에 표시할 최대 항목 수를 10개로 늘림
-        df_limited = ineligible_df.head(10)
-        # HTML title 속성에서 줄바꿈은 &#10; 사용, 따옴표는 &quot;로 변환
-        tooltip_lines = []
-        for _, row in df_limited.iterrows():
-            rn = str(row['RN']).replace('"', '&quot;')
-            note = str(row['Greet Note']).replace('"', '&quot;')
-            tooltip_lines.append(f"{rn}: {note}")
+    with col1:
+        st.write("### 1. 전날, 금일 메일/신청/지급 배분 건수")
         
-        tooltip_text = "&#10;".join(tooltip_lines)
-        if len(ineligible_df) > 10:
-            tooltip_text += f"&#10;...외 {len(ineligible_df) - 10}건의 내역이 더 있습니다."
-        return tooltip_text
+        # --- 메일 건수 계산 ---
+        cnt_today_mail = (df_5_filtered['날짜'].dt.date == day0).sum()
+        cnt_yesterday_mail = (df_5_filtered['날짜'].dt.date == day1).sum()
+        cnt_total_mail = (df_5_filtered['날짜'].dt.date <= day0).sum()
 
-    # 툴팁에 표시할 데이터프레임 생성
-    ineligible_df_yesterday = df_matched_yesterday.loc[~df_matched_yesterday['Greet Note'].astype(str).str.contains('#', na=False), ['RN', 'Greet Note']]
-    ineligible_df_today = df_matched_today.loc[~df_matched_today['Greet Note'].astype(str).str.contains('#', na=False), ['RN', 'Greet Note']]
+        # --- 신청 건수 계산 (지원_EV sheet, '개수' 합계) ---
+        cnt_today_apply = int(df_1_filtered.loc[df_1_filtered['날짜'].dt.date == day0, '개수'].sum())
+        cnt_yesterday_apply = int(df_1_filtered.loc[df_1_filtered['날짜'].dt.date == day1, '개수'].sum())
+        cnt_total_apply = int(df_1_filtered.loc[df_1_filtered['날짜'].dt.date <= day0, '개수'].sum())
 
-    # 툴팁 텍스트 생성
-    tooltip_yesterday = format_tooltip_text(ineligible_df_yesterday)
-    tooltip_today = format_tooltip_text(ineligible_df_today)
+        # 지급/요청 건수 계산 (지급 시트)
+        cnt_today_distribute = int(df_2_filtered.loc[df_2_filtered['날짜'].dt.date == day0, '배분'].sum())
+        cnt_yesterday_distribute = int(df_2_filtered.loc[df_2_filtered['날짜'].dt.date == day1, '배분'].sum())
+        cnt_total_distribute = int(df_2_filtered.loc[df_2_filtered['날짜'].dt.date <= day0, '배분'].sum())
 
-    # '신청 불가' 셀을 툴팁을 포함한 텍스트로 만들기 (클릭 기능 제거)
-    def create_cell_with_tooltip(count, tooltip=""):
-        if count > 0:
-            # <a> 태그를 <span>으로 변경하여 링크 기능 제거
-            return f'<span title="{tooltip}">{count}</span>'
-        return str(count)
-
-    # HTML 생성
-    ineligible_yesterday_html = create_cell_with_tooltip(cnt_ineligible_yesterday, tooltip_yesterday)
-    ineligible_today_html = create_cell_with_tooltip(cnt_ineligible_today, tooltip_today)
-
-    # '변동' 행 계산
-    delta_mail = cnt_today_mail - cnt_yesterday_mail
-    delta_ineligible = cnt_ineligible_today - cnt_ineligible_yesterday
-    delta_apply = cnt_today_apply - cnt_yesterday_apply
-    delta_previous = cnt_today_previous - cnt_yesterday_previous
-    delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
-    delta_request = cnt_today_request - cnt_yesterday_request
-
-    # '변동' 값에 대한 스타일링 함수
-    def format_delta(value):
-        if value > 0:
-            return f'<span style="color:blue;">+{value}</span>'
-        elif value < 0:
-            return f'<span style="color:red;">{value}</span>'
-        return str(value)
-
-    # 3단 멀티인덱스 헤더 구조로 데이터프레임 생성
-    table_data = pd.DataFrame({
-        ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
-        ('지원', '파이프라인', '신청 불가'): [ineligible_yesterday_html, ineligible_today_html, cnt_ineligible_total],
-        ('지원', '신청완료', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
-        ('지원', '신청완료', '이전 건'): [cnt_yesterday_previous, cnt_today_previous, cnt_total_previous],
-        ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
-        ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request]
-    }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계'])
-
-    # 스타일이 적용된 '변동' 행 추가
-    table_data.loc['변동'] = [
-        format_delta(delta_mail),
-        format_delta(delta_ineligible),
-        format_delta(delta_apply),
-        format_delta(delta_previous),
-        format_delta(delta_distribute),
-        format_delta(delta_request)
-    ]
-    
-    # CSS 스타일을 정의하여 테이블을 꾸밉니다.
-    st.markdown("""
-    <style>
-    .custom_table {
-        width: 100%;
-        border-collapse: collapse;
-        text-align: right;
-        font-size: 14px;
-    }
-    .custom_table th, .custom_table td {
-        padding: 8px 12px;
-        border: 1px solid #e0e0e0;
-    }
-    .custom_table th {
-        background-color: #f8f9fa;
-        font-weight: bold;
-        text-align: center;
-        vertical-align: middle;
-    }
-    .custom_table tbody th {
-        text-align: center;
-        font-weight: bold;
-        background-color: #f8f9fa;
-    }
-    .custom_table thead tr:last-child th:first-child::before {
-        content: "구분";
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # DataFrame을 HTML로 변환하고, st.markdown을 사용해 출력합니다.
-    # escape=False를 설정하여 HTML 태그가 그대로 렌더링되도록 합니다.
-    html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
-
-    # --- 헤더에 툴팁 추가 ---
-    # 툴팁 및 설명 텍스트를 한 곳에서 정의하여 중복을 줄입니다.
-    header_tooltips = {
-        '메일 건수': '테슬라 측에서 요청한 지원 신청 건',
-        '신청 불가': 'EV로 신청하지 못한 건',
-        '신청 건수': '해당 날짜에 EV에서 신청된 전체 건수',
-        '이전 건': '당일 파이프라인이 아닌 이전 날짜에 신청한 건\nEX) 7월 28일 파이프라인 건 -> 지자체 오픈 7월 29일 -> 7월 29일 신청',
-        '지급 배분건': '지급 처리 해야 할 건',
-        '지급신청 건수': '지급 처리 완료 건'
-    }
-
-    # 헤더에 툴팁 추가
-    for header, tooltip in header_tooltips.items():
-        html_table = html_table.replace(f'<th>{header}</th>', f'<th title="{tooltip}">{header}</th>')
-
-    st.markdown(html_table, unsafe_allow_html=True)
-
-    # --- 콜아웃(설명 박스)을 토글 방식으로 변경 ---
-    with st.expander("설명 보기/숨기기 (클릭)"):
-        # header_tooltips를 활용하여 설명을 자동 생성
-        설명_리스트 = "\n".join(
-            [f"- **{header}**: {tooltip.replace(chr(10), '<br>')}" for header, tooltip in header_tooltips.items()]
-        )
-        st.markdown(f"""
-        {설명_리스트}
+        cnt_today_request = int(df_2_filtered.loc[df_2_filtered['날짜'].dt.date == day0, '신청'].sum())
+        cnt_yesterday_request = int(df_2_filtered.loc[df_2_filtered['날짜'].dt.date == day1, '신청'].sum())
+        cnt_total_request = int(df_2_filtered.loc[df_2_filtered['날짜'].dt.date <= day0, '신청'].sum())
         
-        *각 표의 헤더에 마우스를 올리면 더 상세한 설명을 볼 수 있습니다.*
-        """, unsafe_allow_html=True)
+        # '변동' 행 계산
+        delta_mail = cnt_today_mail - cnt_yesterday_mail
+        delta_apply = cnt_today_apply - cnt_yesterday_apply
+        delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
+        delta_request = cnt_today_request - cnt_yesterday_request
+
+        # '변동' 값에 대한 스타일링 함수
+        def format_delta(value):
+            if value > 0:
+                return f'<span style="color:blue;">+{value}</span>'
+            elif value < 0:
+                return f'<span style="color:red;">{value}</span>'
+            return str(value)
+
+        # 3단 멀티인덱스 헤더 구조로 데이터프레임 생성 (간소화)
+        table_data = pd.DataFrame({
+            ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
+            ('지원', '신청완료', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
+            ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
+            ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request]
+        }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계'])
+
+        # 스타일이 적용된 '변동' 행 추가
+        table_data.loc['변동'] = [
+            format_delta(delta_mail),
+            format_delta(delta_apply),
+            format_delta(delta_distribute),
+            format_delta(delta_request)
+        ]
+        
+        html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
+
+        header_tooltips = {
+            '메일 건수': 'PipeLine 시트에서 기준일자별 RN 행 수',
+            '신청 건수': '지원_EV 시트의 집계값(개수)',
+            '지급 배분건': '지급 시트의 배분 합계',
+            '지급신청 건수': '지급 시트의 신청 합계'
+        }
+
+        for header, tooltip in header_tooltips.items():
+            html_table = html_table.replace(f'<th>{header}</th>', f'<th title="{tooltip}">{header}</th>')
+
+        st.markdown(html_table, unsafe_allow_html=True)
+
+        with st.expander("설명 보기/숨기기 (클릭)"):
+            설명_리스트 = "\n".join(
+                [f"- **{header}**: {tooltip.replace(chr(10), '<br>')}" for header, tooltip in header_tooltips.items()]
+            )
+            st.markdown(f"""
+            {설명_리스트}
+            <br>
+            *각 표의 헤더에 마우스를 올리면 더 상세한 설명을 볼 수 있습니다.*
+            """, unsafe_allow_html=True)
+            
+    with col2:
+        st.write("### 3. 법인팀 요약")
+
+        required_cols_df3 = ['신청 요청일', '접수 완료', '신청대수']
+        required_cols_df4 = ['요청일자', '지급신청 완료 여부', '신청번호', '접수대수']
+
+        has_all_cols = all(col in df_3.columns for col in required_cols_df3) and \
+                       all(col in df_4.columns for col in required_cols_df4)
+
+        if has_all_cols:
+            def process_new(df, end_date):
+                df = df.copy()
+                date_col = '신청 요청일'
+                if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
+                    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                df_cumulative = df[df[date_col].notna() & (df[date_col].dt.date <= end_date)]
+                df_cumulative = df_cumulative[df_cumulative['접수 완료'].astype(str).str.strip().isin(['O', 'ㅇ'])]
+                if '그리트 노트' in df_cumulative.columns:
+                    is_cancelled = df_cumulative['그리트 노트'].astype(str).str.contains('취소', na=False)
+                    is_reapplied = df_cumulative['그리트 노트'].astype(str).str.contains('취소 후 재신청', na=False)
+                    df_cumulative = df_cumulative[~(is_cancelled & ~is_reapplied)]
+                b_col_name = df_cumulative.columns[1]
+                df_cumulative = df_cumulative[df_cumulative[b_col_name].notna() & (df_cumulative[b_col_name] != "")]
+                df_today = df_cumulative[df_cumulative[date_col].dt.date == end_date]
+                mask_bulk = df_cumulative['신청대수'] > 1
+                mask_single = df_cumulative['신청대수'] == 1
+                new_bulk_sum = int(df_cumulative.loc[mask_bulk, '신청대수'].sum())
+                new_bulk_count = int(mask_bulk.sum())
+                new_single_sum = int(df_cumulative.loc[mask_single, '신청대수'].sum())
+                today_bulk_count = int((df_today['신청대수'] > 1).sum())
+                today_single_count = int((df_today['신청대수'] == 1).sum())
+                return new_bulk_sum, new_single_sum, new_bulk_count, today_bulk_count, today_single_count
+
+            def process_give(df, end_date):
+                df = df.copy()
+                date_col = '요청일자'
+                if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
+                    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                df_cumulative = df[df[date_col].notna() & (df[date_col].dt.date <= end_date)]
+                df_cumulative = df_cumulative[df_cumulative['지급신청 완료 여부'].astype(str).str.strip() == '완료']
+                unique_df_cumulative = df_cumulative.drop_duplicates(subset=['신청번호'])
+                df_today = df_cumulative[df_cumulative[date_col].dt.date == end_date]
+                unique_df_today = df_today.drop_duplicates(subset=['신청번호'])
+                mask_bulk = unique_df_cumulative['접수대수'] > 1
+                mask_single = unique_df_cumulative['접수대수'] == 1
+                give_bulk_sum = int(unique_df_cumulative.loc[mask_bulk, '접수대수'].sum())
+                give_bulk_count = int(mask_bulk.sum())
+                give_single_sum = int(unique_df_cumulative.loc[mask_single, '접수대수'].sum())
+                today_bulk_count = int((unique_df_today['접수대수'] > 1).sum())
+                today_single_count = int((unique_df_today['접수대수'] == 1).sum())
+                return give_bulk_sum, give_single_sum, give_bulk_count, today_bulk_count, today_single_count
+
+            new_bulk_sum, new_single_sum, new_bulk_count, new_today_bulk_count, new_today_single_count = process_new(df_3, selected_date)
+            give_bulk_sum, give_single_sum, give_bulk_count, give_today_bulk_count, give_today_single_count = process_give(df_4, selected_date)
+         
+            row_names = ['벌크', '낱개', 'TTL']
+            columns = pd.MultiIndex.from_tuples([
+                ('지원', '파이프라인', '대수'), ('지원', '신청(건)', '당일'), ('지원', '신청(건)', '누계'),
+                ('지급', '파이프라인', '대수'), ('지급', '신청(건)', '당일'), ('지급', '신청(건)', '누계')
+            ], names=['', '분류', '항목'])
+            df_total = pd.DataFrame(0, index=row_names, columns=columns)
+            df_total.loc['벌크', ('지원', '파이프라인', '대수')] = new_bulk_sum
+            df_total.loc['낱개', ('지원', '파이프라인', '대수')] = new_single_sum
+            df_total.loc['TTL', ('지원', '파이프라인', '대수')] = new_bulk_sum + new_single_sum
+            df_total.loc['벌크', ('지원', '신청(건)', '당일')] = new_today_bulk_count
+            df_total.loc['낱개', ('지원', '신청(건)', '당일')] = new_today_single_count
+            df_total.loc['TTL', ('지원', '신청(건)', '당일')] = new_today_bulk_count + new_today_single_count
+            df_total.loc['벌크', ('지원', '신청(건)', '누계')] = new_bulk_count
+            df_total.loc['낱개', ('지원', '신청(건)', '누계')] = new_single_sum
+            df_total.loc['TTL', ('지원', '신청(건)', '누계')] = new_bulk_count + new_single_sum
+            df_total.loc['벌크', ('지급', '파이프라인', '대수')] = give_bulk_sum
+            df_total.loc['낱개', ('지급', '파이프라인', '대수')] = give_single_sum
+            df_total.loc['TTL', ('지급', '파이프라인', '대수')] = give_bulk_sum + give_single_sum
+            df_total.loc['벌크', ('지급', '신청(건)', '당일')] = give_today_bulk_count
+            df_total.loc['낱개', ('지급', '신청(건)', '당일')] = give_today_single_count
+            df_total.loc['TTL', ('지급', '신청(건)', '당일')] = give_today_bulk_count + give_today_single_count
+            df_total.loc['벌크', ('지급', '신청(건)', '누계')] = give_bulk_count
+            df_total.loc['낱개', ('지급', '신청(건)', '누계')] = give_single_sum
+            df_total.loc['TTL', ('지급', '신청(건)', '누계')] = give_bulk_count + give_single_sum
+             
+            html_table_4 = df_total.to_html(classes='custom_table', border=0)
+            st.markdown(html_table_4, unsafe_allow_html=True)
+
+            st.write("### 법인팀 메모")
+            new_memo = st.text_area(
+                "메모를 입력하거나 수정하세요. (내용은 자동으로 저장됩니다)",
+                value=st.session_state.memo_content, height=100, key="memo_input"
+            )
+
+            if new_memo != st.session_state.memo_content:
+                st.session_state.memo_content = new_memo
+                with open(MEMO_FILE, "w", encoding="utf-8") as f:
+                    f.write(new_memo)
+                st.toast("메모가 저장되었습니다!")
+        else:
+            st.warning("3번 테이블에 필요한 컬럼이 df_3 또는 df_4에 존재하지 않습니다.")
 
     # --- 2. 기간별 합계 테이블 ---
-    st.write("---") # 구분선
+    st.write("---")
     st.write("### 2. 기간별 합계")
     
-    # 기간 선택 UI
-    col1, col2 = st.columns(2)
-    with col1:
+    col1_period, col2_period = st.columns(2)
+    with col1_period:
         start_date_period = st.date_input('기간 시작일', value=(today_kst.replace(day=1)), key='start_date_period')
-    with col2:
+    with col2_period:
         end_date_period = st.date_input('기간 종료일', value=today_kst, key='end_date_period')
 
     if start_date_period > end_date_period:
         st.error("기간 시작일이 종료일보다 늦을 수 없습니다.")
     else:
-        # 기간 내 데이터 필터링
         mask_mail = (df_5['날짜'].dt.date >= start_date_period) & (df_5['날짜'].dt.date <= end_date_period)
-        mask_apply = (df_1['신청일자'].dt.date >= start_date_period) & (df_1['신청일자'].dt.date <= end_date_period)
-        mask_distribute = (df_2['배분일'].dt.date >= start_date_period) & (df_2['배분일'].dt.date <= end_date_period)
-        mask_request = (df_1['지급신청일자_날짜'].dt.date >= start_date_period) & (df_1['지급신청일자_날짜'].dt.date <= end_date_period)
+        mask_apply = (df_1['날짜'].dt.date >= start_date_period) & (df_1['날짜'].dt.date <= end_date_period)
+        mask_distribute = (df_2['날짜'].dt.date >= start_date_period) & (df_2['날짜'].dt.date <= end_date_period)
+        mask_request = mask_distribute
 
-        # 기간별 합계 계산
         cnt_period_mail = int(mask_mail.sum())
-        cnt_period_apply = int(mask_apply.sum())
-        cnt_period_distribute = int(mask_distribute.sum())
-        cnt_period_request = int(mask_request.sum())
+        cnt_period_apply = int(df_1.loc[mask_apply, '개수'].sum())
+        cnt_period_distribute = int(df_2.loc[mask_distribute, '배분'].sum())
+        cnt_period_request = int(df_2.loc[mask_request, '신청'].sum())
 
-        # 기간별 합계 데이터프레임 생성
         period_table_data = pd.DataFrame({
             ('지원', '파이프라인', '메일 건수'): [cnt_period_mail],
             ('지원', '신청완료', '신청 건수'): [cnt_period_apply],
@@ -345,297 +310,75 @@ if '날짜' in df_5.columns and 'RN' in df_5.columns and '신청일자' in df_1.
             ('지급', '지급 처리', '지급신청 건수'): [cnt_period_request]
         }, index=[f'합계'])
 
-        # HTML로 변환하여 출력
         period_html_table = period_table_data.to_html(classes='custom_table', border=0)
         st.markdown(period_html_table, unsafe_allow_html=True)
 
-else:
-    st.warning("필요한 컬럼('접수메일\n도착일', 'RN', '신청일자', '배분일', '지급신청일자')을 찾을 수 없습니다.")
+    # --- 4. 분기별 메일/신청 건수 ---
+    st.write("---")
+    st.write("### 4. 분기별 메일/신청 건수")
+    if '날짜' in df_5.columns and '날짜' in df_1.columns and '분기' in df_5.columns and '분기' in df_1.columns:
+        mail_counts_by_quarter = df_5.groupby('분기').size()
+        q2_mail_count = mail_counts_by_quarter.get('2분기', 0)
+        q3_mail_count = mail_counts_by_quarter.get('3분기', 0)
+        apply_counts_by_quarter = df_1.groupby('분기')['개수'].sum()
+        q2_apply_count = apply_counts_by_quarter.get('2분기', 0)
+        q3_apply_count = apply_counts_by_quarter.get('3분기', 0)
+        quarter_chart_df = pd.DataFrame({
+            '분기': ['2분기', '3분기'],
+            '메일 건수': [q2_mail_count, q3_mail_count],
+            '신청 건수': [q2_apply_count, q3_apply_count]
+        })
+        quarter_chart_long = quarter_chart_df.melt(id_vars='분기', var_name='구분', value_name='건수')
+        quarter_bar_chart = alt.Chart(quarter_chart_long).mark_bar(size=40).encode(
+            x=alt.X('분기:N', title='분기'),
+            xOffset='구분:N',
+            y=alt.Y('건수:Q', title='건수'),
+            color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+            tooltip=['분기', '구분', '건수']
+        ).properties(title='분기별 메일/신청 건수 합계')
+        st.altair_chart(quarter_bar_chart, use_container_width=True)
+    else:
+        st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '분기' 컬럼을 찾을 수 없습니다.")
 
-# --- 3. 월별 데이터 (4월~) ---
-st.write("---") # 구분선
-st.write("### 3. 월별 데이터 4월(2분기) 부터")
-
-# --- 월별 데이터 차트 (월간 합계) ---
-if '날짜' in df_5.columns and '신청일자' in df_1.columns:
-    
-    # 분기 선택과 상관없이 항상 4월부터 현재 월까지의 데이터를 집계
-    current_month = selected_date.month
-    months_to_show = list(range(4, current_month + 1))
-    chart_title = f"{selected_date.year}년 월별 합계 (4월~{current_month}월)"
-
-    # 해당 월 데이터 필터링 (분기 필터링 제거)
-    df_5_filtered_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
-    df_1_filtered_monthly = df_1[(df_1['신청일자'].dt.year == selected_date.year) & (df_1['신청일자'].dt.month.isin(months_to_show))]
-
-    # 월별 합계 계산
-    mail_counts = df_5_filtered_monthly.groupby(df_5_filtered_monthly['날짜'].dt.month).size()
-    apply_counts = df_1_filtered_monthly.groupby(df_1_filtered_monthly['신청일자'].dt.month).size()
-
-    # 차트용 데이터프레임 생성
-    chart_df = pd.DataFrame(
-        {'메일 건수': mail_counts, '신청 건수': apply_counts},
-        index=pd.Index(months_to_show, name='월')
-    ).fillna(0).astype(int).reset_index()
-    
-    # '월' 컬럼을 '4월', '5월' 형태로 변환
-    chart_df['월'] = chart_df['월'].astype(str) + '월'
-
-    # melt로 long-form 변환
-    chart_long = chart_df.melt(id_vars='월', var_name='구분', value_name='건수')
-
-    # Altair 그룹형 막대그래프 생성
-    bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
-        x=alt.X('월:N', title='월', sort=[f"{m}월" for m in months_to_show]),
-        xOffset='구분:N',
-        y=alt.Y('건수:Q', title='건수'),
-        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
-        tooltip=['월', '구분', '건수']
-    ).properties(
-        title=chart_title
-    )
-    st.altair_chart(bar_chart, use_container_width=True)
-else:
-    st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
-
-# --- 4. 분기별 메일/신청 건수 ---
-st.write("---") # 구분선
-st.write("### 4. 분기별 메일/신청 건수")
-
-if '날짜' in df_5.columns and '신청일자' in df_1.columns and '분기' in df_5.columns and '분기' in df_1.columns:
-    
-    # 메일 건수 분기별 집계 (전처리된 '분기' 컬럼 사용)
-    mail_counts_by_quarter = df_5.groupby('분기').size()
-    q2_mail_count = mail_counts_by_quarter.get('2분기', 0)
-    q3_mail_count = mail_counts_by_quarter.get('3분기', 0)
-
-    # 신청 건수 분기별 집계 (전처리된 '분기' 컬럼 사용)
-    apply_counts_by_quarter = df_1.groupby('분기').size()
-    q2_apply_count = apply_counts_by_quarter.get('2분기', 0)
-    q3_apply_count = apply_counts_by_quarter.get('3분기', 0)
-    
-    # 차트용 데이터프레임 생성
-    quarter_chart_df = pd.DataFrame({
-        '분기': ['2분기', '3분기'],
-        '메일 건수': [q2_mail_count, q3_mail_count],
-        '신청 건수': [q2_apply_count, q3_apply_count]
-    })
-    
-    # melt로 long-form 변환
-    quarter_chart_long = quarter_chart_df.melt(id_vars='분기', var_name='구분', value_name='건수')
-    
-    # Altair 그룹형 막대그래프 생성
-    quarter_bar_chart = alt.Chart(quarter_chart_long).mark_bar(size=40).encode(
-        x=alt.X('분기:N', title='분기'),
-        xOffset='구분:N',
-        y=alt.Y('건수:Q', title='건수'),
-        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
-        tooltip=['분기', '구분', '건수']
-    ).properties(
-        title='분기별 메일/신청 건수 합계'
-    )
-    
-    st.altair_chart(quarter_bar_chart, use_container_width=True)
-else:
-    st.warning("차트를 표시하는 데 필요한 '날짜', '신청일자' 또는 '분기' 컬럼을 찾을 수 없습니다.")
-
-# --- 5. 최근 5 영업일 메일/신청 건수 (주말 제외) ---
-st.write("---") # 구분선
-st.write("### 5. 최근 5 영업일 메일/신청 건수 (주말 제외)")
-if '날짜' in df_5.columns and '신청일자' in df_1.columns:
-    last_5_bdays_index = pd.bdate_range(end=pd.Timestamp(selected_date), periods=5)
-    last_5_bdays_list = last_5_bdays_index.to_list()
-    # 메일 건수
-    df_recent = df_5[df_5['날짜'].dt.normalize().isin(last_5_bdays_list)]
-    mail_counts = df_recent['날짜'].dt.normalize().value_counts().reindex(last_5_bdays_index, fill_value=0).sort_index()
-    # 신청 건수
-    df1_recent = df_1[df_1['신청일자'].dt.normalize().isin(last_5_bdays_list)]
-    apply_counts = df1_recent['신청일자'].dt.normalize().value_counts().reindex(last_5_bdays_index, fill_value=0).sort_index()
-    # 날짜 인덱스 문자열 변환
-    idx_str = pd.to_datetime(last_5_bdays_index).strftime('%Y-%m-%d')
-    # DataFrame for bar chart
-    chart_df = pd.DataFrame({
-        '날짜': idx_str,
-        '메일 건수': mail_counts.values,
-        '신청 건수': apply_counts.values
-    })
-    # melt로 long-form 변환
-    chart_long = chart_df.melt(id_vars='날짜', var_name='구분', value_name='건수')
-    # Altair 그룹형(날짜별 두 막대) 막대그래프
-    bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
-        x=alt.X('날짜:N', title='날짜', axis=alt.Axis(labelAngle=-45)),
-        xOffset='구분:N',  # 날짜별로 두 막대가 나란히!
-        y=alt.Y('건수:Q', title='건수'),
-        color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
-        tooltip=['날짜', '구분', '건수']
-    ).properties(width=200)
-    st.altair_chart(bar_chart, use_container_width=True)
-else:
-    st.warning("'접수메일\n도착일' 또는 '신청일자' 컬럼을 찾을 수 없습니다.")
-
-# --- 6. 현재 EV 신청단계 별 건수 ---
-st.write("---") # 구분선
-st.write("### 6. 현재 EV 신청단계 별 건수")
-st.write(f"**업데이트 시간: {update_time_str}**")
-
-# df_1 (EV 시트)에 필요한 컬럼들이 있는지 확인
-if '신청단계' in df_1.columns and '지역구분' in df_1.columns:
-    # '지역구분'이 비어있지 않은 데이터만 필터링
-    df_filtered = df_1.dropna(subset=['지역구분'])
-
-    # 필터링된 데이터에서 '신청단계'의 값별로 개수를 셉니다 (NaN 값도 포함).
-    stage_counts = df_filtered['신청단계'].value_counts(dropna=False)
-    
-    # Series의 이름을 '건수'로 지정합니다.
-    stage_counts.name = '건수'
-    
-    # 결측값(NaN)이 있다면 인덱스 이름을 '미지정'으로 변경합니다.
-    if np.nan in stage_counts.index:
-        stage_counts = stage_counts.rename(index={np.nan: '미지정'})
-
-    # Streamlit 테이블로 표시합니다.
-    st.table(stage_counts)
-else:
-    st.warning("EV 시트(df_1)에서 '신청단계' 또는 '지역구분' 컬럼을 찾을 수 없습니다.")
-
-# --- 7. 법인팀 요약 ---
-st.write("---") # 구분선
-st.write("### 7. 법인팀 요약")
-
-# 필요한 컬럼 목록 정의
-required_cols_df3 = ['신청 요청일', '접수 완료', '신청대수']
-required_cols_df4 = ['요청일자', '지급신청 완료 여부', '신청번호', '접수대수']
-
-# 모든 컬럼이 존재하는지 확인
-has_all_cols = all(col in df_3.columns for col in required_cols_df3) and \
-               all(col in df_4.columns for col in required_cols_df4)
-
-if has_all_cols:
-    # --- 데이터 처리 함수 (manager.py 로직 기반) ---
-    def process_new(df, end_date):
-        df = df.copy()
-        date_col = '신청 요청일'
-        # 날짜 타입 변환
-        if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-        
-        # 기준일까지 필터링 (누계 계산용)
-        df_cumulative = df[df[date_col].notna() & (df[date_col].dt.date <= end_date)]
-        # '접수 완료' 필터
-        df_cumulative = df_cumulative[df_cumulative['접수 완료'].astype(str).str.strip().isin(['O', 'ㅇ'])]
-        
-        # '그리트 노트'에 '취소'가 포함된 경우 제외 (단, '취소 후 재신청'은 포함)
-        if '그리트 노트' in df_cumulative.columns:
-            # '취소'는 포함하지만 '취소 후 재신청'은 포함하지 않는 경우를 찾음
-            is_cancelled = df_cumulative['그리트 노트'].astype(str).str.contains('취소', na=False)
-            is_reapplied = df_cumulative['그리트 노트'].astype(str).str.contains('취소 후 재신청', na=False)
-            
-            # '취소'만 있고 '취소 후 재신청'이 없는 행만 제외
-            df_cumulative = df_cumulative[~(is_cancelled & ~is_reapplied)]
-            
-        # 기타 필터
-        b_col_name = df_cumulative.columns[1]
-        df_cumulative = df_cumulative[df_cumulative[b_col_name].notna() & (df_cumulative[b_col_name] != "")]
-        
-        # 당일 데이터 필터링
-        df_today = df_cumulative[df_cumulative[date_col].dt.date == end_date]
-
-        # 누계 계산
-        mask_bulk = df_cumulative['신청대수'] > 1
-        mask_single = df_cumulative['신청대수'] == 1
-        new_bulk_sum = int(df_cumulative.loc[mask_bulk, '신청대수'].sum())
-        new_bulk_count = int(mask_bulk.sum())
-        new_single_sum = int(df_cumulative.loc[mask_single, '신청대수'].sum())
-
-        # 당일 건수 계산
-        today_bulk_count = int((df_today['신청대수'] > 1).sum())
-        today_single_count = int((df_today['신청대수'] == 1).sum())
-
-        return new_bulk_sum, new_single_sum, new_bulk_count, today_bulk_count, today_single_count
-
-    def process_give(df, end_date):
-        df = df.copy()
-        date_col = '요청일자'
-        # 날짜 타입 변환
-        if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-         
-        # 기준일까지 필터링 (누계 계산용)
-        df_cumulative = df[df[date_col].notna() & (df[date_col].dt.date <= end_date)]
-        # '지급신청 완료 여부' 필터
-        df_cumulative = df_cumulative[df_cumulative['지급신청 완료 여부'].astype(str).str.strip() == '완료']
-        # 중복 제거
-        unique_df_cumulative = df_cumulative.drop_duplicates(subset=['신청번호'])
-
-        # 당일 데이터 필터링
-        df_today = df_cumulative[df_cumulative[date_col].dt.date == end_date]
-        unique_df_today = df_today.drop_duplicates(subset=['신청번호'])
-         
-        # 누계 계산
-        mask_bulk = unique_df_cumulative['접수대수'] > 1
-        mask_single = unique_df_cumulative['접수대수'] == 1
-        give_bulk_sum = int(unique_df_cumulative.loc[mask_bulk, '접수대수'].sum())
-        give_bulk_count = int(mask_bulk.sum())
-        give_single_sum = int(unique_df_cumulative.loc[mask_single, '접수대수'].sum())
-
-        # 당일 건수 계산
-        today_bulk_count = int((unique_df_today['접수대수'] > 1).sum())
-        today_single_count = int((unique_df_today['접수대수'] == 1).sum())
-
-        return give_bulk_sum, give_single_sum, give_bulk_count, today_bulk_count, today_single_count
-
-    # --- 데이터 처리 실행 ---
-    new_bulk_sum, new_single_sum, new_bulk_count, new_today_bulk_count, new_today_single_count = process_new(df_3, selected_date)
-    give_bulk_sum, give_single_sum, give_bulk_count, give_today_bulk_count, give_today_single_count = process_give(df_4, selected_date)
- 
-    # --- 요약 DataFrame 생성 (3단 멀티인덱스) ---
-    row_names = ['벌크', '낱개', 'TTL']
-     
-    columns = pd.MultiIndex.from_tuples([
-        ('지원', '파이프라인', '대수'),
-        ('지원', '신청(건)', '당일'),
-        ('지원', '신청(건)', '누계'),
-        ('지급', '파이프라인', '대수'),
-        ('지급', '신청(건)', '당일'),
-        ('지급', '신청(건)', '누계')
-    ], names=['', '분류', '항목']) # 헤더 이름 지정
- 
-    df_total = pd.DataFrame(0, index=row_names, columns=columns)
- 
-    # 지원 데이터 채우기
-    df_total.loc['벌크', ('지원', '파이프라인', '대수')] = new_bulk_sum
-    df_total.loc['낱개', ('지원', '파이프라인', '대수')] = new_single_sum
-    df_total.loc['TTL', ('지원', '파이프라인', '대수')] = new_bulk_sum + new_single_sum
-     
-    df_total.loc['벌크', ('지원', '신청(건)', '당일')] = new_today_bulk_count
-    df_total.loc['낱개', ('지원', '신청(건)', '당일')] = new_today_single_count
-    df_total.loc['TTL', ('지원', '신청(건)', '당일')] = new_today_bulk_count + new_today_single_count
-
-    df_total.loc['벌크', ('지원', '신청(건)', '누계')] = new_bulk_count
-    df_total.loc['낱개', ('지원', '신청(건)', '누계')] = new_single_sum
-    df_total.loc['TTL', ('지원', '신청(건)', '누계')] = new_bulk_count + new_single_sum
-     
-    # 지급 데이터 채우기
-    df_total.loc['벌크', ('지급', '파이프라인', '대수')] = give_bulk_sum
-    df_total.loc['낱개', ('지급', '파이프라인', '대수')] = give_single_sum
-    df_total.loc['TTL', ('지급', '파이프라인', '대수')] = give_bulk_sum + give_single_sum
-     
-    df_total.loc['벌크', ('지급', '신청(건)', '당일')] = give_today_bulk_count
-    df_total.loc['낱개', ('지급', '신청(건)', '당일')] = give_today_single_count
-    df_total.loc['TTL', ('지급', '신청(건)', '당일')] = give_today_bulk_count + give_today_single_count
-
-    df_total.loc['벌크', ('지급', '신청(건)', '누계')] = give_bulk_count
-    df_total.loc['낱개', ('지급', '신청(건)', '누계')] = give_single_sum
-    df_total.loc['TTL', ('지급', '신청(건)', '누계')] = give_bulk_count + give_single_sum
-     
-    # '당일' 컬럼은 manager.py에 계산 로직이 없으므로 0으로 유지됩니다.
-     
-    # Streamlit에 HTML 테이블로 표시
-    html_table_4 = df_total.to_html(classes='custom_table', border=0)
-    st.markdown(html_table_4, unsafe_allow_html=True)
+    # --- 5. 월별 데이터 (4월~) ---
+    st.write("---")
+    st.write("### 5. 월별 데이터 (4월~)")
+    if '날짜' in df_5.columns and '날짜' in df_1.columns:
+        current_month = selected_date.month
+        start_month = 4 
+        months_to_show = list(range(start_month, current_month + 1))
+        if not months_to_show:
+            st.info("4월 이후의 데이터가 없습니다.")
+        else:
+            chart_title = f"{selected_date.year}년 월별 합계 ({start_month}월~{current_month}월)"
+            df_5_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
+            df_1_monthly = df_1[(df_1['날짜'].dt.year == selected_date.year) & (df_1['날짜'].dt.month.isin(months_to_show))]
+            mail_counts = df_5_monthly.groupby(df_5_monthly['날짜'].dt.month).size()
+            apply_counts = df_1_monthly.groupby(df_1_monthly['날짜'].dt.month)['개수'].sum()
+            chart_df = pd.DataFrame(
+                {'메일 건수': mail_counts, '신청 건수': apply_counts},
+                index=pd.Index(months_to_show, name='월')
+            ).fillna(0).astype(int).reset_index()
+            chart_df['월'] = chart_df['월'].astype(str) + '월'
+            chart_long = chart_df.melt(id_vars='월', var_name='구분', value_name='건수')
+            bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
+                x=alt.X('월:N', title='월', sort=[f"{m}월" for m in months_to_show]),
+                xOffset='구분:N',
+                y=alt.Y('건수:Q', title='건수'),
+                color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+                tooltip=['월', '구분', '건수']
+            ).properties(title=chart_title)
+            st.altair_chart(bar_chart, use_container_width=True)
+    else:
+        st.warning("차트를 표시하는 데 필요한 '날짜' 컬럼을 찾을 수 없습니다.")
 
 else:
-    st.warning("4번 테이블에 필요한 컬럼이 df_3 또는 df_4에 존재하지 않습니다.")
+    st.warning("필요한 컬럼('날짜', '개수', '배분', '신청')이 존재하지 않습니다.")
+
+
+    
+
+
 
 
 
