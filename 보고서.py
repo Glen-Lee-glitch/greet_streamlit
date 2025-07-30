@@ -96,7 +96,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
     col1, col2 = st.columns([6.4, 3.6])
 
     with col1:
-        st.write("### 1. 전날, 금일 메일/신청/지급 배분 건수")
+        st.write("### 1. 리테일 금일/전일 요약")
         
         # --- 메일 건수 계산 ---
         cnt_today_mail = (df_5_filtered['날짜'].dt.date == day0).sum()
@@ -176,7 +176,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
         temp_col1, temp_col2 = st.columns([5.7, 4.3])
 
         with temp_col1:
-            st.write("##### 리테일")
+            st.write("##### 리테일 월별 요약")
 
             # --- Q3 데이터 기간 계산 ---
             year = selected_date.year
@@ -246,7 +246,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
 
         # --- 법인팀 ---
         with temp_col2:
-            st.write("##### 법인팀")
+            st.write("##### 법인팀 월별 요약")
 
             # --- 날짜 변수 설정 ---
             year = selected_date.year
@@ -345,7 +345,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
 
 
     with col2:
-        st.write("### 2. 법인팀 요약")
+        st.write("### 2. 금일 법인팀 요약")
 
         required_cols_df3 = ['신청 요청일', '접수 완료', '신청대수']
         required_cols_df4 = ['요청일자', '지급신청 완료 여부', '신청번호', '접수대수']
