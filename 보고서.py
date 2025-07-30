@@ -49,24 +49,12 @@ st.markdown("""
 @media print {
     /* 인쇄 시 적용될 스타일 */
     .main .block-container {
-        max-width: 100%;
-        padding: 1rem;
-    }
-    /* Streamlit의 불필요한 UI 요소들을 숨깁니다. */
-    header, .stToolbar, .stActionButton, .stDeployButton {
-        display: none !important;
-    }
-    /* 페이지가 어색하게 나뉘는 것을 방지합니다. */
-    .stApp > div {
-        page-break-inside: avoid;
-    }
-    /* 모든 텍스트를 검은색으로 강제하여 가독성을 높입니다. */
-    * {
-        color: black !important;
-    }
-    /* 차트 크기 조정 */
+// ... 기존 스타일 ...
     .stAltairChart {
         width: 100% !important;
+    }
+    .no-print {
+        display: none !important;
     }
 }
 </style>
@@ -452,6 +440,11 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 st.toast("메모가 저장되었습니다!")
         else:
             st.warning("3번 테이블에 필요한 컬럼이 df_3 또는 df_4에 존재하지 않습니다.")
+
+    st.markdown('<div class="no-print">', unsafe_allow_html=True)
+
+    # 10rem 높이의 여백을 추가합니다. (원하는 높이로 숫자 조절 가능)
+    st.markdown('<div style="height: 10rem;"></div>', unsafe_allow_html=True)
 
     # --- 2. 기간별 합계 테이블 ---
     st.write("---")
