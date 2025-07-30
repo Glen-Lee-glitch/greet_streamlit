@@ -338,7 +338,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 '<td style="background-color: #e0f7fa;">진척률</td>'
             ).replace(
                 f'<td>{formatted_progress_corp}</td>',
-                f'<td style="background-color: #e0f7fa;">{formatted_progress_corp}</td>'
+                f'<td>{formatted_progress_corp}</td>'
             )
             
             st.markdown(html_corp, unsafe_allow_html=True)
