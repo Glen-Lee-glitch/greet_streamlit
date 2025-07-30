@@ -105,7 +105,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
     # '전일'을 주말을 제외한 가장 최근의 영업일로 계산합니다.
     day1 = (pd.to_datetime(selected_date) - pd.tseries.offsets.BDay(1)).date()
 
-    col1, col2 = st.columns([6, 4])
+    col1, col2 = st.columns([6.4, 3.6])
 
     with col1:
         st.write("### 1. 전날, 금일 메일/신청/지급 배분 건수")
@@ -185,7 +185,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
 
         # --- 임시 테이블 추가 ---
         st.write("------")  # 구분선
-        temp_col1, temp_col2 = st.columns([6, 4])
+        temp_col1, temp_col2 = st.columns([5.7, 4.3])
 
         with temp_col1:
             st.write("##### 리테일")
