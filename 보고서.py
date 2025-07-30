@@ -228,6 +228,8 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
             }))
         # --- 임시 테이블 끝 ---
 
+    # (col1의 임시 테이블 코드 끝)
+
     with col2:
         st.write("### 3. 법인팀 요약")
 
@@ -324,6 +326,98 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 st.toast("메모가 저장되었습니다!")
         else:
             st.warning("3번 테이블에 필요한 컬럼이 df_3 또는 df_4에 존재하지 않습니다.")
+
+    # --- 2. 기간별 합계 테이블 ---
+    st.write("---")
+    st.write("### 2. 기간별 합계")
+    
+    col1_period, col2_period = st.columns(2)
+    with col1_period:
+        start_date_period = st.date_input('기간 시작일', value=(today_kst.replace(day=1)), key='start_date_period')
+    with col2_period:
+        end_date_period = st.date_input('기간 종료일', value=today_kst, key='end_date_period')
+
+    if start_date_period > end_date_period:
+        st.error("기간 시작일이 종료일보다 늦을 수 없습니다.")
+    else:
+        mask_mail = (df_5['날짜'].dt.date >= start_date_period) & (df_5['날짜'].dt.date <= end_date_period)
+        mask_apply = (df_1['날짜'].dt.date >= start_date_period) & (df_1['날짜'].dt.date <= end_date_period)
+        mask_distribute = (df_2['날짜'].dt.date >= start_date_period) & (df_2['날짜'].dt.date <= end_date_period)
+        mask_request = mask_distribute
+
+        cnt_period_mail = int(mask_mail.sum())
+        cnt_period_apply = int(df_1.loc[mask_apply, '개수'].sum())
+        cnt_period_distribute = int(df_2.loc[mask_distribute, '배분'].sum())
+        cnt_period_request = int(df_2.loc[mask_request, '신청'].sum())
+
+        period_table_data = pd.DataFrame({
+            ('지원', '파이프라인', '메일 건수'): [cnt_period_mail],
+            ('지원', '신청완료', '신청 건수'): [cnt_period_apply],
+            ('지급', '지급 처리', '지급 배분건'): [cnt_period_distribute],
+            ('지급', '지급 처리', '지급신청 건수'): [cnt_period_request]
+        }, index=[f'합계'])
+
+        period_html_table = period_table_data.to_html(classes='custom_table', border=0)
+        st.markdown(period_html_table, unsafe_allow_html=True)
+
+    # --- 4. 분기별 메일/신청 건수 ---
+    st.write("---")
+    st.write("### 4. 분기별 메일/신청 건수")
+    if '날짜' in df_5.columns and '날짜' in df_1.columns and '분기' in df_5.columns and '분기' in df_1.columns:
+        mail_counts_by_quarter = df_5.groupby('분기').size()
+        q2_mail_count = mail_counts_by_quarter.get('2분기', 0)
+        q3_mail_count = mail_counts_by_quarter.get('3분기', 0)
+        apply_counts_by_quarter = df_1.groupby('분기')['개수'].sum()
+        q2_apply_count = apply_counts_by_quarter.get('2분기', 0)
+        q3_apply_count = apply_counts_by_quarter.get('3분기', 0)
+        quarter_chart_df = pd.DataFrame({
+            '분기': ['2분기', '3분기'],
+            '메일 건수': [q2_mail_count, q3_mail_count],
+            '신청 건수': [q2_apply_count, q3_apply_count]
+        })
+        quarter_chart_long = quarter_chart_df.melt(id_vars='분기', var_name='구분', value_name='건수')
+        quarter_bar_chart = alt.Chart(quarter_chart_long).mark_bar(size=40).encode(
+            x=alt.X('분기:N', title='분기'),
+            xOffset='구분:N',
+            y=alt.Y('건수:Q', title='건수'),
+            color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+            tooltip=['분기', '구분', '건수']
+        ).properties(title='분기별 메일/신청 건수 합계')
+        st.altair_chart(quarter_bar_chart, use_container_width=True)
+    else:
+        st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '분기' 컬럼을 찾을 수 없습니다.")
+
+    # --- 5. 월별 데이터 (4월~) ---
+    st.write("---")
+    st.write("### 5. 월별 데이터 (4월~)")
+    if '날짜' in df_5.columns and '날짜' in df_1.columns:
+        current_month = selected_date.month
+        start_month = 4 
+        months_to_show = list(range(start_month, current_month + 1))
+        if not months_to_show:
+            st.info("4월 이후의 데이터가 없습니다.")
+        else:
+            chart_title = f"{selected_date.year}년 월별 합계 ({start_month}월~{current_month}월)"
+            df_5_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
+            df_1_monthly = df_1[(df_1['날짜'].dt.year == selected_date.year) & (df_1['날짜'].dt.month.isin(months_to_show))]
+            mail_counts = df_5_monthly.groupby(df_5_monthly['날짜'].dt.month).size()
+            apply_counts = df_1_monthly.groupby(df_1_monthly['날짜'].dt.month)['개수'].sum()
+            chart_df = pd.DataFrame(
+                {'메일 건수': mail_counts, '신청 건수': apply_counts},
+                index=pd.Index(months_to_show, name='월')
+            ).fillna(0).astype(int).reset_index()
+            chart_df['월'] = chart_df['월'].astype(str) + '월'
+            chart_long = chart_df.melt(id_vars='월', var_name='구분', value_name='건수')
+            bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
+                x=alt.X('월:N', title='월', sort=[f"{m}월" for m in months_to_show]),
+                xOffset='구분:N',
+                y=alt.Y('건수:Q', title='건수'),
+                color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+                tooltip=['월', '구분', '건수']
+            ).properties(title=chart_title)
+            st.altair_chart(bar_chart, use_container_width=True)
+    else:
+        st.warning("차트를 표시하는 데 필요한 '날짜' 컬럼을 찾을 수 없습니다.")
 
 else:
     st.warning("필요한 컬럼('날짜', '개수', '배분', '신청')이 존재하지 않습니다.")
