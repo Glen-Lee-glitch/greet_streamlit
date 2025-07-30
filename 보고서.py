@@ -150,10 +150,10 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
         html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
 
         header_tooltips = {
-            '메일 건수': 'PipeLine 시트에서 기준일자별 RN 행 수',
-            '신청 건수': '지원_EV 시트의 집계값(개수)',
-            '지급 배분건': '지급 시트의 배분 합계',
-            '지급신청 건수': '지급 시트의 신청 합계'
+            '메일 건수': '금일 지원신청 요청 메일 수신 건수',
+            '신청 건수': '실제로 신청한 건수',
+            '지급 배분건': '지급 신청 필요 건수',
+            '지급신청 건수': '지급 신청 완료 건수'
         }
 
         for header, tooltip in header_tooltips.items():
@@ -345,7 +345,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
 
 
     with col2:
-        st.write("### 2. 금일 법인팀 요약")
+        st.write("### 2. 법인팀 금일 요약")
 
         required_cols_df3 = ['신청 요청일', '접수 완료', '신청대수']
         required_cols_df4 = ['요청일자', '지급신청 완료 여부', '신청번호', '접수대수']
