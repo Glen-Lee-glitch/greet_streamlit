@@ -439,10 +439,10 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
             html_table_4 = df_total.to_html(classes='custom_table', border=0)
             st.markdown(html_table_4, unsafe_allow_html=True)
 
-            st.write("### 법인팀 메모")
+            st.write("### 메모")
             new_memo = st.text_area(
                 "메모를 입력하거나 수정하세요. (내용은 자동으로 저장됩니다)",
-                value=st.session_state.memo_content, height=100, key="memo_input"
+                value=st.session_state.memo_content, height=300, key="memo_input"
             )
 
             if new_memo != st.session_state.memo_content:
