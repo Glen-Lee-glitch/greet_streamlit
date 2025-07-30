@@ -231,7 +231,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 '7월': [july_mail_count, july_apply_count, july_distribute_count],
                 '8월': [august_mail_count, august_apply_count, august_distribute_count]
             }
-            retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청완료', '지급배분'])
+            retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청완료', '지급신청'])
 
             # TTL 컬럼 추가
             retail_df['TTL'] = retail_df['7월'] + retail_df['8월']
@@ -255,16 +255,106 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
             
             st.markdown(html_retail, unsafe_allow_html=True)
 
+
+        # --- 법인팀 ---
         with temp_col2:
             st.write("##### 법인팀")
-            st.table(pd.DataFrame({
-                '분류': ['항목 A', '항목 B'],
-                '값': [123.45, 678.90],
-                '비고': ['-', '확인 필요']
-            }))
-        # --- 임시 테이블 끝 ---
 
-    # (col1의 임시 테이블 코드 끝)
+            # --- 날짜 변수 설정 ---
+            year = selected_date.year
+            q3_apply_start = datetime(year, 6, 18).date()
+            q3_distribute_start = datetime(year, 6, 18).date()
+            july_end = min(selected_date, datetime(year, 7, 31).date())
+            august_start = datetime(year, 8, 1).date()
+            august_end = selected_date
+
+            # --- 월별 계산 함수 (수정된 최종 로직) ---
+            def get_corp_period_metrics(df3_raw, df4_raw, apply_start, apply_end, distribute_start, distribute_end):
+                # --- df_3 (지원: 파이프라인, 지원신청) 계산 ---
+                pipeline, apply = 0, 0
+                if selected_date >= apply_start:
+                    df3 = df3_raw.copy()
+                    date_col_3 = '신청 요청일'
+                    if not pd.api.types.is_datetime64_any_dtype(df3[date_col_3]):
+                        df3[date_col_3] = pd.to_datetime(df3[date_col_3], errors='coerce')
+                    
+                    mask3 = (df3[date_col_3].dt.date >= apply_start) & (df3[date_col_3].dt.date <= apply_end)
+                    df3_period = df3.loc[mask3]
+
+                    df3_period = df3_period[df3_period['접수 완료'].astype(str).str.strip().isin(['O', 'ㅇ'])]
+                    if '그리트 노트' in df3_period.columns:
+                        is_cancelled = df3_period['그리트 노트'].astype(str).str.contains('취소', na=False)
+                        is_reapplied = df3_period['그리트 노트'].astype(str).str.contains('취소 후 재신청', na=False)
+                        df3_period = df3_period[~(is_cancelled & ~is_reapplied)]
+                    b_col_name = df3_period.columns[1]
+                    df3_period = df3_period[df3_period[b_col_name].notna() & (df3_period[b_col_name] != "")]
+
+                    pipeline = int(df3_period['신청대수'].sum())
+                    mask_bulk_3 = df3_period['신청대수'] > 1
+                    mask_single_3 = df3_period['신청대수'] == 1
+                    apply = int(mask_bulk_3.sum() + df3_period.loc[mask_single_3, '신청대수'].sum())
+
+                # --- df_4 (지급: 지급신청) 계산 ---
+                distribute = 0
+                if selected_date >= distribute_start:
+                    df4 = df4_raw.copy()
+                    date_col_4 = '요청일자'
+                    if not pd.api.types.is_datetime64_any_dtype(df4[date_col_4]):
+                        df4[date_col_4] = pd.to_datetime(df4[date_col_4], errors='coerce')
+
+                    mask4 = (df4[date_col_4].dt.date >= distribute_start) & (df4[date_col_4].dt.date <= distribute_end)
+                    df4_period = df4.loc[mask4]
+
+                    df4_period = df4_period[df4_period['지급신청 완료 여부'].astype(str).str.strip() == '완료']
+                    unique_df4_period = df4_period.drop_duplicates(subset=['신청번호'])
+
+                    mask_bulk_4 = unique_df4_period['접수대수'] > 1
+                    mask_single_4 = unique_df4_period['접수대수'] == 1
+                    # [오류 수정] 벌크 건의 '대수 합'이 아닌 '건수 합'을 사용하도록 변경
+                    distribute = int(mask_bulk_4.sum() + unique_df4_period.loc[mask_single_4, '접수대수'].sum())
+
+                return pipeline, apply, distribute
+
+            # --- 월별 데이터 계산 실행 ---
+            july_pipeline, july_apply, july_distribute = get_corp_period_metrics(
+                df_3, df_4, q3_apply_start, july_end, q3_distribute_start, july_end
+            )
+            
+            august_pipeline, august_apply, august_distribute = get_corp_period_metrics(
+                df_3, df_4, august_start, august_end, august_start, august_end
+            )
+                
+            # --- 데이터프레임 생성 ---
+            corp_df_data = {
+                '7월': [july_pipeline, july_apply, july_distribute],
+                '8월': [august_pipeline, august_apply, august_distribute]
+            }
+            corp_df = pd.DataFrame(corp_df_data, index=['파이프라인', '지원신청', '지급신청'])
+            corp_df['TTL'] = corp_df['7월'] + corp_df['8월']
+
+            # --- 'Q3 Target' 및 진척률 추가 ---
+            q3_target_corp = 1500
+            ttl_apply_corp = corp_df.loc['지원신청', 'TTL']
+            progress_rate_corp = ttl_apply_corp / q3_target_corp if q3_target_corp > 0 else 0
+            formatted_progress_corp = f"{progress_rate_corp:.2%}"
+
+            corp_df['Q3 Target'] = ''
+            corp_df.loc['파이프라인', 'Q3 Target'] = f"{q3_target_corp}"
+            corp_df.loc['지원신청', 'Q3 Target'] = '진척률'
+            corp_df.loc['지급신청', 'Q3 Target'] = formatted_progress_corp
+            
+            # --- HTML로 변환 및 스타일 적용 ---
+            html_corp = corp_df.to_html(classes='custom_table', border=0, escape=False)
+            html_corp = html_corp.replace(
+                '<td>진척률</td>',
+                '<td style="background-color: #e0f7fa;">진척률</td>'
+            ).replace(
+                f'<td>{formatted_progress_corp}</td>',
+                f'<td style="background-color: #e0f7fa;">{formatted_progress_corp}</td>'
+            )
+            
+            st.markdown(html_corp, unsafe_allow_html=True)
+
 
     with col2:
         st.write("### 3. 법인팀 요약")
