@@ -190,34 +190,70 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
         with temp_col1:
             st.write("##### 리테일")
 
-            # --- 7월 데이터 계산 ---
-            # selected_date를 기준으로 올해 7월 1일 ~ 31일 범위 설정
-            july_start = datetime(selected_date.year, 7, 1).date()
-            july_end = datetime(selected_date.year, 7, 31).date()
+            # --- Q3 데이터 기간 계산 ---
+            year = selected_date.year
 
-            # 기간 내 데이터 필터링
-            mask_july_5 = (df_5['날짜'].dt.date >= july_start) & (df_5['날짜'].dt.date <= july_end)
-            mask_july_1 = (df_1['날짜'].dt.date >= july_start) & (df_1['날짜'].dt.date <= july_end)
-            mask_july_2 = (df_2['날짜'].dt.date >= july_start) & (df_2['날짜'].dt.date <= july_end)
+            # 기간 정의
+            q3_start_default = datetime(year, 6, 24).date()     # 파이프라인/신청 시작일
+            q3_start_distribute = datetime(year, 7, 1).date()   # 지급 시작일
+            
+            july_end = min(selected_date, datetime(year, 7, 31).date())
+            
+            august_start = datetime(year, 8, 1).date()
+            august_end = selected_date
 
-            # 7월 건수 계산
-            july_mail_count = int(df_5.loc[mask_july_5].shape[0])
-            july_apply_count = int(df_1.loc[mask_july_1, '개수'].sum())
-            july_distribute_count = int(df_2.loc[mask_july_2, '배분'].sum())
+            # --- 7월 건수 계산 ---
+            # 파이프라인/신청 (6/24~)
+            july_mail_count = int(df_5[(df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= july_end)].shape[0]) if july_end >= q3_start_default else 0
+            july_apply_count = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= july_end), '개수'].sum()) if july_end >= q3_start_default else 0
+            
+            # 지급 (7/1~)
+            july_distribute_count = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= july_end), '배분'].sum()) if july_end >= q3_start_distribute else 0
+
+            # --- 8월 건수 계산 ---
+            # 8월은 모든 항목이 8/1부터 시작
+            august_mail_count = 0
+            august_apply_count = 0
+            august_distribute_count = 0
+            if selected_date >= august_start:
+                mask_august_5 = (df_5['날짜'].dt.date >= august_start) & (df_5['날짜'].dt.date <= august_end)
+                mask_august_1 = (df_1['날짜'].dt.date >= august_start) & (df_1['날짜'].dt.date <= august_end)
+                mask_august_2 = (df_2['날짜'].dt.date >= august_start) & (df_2['날짜'].dt.date <= august_end)
+
+                august_mail_count = int(df_5.loc[mask_august_5].shape[0])
+                august_apply_count = int(df_1.loc[mask_august_1, '개수'].sum())
+                august_distribute_count = int(df_2.loc[mask_august_2, '배분'].sum())
 
             # --- 데이터프레임 생성 ---
             retail_df_data = {
                 'Q1': [4436, 4230, 4214],
                 'Q2': [9199, 9212, 8946],
                 '7월': [july_mail_count, july_apply_count, july_distribute_count],
-                '8월': [0, 0, 0]
+                '8월': [august_mail_count, august_apply_count, august_distribute_count]
             }
             retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청완료', '지급배분'])
-            
-            # TTL 컬럼 추가 (7월 + 8월)
+
+            # TTL 컬럼 추가
             retail_df['TTL'] = retail_df['7월'] + retail_df['8월']
+
+            # --- 'Q3 Target' 컬럼 추가 (진척률 서식 포함) ---
+            q3_target = 10000
+            # 0으로 나누는 경우 방지
+            progress_rate = july_mail_count / q3_target if q3_target > 0 else 0
+            formatted_progress = f"{progress_rate:.2%}"
+            retail_df['Q3 Target'] = [q3_target, '진척률', formatted_progress]
+
+            # --- HTML 테이블로 변환 및 스타일 적용 ---
+            html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False)
             
-            st.table(retail_df)
+            # '진척률' 셀을 찾아 배경색 스타일 추가
+            # <td>진척률</td> 부분을 찾아서 td 태그에 스타일을 추가합니다.
+            html_retail = html_retail.replace(
+                '<td>진척률</td>',
+                '<td style="background-color: #e0f7fa;">진척률</td>'
+            )
+            
+            st.markdown(html_retail, unsafe_allow_html=True)
 
         with temp_col2:
             st.write("##### 법인팀")
