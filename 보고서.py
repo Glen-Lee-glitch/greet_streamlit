@@ -250,7 +250,11 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
             # 2분기까지 파이프라인 대비 판매현황 비율 계산
             pipeline_q12_total = retail_df_data['Q1'][0] + retail_df_data['Q2'][0]
             tesla_total = tesla_q1_sum + tesla_q2_sum
-            sales_rate = pipeline_q12_total / tesla_total if pipeline_q12_total > 0 else 0
+            # 테슬라 판매현황이 0일 경우 분모가 0이 되어 오류가 발생할 수 있으므로 예외 처리
+            if tesla_total > 0:
+                sales_rate = pipeline_q12_total / tesla_total
+            else:
+                sales_rate = 0  # 판매현황 데이터가 없을 때는 0%로 표시
             formatted_sales_rate = f"{sales_rate:.2%}"
 
             retail_df['Q3 Target'] = [q3_target, '진척률', formatted_progress, formatted_sales_rate]
