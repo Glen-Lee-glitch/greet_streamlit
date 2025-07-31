@@ -13,6 +13,7 @@ def preprocess_and_save_data():
         # ---------- 1. 파일 경로 및 시트 로딩 ----------
         q3_file = "Q3.xlsx"
         q2_file = "Q2.xlsx"
+        q1_file = "Q1.xlsx"
 
         # 3분기 시트
         df_1_q3 = pd.read_excel(q3_file, sheet_name="지원_EV")      # 지원 데이터 (3분기)
@@ -24,16 +25,41 @@ def preprocess_and_save_data():
         df_2_q2 = pd.read_excel(q2_file, sheet_name="지급")         # 지급 데이터 (2분기)
         df_5_q2 = pd.read_excel(q2_file, sheet_name="PipeLine")     # 파이프라인 데이터 (2분기)
 
-        print("Q3.xlsx, Q2.xlsx의 시트를 성공적으로 로드했습니다.")
+        # 1분기 시트
+        df_1_q1 = pd.read_excel(q1_file, sheet_name="지원_EV")      # 지원 데이터 (1분기)
+        df_2_q1 = pd.read_excel(q1_file, sheet_name="지급")         # 지급 데이터 (1분기)
+        df_5_q1_raw = pd.read_excel(q1_file, sheet_name="PipeLine") # 파이프라인 데이터 (1분기, 집계형)
+
+        # 1분기 PipeLine 시트는 날짜별 '개수'가 누적되어 있어 개수만큼 행을 복제하여 확장합니다.
+        df_5_q1_list = []
+        if {'날짜', '개수'}.issubset(df_5_q1_raw.columns):
+            df_5_q1_raw['날짜'] = pd.to_datetime(df_5_q1_raw['날짜'], errors='coerce')
+            df_5_q1_raw = df_5_q1_raw.dropna(subset=['날짜', '개수'])
+            for _, row in df_5_q1_raw.iterrows():
+                df_5_q1_list.append(pd.DataFrame({'날짜': [row['날짜']]*int(row['개수'])}))
+            df_5_q1 = pd.concat(df_5_q1_list, ignore_index=True) if df_5_q1_list else pd.DataFrame(columns=['날짜'])
+        else:
+            df_5_q1 = df_5_q1_raw.copy()
+
+        print("Q3.xlsx, Q2.xlsx, Q1.xlsx의 시트를 성공적으로 로드했습니다.")
 
         # ---------- 2. 분기 컬럼 추가 및 병합 ----------
-        df_1_q3["분기"] = "3분기"; df_1_q2["분기"] = "2분기"
-        df_2_q3["분기"] = "3분기"; df_2_q2["분기"] = "2분기"
-        df_5_q3["분기"] = "3분기"; df_5_q2["분기"] = "2분기"
+        df_1_q3["분기"] = "3분기"; df_1_q2["분기"] = "2분기"; df_1_q1["분기"] = "1분기"
+        df_2_q3["분기"] = "3분기"; df_2_q2["분기"] = "2분기"; df_2_q1["분기"] = "1분기"
+        df_5_q3["분기"] = "3분기"; df_5_q2["분기"] = "2분기"; df_5_q1["분기"] = "1분기"
 
-        df_1 = pd.concat([df_1_q3, df_1_q2], ignore_index=True)
-        df_2 = pd.concat([df_2_q3, df_2_q2], ignore_index=True)
-        df_5 = pd.concat([df_5_q3, df_5_q2], ignore_index=True)
+        # 1분기는 2월~3월 데이터만 포함합니다.
+        for _df in [df_1_q1, df_2_q1, df_5_q1]:
+            if "날짜" in _df.columns:
+                _df["날짜"] = pd.to_datetime(_df["날짜"], errors="coerce")
+        df_1_q1 = df_1_q1[df_1_q1["날짜"].dt.month.isin([2,3])]
+        df_2_q1 = df_2_q1[df_2_q1["날짜"].dt.month.isin([2,3])]
+        df_5_q1 = df_5_q1[df_5_q1["날짜"].dt.month.isin([2,3])]
+
+        # 병합
+        df_1 = pd.concat([df_1_q3, df_1_q2, df_1_q1], ignore_index=True)
+        df_2 = pd.concat([df_2_q3, df_2_q2, df_2_q1], ignore_index=True)
+        df_5 = pd.concat([df_5_q3, df_5_q2, df_5_q1], ignore_index=True)
 
         # ---------- 3. 날짜 컬럼 타입 변환 ----------
         # PipeLine / 지원 / 지급 시트 공통으로 '날짜' 컬럼 존재

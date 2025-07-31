@@ -59,6 +59,9 @@ with pd.ExcelWriter("Q3.xlsx", engine="openpyxl", mode="a", if_sheet_exists="rep
 
 # 3) 지급 신청 건수 최신화
 # '지급신청일자'에 시분초가 포함되어 있으므로, 날짜 부분만 비교하여 필터링
+
+df_distribution = pd.read_excel("C:/Users/HP/Desktop/그리트_공유/07_31_1504_EV_merged.xlsx", sheet_name="Sheet2")
+
 df_payment = _ev_df[
     pd.to_datetime(_ev_df['지급신청일자'], errors='coerce').dt.strftime('%Y-%m-%d') == today_date
 ]
@@ -91,6 +94,8 @@ df_pay_sheet = df_pay_sheet.drop_duplicates(subset=['날짜'], keep='first').res
 # 6) 다시 Q3.xlsx에 저장 (지급 시트만 교체)
 with pd.ExcelWriter("Q3.xlsx", engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
     df_pay_sheet.to_excel(writer, sheet_name="지급", index=False)
+
+
 
 
 
