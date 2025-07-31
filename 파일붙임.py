@@ -57,5 +57,40 @@ with pd.ExcelWriter("Q3.xlsx", engine="openpyxl", mode="a", if_sheet_exists="rep
     df_ev.to_excel(writer, sheet_name="지원_EV", index=False)
 
 
+# 3) 지급 신청 건수 최신화
+# '지급신청일자'에 시분초가 포함되어 있으므로, 날짜 부분만 비교하여 필터링
+df_payment = _ev_df[
+    pd.to_datetime(_ev_df['지급신청일자'], errors='coerce').dt.strftime('%Y-%m-%d') == today_date
+]
+
+c_payment = df_payment['지급신청일자'].shape[0]
+
+df_payment_new = pd.DataFrame({
+    '날짜': [today_date],
+    '배분': [pd.NA],
+    '신청': [c_payment],
+    '지급 잔여': [pd.NA]
+})
+
+# 4) 기존 '지급' 시트 읽기 (없으면 빈 DF)
+try:
+    df_pay_sheet = pd.read_excel("Q3.xlsx", sheet_name="지급")
+    # 필요한 4개 컬럼만 유지, 없으면 추가
+    expected_cols = ['날짜', '배분', '신청', '지급 잔여']
+    for col in expected_cols:
+        if col not in df_pay_sheet.columns:
+            df_pay_sheet[col] = pd.NA
+    df_pay_sheet = df_pay_sheet[expected_cols]
+except ValueError:
+    df_pay_sheet = pd.DataFrame(columns=['날짜', '배분', '신청', '지급 잔여'])
+
+# 5) 새 데이터 붙이고 중복 제거 (기존 데이터 우선 유지)
+df_pay_sheet = pd.concat([df_pay_sheet, df_payment_new], ignore_index=True)
+df_pay_sheet = df_pay_sheet.drop_duplicates(subset=['날짜'], keep='first').reset_index(drop=True)
+
+# 6) 다시 Q3.xlsx에 저장 (지급 시트만 교체)
+with pd.ExcelWriter("Q3.xlsx", engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+    df_pay_sheet.to_excel(writer, sheet_name="지급", index=False)
+
 
 
