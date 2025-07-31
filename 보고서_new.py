@@ -228,24 +228,29 @@ with col1:
     day0 = selected_date
     day1 = (pd.to_datetime(selected_date) - pd.tseries.offsets.BDay(1)).date()
 
+    # --- 3분기 시작일 설정 ---
+    year = selected_date.year
+    q3_start_default = datetime(year, 6, 24).date()     # 파이프라인/신청 시작일
+    q3_start_distribute = datetime(year, 7, 1).date()   # 지급/요청 시작일
+
     # --- 메일 건수 ---
     cnt_today_mail = (df_5['날짜'].dt.date == day0).sum()
     cnt_yesterday_mail = (df_5['날짜'].dt.date == day1).sum()
-    cnt_total_mail = (df_5['날짜'].dt.date <= day0).sum()
+    cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= day0)).sum()
 
     # --- 신청 건수 ---
     cnt_today_apply = int(df_1.loc[df_1['날짜'].dt.date == day0, '개수'].sum())
     cnt_yesterday_apply = int(df_1.loc[df_1['날짜'].dt.date == day1, '개수'].sum())
-    cnt_total_apply = int(df_1.loc[df_1['날짜'].dt.date <= day0, '개수'].sum())
+    cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= day0), '개수'].sum())
 
     # --- 지급/요청 건수 ---
     cnt_today_distribute = int(df_2.loc[df_2['날짜'].dt.date == day0, '배분'].sum())
     cnt_yesterday_distribute = int(df_2.loc[df_2['날짜'].dt.date == day1, '배분'].sum())
-    cnt_total_distribute = int(df_2.loc[df_2['날짜'].dt.date <= day0, '배분'].sum())
+    cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '배분'].sum())
 
     cnt_today_request = int(df_2.loc[df_2['날짜'].dt.date == day0, '신청'].sum())
     cnt_yesterday_request = int(df_2.loc[df_2['날짜'].dt.date == day1, '신청'].sum())
-    cnt_total_request = int(df_2.loc[df_2['날짜'].dt.date <= day0, '신청'].sum())
+    cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '신청'].sum())
 
     # --- 변동 값 계산 ---
     delta_mail = cnt_today_mail - cnt_yesterday_mail
@@ -265,7 +270,7 @@ with col1:
         ('지원', '신청완료', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
         ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
         ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request]
-    }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계'])
+    }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계 (3분기)'])
 
     table_data.loc['변동'] = [
         format_delta(delta_mail),
@@ -367,7 +372,7 @@ with col2:
         ).interactive()
         st.altair_chart(chart_corp, use_container_width=True)
     else:
-        st.info("선택된 기간에 해당하는 데이터가 없습니다.")
+        st.info("금일 신청 0건")
 
 # --- 인쇄 버튼 ---
 st.markdown('<p class="no-print">', unsafe_allow_html=True)

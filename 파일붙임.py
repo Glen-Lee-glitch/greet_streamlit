@@ -34,7 +34,7 @@ with pd.ExcelWriter("Q3.xlsx", engine="openpyxl", mode="a", if_sheet_exists="rep
 
 ### EV 최신 정보 붙이기
 # 1) 오늘 신청 건수 계산
-_ev_df = pd.read_excel("C:/Users/HP/Desktop/그리트_공유/07_31_1504_EV_merged.xlsx", sheet_name="Sheet1")
+_ev_df = pd.read_excel("C:/Users/HP/Desktop/그리트_공유/07_31_1758_EV_merged.xlsx", sheet_name="Sheet1")
 _today_ev_count = _ev_df[_ev_df['신청일자'] == today_date].shape[0]
 
 df_ev_new = pd.DataFrame({
@@ -60,7 +60,7 @@ with pd.ExcelWriter("Q3.xlsx", engine="openpyxl", mode="a", if_sheet_exists="rep
 # 3) 지급 신청 건수 최신화
 # '지급신청일자'에 시분초가 포함되어 있으므로, 날짜 부분만 비교하여 필터링
 
-df_distribution = pd.read_excel("C:/Users/HP/Desktop/그리트_공유/07_31_1504_EV_merged.xlsx", sheet_name="Sheet2")
+df_distribution = pd.read_excel("C:/Users/HP/Desktop/그리트_공유/07_31_1758_EV_merged.xlsx", sheet_name="Sheet1")
 
 df_payment = _ev_df[
     pd.to_datetime(_ev_df['지급신청일자'], errors='coerce').dt.strftime('%Y-%m-%d') == today_date

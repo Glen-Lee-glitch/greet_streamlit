@@ -4,6 +4,7 @@ import numpy as np
 import altair as alt
 import pickle
 import sys
+import re
 
 # --- 메모 파일 경로 및 로딩 ---
 MEMO_FILE = "memo.txt"
@@ -212,25 +213,51 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 august_apply_count = int(df_1.loc[mask_august_1, '개수'].sum())
                 august_distribute_count = int(df_2.loc[mask_august_2, '배분'].sum())
 
-            # --- 데이터프레임 생성 ---
+                        # --- 데이터프레임 생성 ---
+            # 테슬라 판매현황 데이터 로드 및 분기별 합계 계산
+            tesla_q1_sum = tesla_q2_sum = 0
+            try:
+                tesla_df = pd.read_excel("테슬라_판매현황.xlsx")
+                if {'월', '대수'}.issubset(tesla_df.columns):
+                    tesla_q1_sum = int(tesla_df[tesla_df['월'].isin([1, 2, 3])]['대수'].sum())
+                    tesla_q2_sum = int(tesla_df[tesla_df['월'].isin([4, 5, 6])]['대수'].sum())
+            except FileNotFoundError:
+                st.warning("'테슬라_판매현황.xlsx' 파일을 찾을 수 없습니다. 판매현황을 0으로 표시합니다.")
+            except Exception as e:
+                st.warning(f"판매현황 데이터를 불러오는 중 오류가 발생했습니다: {e}")
+            
             retail_df_data = {
-                'Q1': [4436, 4230, 4214],
-                'Q2': [9199, 9212, 8946],
-                '7월': [july_mail_count, july_apply_count, july_distribute_count],
-                '8월': [august_mail_count, august_apply_count, august_distribute_count]
+                'Q1': [4436, 4230, 4214, tesla_q1_sum],
+                'Q2': [9199, 9212, 8946, tesla_q2_sum],
+                '7월': [july_mail_count, july_apply_count, july_distribute_count, np.nan],
+                '8월': [august_mail_count, august_apply_count, august_distribute_count, np.nan]
             }
-            retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청완료', '지급신청'])
-
-            # TTL 컬럼 추가
-            retail_df['TTL'] = retail_df['7월'] + retail_df['8월']
-
-            # --- 'Q3 Target' 컬럼 추가 (진척률 서식 포함) ---
+            retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청완료', '지급신청', '판매현황'])
+            
+            # TTL 컬럼 추가 (판매현황은 Q1+Q2, 나머지는 7월+8월)
+            retail_df['TTL'] = [
+                july_mail_count + august_mail_count,
+                july_apply_count + august_apply_count,
+                july_distribute_count + august_distribute_count,
+                tesla_q1_sum + tesla_q2_sum
+            ]
+            
+            # --- 'Q3 Target' 컬럼 및 판매현황 진척률 추가 ---
             q3_target = 10000
-            # 0으로 나누는 경우 방지
             progress_rate = july_mail_count / q3_target if q3_target > 0 else 0
             formatted_progress = f"{progress_rate:.2%}"
-            retail_df['Q3 Target'] = [q3_target, '진척률', formatted_progress]
 
+            # 2분기까지 파이프라인 대비 판매현황 비율 계산
+            pipeline_q12_total = retail_df_data['Q1'][0] + retail_df_data['Q2'][0]
+            tesla_total = tesla_q1_sum + tesla_q2_sum
+            sales_rate = pipeline_q12_total / tesla_total if pipeline_q12_total > 0 else 0
+            formatted_sales_rate = f"{sales_rate:.2%}"
+
+            retail_df['Q3 Target'] = [q3_target, '진척률', formatted_progress, formatted_sales_rate]
+            
+            # 7월/8월 NaN 값을 '-'로 대체
+            retail_df[['7월', '8월']] = retail_df[['7월', '8월']].fillna('-')
+            
             # --- HTML 테이블로 변환 및 스타일 적용 ---
             html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False)
             
@@ -239,9 +266,28 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
             html_retail = html_retail.replace(
                 '<td>진척률</td>',
                 '<td style="background-color: #e0f7fa;">진척률</td>'
+            ).replace(
+                f'<td>{formatted_sales_rate}</td>',
+                f'<td style="background-color: #fff4e6;">{formatted_sales_rate}</td>'
             )
+            # 판매현황 행 전체에 배경색 적용
+            pattern = r'(<tr[^>]*>\s*<th[^>]*>판매현황</th>.*?</tr>)'
+            def _color_sales_row(match):
+                row_html = match.group(0)
+                row_html = row_html.replace('<th', '<th style="background-color: #fff4e6;"')
+                row_html = row_html.replace('<td', '<td style="background-color: #fff4e6;"')
+                return row_html
+            html_retail = re.sub(pattern, _color_sales_row, html_retail, flags=re.S)
             
             st.markdown(html_retail, unsafe_allow_html=True)
+
+            # --- 기타 텍스트 추가 ---
+            st.write("""
+            <div style="font-size: 14px; color: #666;">
+                * 판매현황은 1~2분기의 판매현황 대비 파이프라인 비율을 계산합니다.(추후 업데이트)<br>
+                ** 판매현황은 법인팀 포함입니다.
+            </div>
+            """, unsafe_allow_html=True)
 
 
         # --- 법인팀 ---

@@ -43,6 +43,23 @@ def preprocess_and_save_data():
 
         print("Q3.xlsx, Q2.xlsx, Q1.xlsx의 시트를 성공적으로 로드했습니다.")
 
+        # ---------- 추가: 테슬라 판매현황 로드 ----------
+        tesla_sales_file = "테슬라_판매현황.xlsx"
+        try:
+            df_sales = pd.read_excel(tesla_sales_file)  # 컬럼: 월, 대수
+            # 데이터 타입 변환
+            if '월' in df_sales.columns:
+                df_sales['월'] = pd.to_numeric(df_sales['월'], errors='coerce')
+            if '대수' in df_sales.columns:
+                df_sales['대수'] = pd.to_numeric(df_sales['대수'], errors='coerce')
+            print("테슬라 판매현황 데이터를 로드했습니다.")
+        except FileNotFoundError:
+            print("'테슬라_판매현황.xlsx' 파일을 찾을 수 없습니다. 판매현황 데이터는 빈 DataFrame으로 저장됩니다.")
+            df_sales = pd.DataFrame()
+        except Exception as e:
+            print(f"테슬라 판매현황을 불러오는 중 오류: {e}")
+            df_sales = pd.DataFrame()
+
         # ---------- 2. 분기 컬럼 추가 및 병합 ----------
         df_1_q3["분기"] = "3분기"; df_1_q2["분기"] = "2분기"; df_1_q1["분기"] = "1분기"
         df_2_q3["분기"] = "3분기"; df_2_q2["분기"] = "2분기"; df_2_q1["분기"] = "1분기"
@@ -92,6 +109,7 @@ def preprocess_and_save_data():
             "df_3": df_3,
             "df_4": df_4,
             "df_5": df_5,
+            "df_sales": df_sales,
             "update_time_str": update_time_str
         }
 
