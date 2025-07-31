@@ -67,7 +67,7 @@ today_kst = datetime.now(KST).date()
 col1, col2 = st.columns(2)
 with col1:
     # 분기 선택 (전체, 3분기, 2분기)
-    selected_quarter = st.selectbox('분기를 선택하세요', ['3분기', '2분기', '전체'])
+    selected_quarter = st.selectbox('분기를 선택하세요', ['3분기', '2분기','1분기','전체'])
 with col2:
     selected_date = st.date_input('기준 날짜를 선택하세요 (기본값: 금일)', value=today_kst)
 
@@ -487,15 +487,13 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
         st.write("### 4. 분기별 메일/신청 건수")
         if '날짜' in df_5.columns and '날짜' in df_1.columns and '분기' in df_5.columns and '분기' in df_1.columns:
             mail_counts_by_quarter = df_5.groupby('분기').size()
-            q2_mail_count = mail_counts_by_quarter.get('2분기', 0)
-            q3_mail_count = mail_counts_by_quarter.get('3분기', 0)
             apply_counts_by_quarter = df_1.groupby('분기')['개수'].sum()
-            q2_apply_count = apply_counts_by_quarter.get('2분기', 0)
-            q3_apply_count = apply_counts_by_quarter.get('3분기', 0)
+
+            quarter_list = ['1분기', '2분기', '3분기']
             quarter_chart_df = pd.DataFrame({
-                '분기': ['2분기', '3분기'],
-                '메일 건수': [q2_mail_count, q3_mail_count],
-                '신청 건수': [q2_apply_count, q3_apply_count]
+                '분기': quarter_list,
+                '메일 건수': [mail_counts_by_quarter.get(q, 0) for q in quarter_list],
+                '신청 건수': [apply_counts_by_quarter.get(q, 0) for q in quarter_list]
             })
             quarter_chart_long = quarter_chart_df.melt(id_vars='분기', var_name='구분', value_name='건수')
             quarter_bar_chart = alt.Chart(quarter_chart_long).mark_bar(size=40).encode(
@@ -510,13 +508,13 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
             st.warning("차트를 표시하는 데 필요한 '날짜' 또는 '분기' 컬럼을 찾을 수 없습니다.")
 
     with chart_col2:
-        st.write("### 5. 월별 데이터 (4월~)")
+        st.write("### 5. 월별 데이터 (2월~)")
         if '날짜' in df_5.columns and '날짜' in df_1.columns:
             current_month = selected_date.month
-            start_month = 4 
+            start_month = 2 
             months_to_show = list(range(start_month, current_month + 1))
             if not months_to_show:
-                st.info("4월 이후의 데이터가 없습니다.")
+                st.info("2월 이후의 데이터가 없습니다.")
             else:
                 chart_title = f"{selected_date.year}년 월별 합계 ({start_month}월~{current_month}월)"
                 df_5_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
