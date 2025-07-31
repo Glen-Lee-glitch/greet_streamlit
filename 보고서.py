@@ -229,7 +229,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 '7월': [july_mail_count, july_apply_count, july_distribute_count, np.nan],
                 '8월': [august_mail_count, august_apply_count, august_distribute_count, np.nan]
             }
-            retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청완료', '지급신청', '판매현황'])
+            retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청완료', '지급신청', '판매현황(KAIDA기준)'])
             
             # TTL 컬럼 추가 (판매현황은 Q1+Q2, 나머지는 7월+8월)
             retail_df['TTL'] = [
@@ -272,7 +272,7 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 f'<td style="background-color: #fff4e6;">{formatted_sales_rate}</td>'
             )
             # 판매현황 행 전체에 배경색 적용
-            pattern = r'(<tr[^>]*>\s*<th[^>]*>판매현황</th>.*?</tr>)'
+            pattern = r'(<tr[^>]*>\s*<th[^>]*>판매현황\(KAIDA기준\)</th>.*?</tr>)'
             def _color_sales_row(match):
                 row_html = match.group(0)
                 row_html = row_html.replace('<th', '<th style="background-color: #fff4e6;"')
