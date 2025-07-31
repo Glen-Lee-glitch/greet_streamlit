@@ -29,6 +29,7 @@ try:
     df_3 = data["df_3"]
     df_4 = data["df_4"]
     df_5 = data["df_5"]
+    df_sales = data.get("df_sales", pd.DataFrame())
     update_time_str = data["update_time_str"]
 except FileNotFoundError:
     st.error("전처리된 데이터 파일(preprocessed_data.pkl)을 찾을 수 없습니다.")
@@ -214,17 +215,13 @@ if '날짜' in df_5.columns and '날짜' in df_1.columns and '날짜' in df_2.co
                 august_distribute_count = int(df_2.loc[mask_august_2, '배분'].sum())
 
                         # --- 데이터프레임 생성 ---
-            # 테슬라 판매현황 데이터 로드 및 분기별 합계 계산
+            # 테슬라 판매현황 데이터(pkl 로드 값) 분기별 합계 계산
             tesla_q1_sum = tesla_q2_sum = 0
-            try:
-                tesla_df = pd.read_excel("테슬라_판매현황.xlsx")
-                if {'월', '대수'}.issubset(tesla_df.columns):
-                    tesla_q1_sum = int(tesla_df[tesla_df['월'].isin([1, 2, 3])]['대수'].sum())
-                    tesla_q2_sum = int(tesla_df[tesla_df['월'].isin([4, 5, 6])]['대수'].sum())
-            except FileNotFoundError:
-                st.warning("'테슬라_판매현황.xlsx' 파일을 찾을 수 없습니다. 판매현황을 0으로 표시합니다.")
-            except Exception as e:
-                st.warning(f"판매현황 데이터를 불러오는 중 오류가 발생했습니다: {e}")
+            if not df_sales.empty and {'월', '대수'}.issubset(df_sales.columns):
+                tesla_q1_sum = int(df_sales[df_sales['월'].isin([1, 2, 3])]['대수'].sum())
+                tesla_q2_sum = int(df_sales[df_sales['월'].isin([4, 5, 6])]['대수'].sum())
+            else:
+                st.warning("판매현황 데이터(df_sales)가 없거나 컬럼이 올바르지 않습니다. 판매현황을 0으로 표시합니다.")
             
             retail_df_data = {
                 'Q1': [4436, 4230, 4214, tesla_q1_sum],
