@@ -460,24 +460,49 @@ with col1:
         start_month = 2
         months_to_show = list(range(start_month, end_month + 1))
         if months_to_show:
-            df_5_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
-            df_1_monthly = df_1[(df_1['날짜'].dt.year == selected_date.year) & (df_1['날짜'].dt.month.isin(months_to_show))]
-            mail_counts = df_5_monthly.groupby(df_5_monthly['날짜'].dt.month).size()
+            # 월별 신청 건수 집계 (메일 건수 제거)
+            df_1_monthly = df_1[
+                (df_1['날짜'].dt.year == selected_date.year) &
+                (df_1['날짜'].dt.month.isin(months_to_show))
+            ]
             apply_counts = df_1_monthly.groupby(df_1_monthly['날짜'].dt.month)['개수'].sum()
+
+            # 차트용 데이터프레임 생성
             chart_df = pd.DataFrame(
-                {'메일 건수': mail_counts, '신청 건수': apply_counts},
-                index=pd.Index(months_to_show, name='월')
-            ).fillna(0).astype(int).reset_index()
-            chart_df['월'] = chart_df['월'].astype(str) + '월'
-            chart_long = chart_df.melt(id_vars='월', var_name='구분', value_name='건수')
-            bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
-                x=alt.X('월:N', title='월', sort=[f"{m}월" for m in months_to_show]),
-                xOffset='구분:N',
-                y=alt.Y('건수:Q', title='건수'),
-                color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
-                tooltip=['월', '구분', '건수']
-            ).properties(title=f"{selected_date.year}년 월별 추이 ({start_month}월~{end_month}월)")
-            st.altair_chart(bar_chart, use_container_width=True)
+                {
+                    '월': months_to_show,
+                    '신청 건수': [int(apply_counts.get(m, 0)) for m in months_to_show]
+                }
+            )
+            chart_df['월 라벨'] = chart_df['월'].astype(str) + '월'
+
+            # 막대 그래프 (신청 건수)
+            bar = alt.Chart(chart_df).mark_bar(size=25, color='#2ca02c').encode(
+                x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show]),
+                y=alt.Y('신청 건수:Q', title='건수')
+            )
+
+            # 선 그래프 + 포인트
+            line = alt.Chart(chart_df).mark_line(color='#FF5733', strokeWidth=2).encode(
+                x='월 라벨:N',
+                y='신청 건수:Q'
+            )
+            point = alt.Chart(chart_df).mark_point(color='#FF5733', size=60).encode(
+                x='월 라벨:N',
+                y='신청 건수:Q'
+            )
+
+            # 값 레이블 텍스트
+            text = alt.Chart(chart_df).mark_text(dy=-10, color='black').encode(
+                x='월 라벨:N',
+                y='신청 건수:Q',
+                text=alt.Text('신청 건수:Q')
+            )
+
+            combo_chart = (bar + line + point + text).properties(
+                title=f"{selected_date.year}년 월별 신청 건수 추이 ({start_month}월~{end_month}월)"
+            )
+            st.altair_chart(combo_chart, use_container_width=True)
 
 with col2:
     st.write("### 2. 법인팀 금일 요약")
