@@ -268,6 +268,21 @@ if viewer_option == '폴스타':
     html_pol = re.sub(r'<tr>(.*?)</tr>', color_sum_column, html_pol, flags=re.DOTALL)
 
     st.markdown(html_pol, unsafe_allow_html=True)
+
+    # --- 두 번째 표: 7월 현황 (반쪽 영역) ---
+    second_data = {
+        '전월 이월수량': ['-','-','-','-'],
+        '당일': [6,3,2,1],
+        '누계': [217,130,78,9]
+    }
+    second_df = pd.DataFrame(second_data, index=row_idx)
+    second_html = second_df.to_html(classes='custom_table', border=0, escape=False)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("7월 현황")
+        st.markdown(second_html, unsafe_allow_html=True)
+
     st.stop()
 
 # --- 메인 대시보드 ---
