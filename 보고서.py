@@ -90,7 +90,7 @@ today_kst = datetime.now(KST).date()
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
     st.header("👁️ 뷰어 옵션")
-    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라'), key="viewer_option")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타'), key="viewer_option")
     st.markdown("---")
     st.header("📊 조회 옵션")
     view_option = st.radio(
@@ -105,7 +105,17 @@ with st.sidebar:
     if view_option == '금일':
         start_date = end_date = today_kst
     elif view_option == '특정일 조회':
-        selected_date = st.date_input('날짜 선택', value=today_kst)
+        # 6월 24일부터만 선택 가능하도록 최소 날짜 제한 설정
+        earliest_date = datetime(today_kst.year, 6, 24).date()
+        # 만약 오늘이 6월 24일 이전이라면 전년도 6월 24일을 최소값으로 사용
+        if today_kst < earliest_date:
+            earliest_date = datetime(today_kst.year - 1, 6, 24).date()
+        selected_date = st.date_input(
+            '날짜 선택',
+            value=max(today_kst, earliest_date),
+            min_value=earliest_date,
+            max_value=today_kst
+        )
         start_date = end_date = selected_date
         title = f"{selected_date.strftime('%Y-%m-%d')} 리포트"
     elif view_option == '기간별 조회':
@@ -163,6 +173,102 @@ with st.sidebar:
         with open("memo.txt", "w", encoding="utf-8") as f:
             f.write(new_memo)
         st.toast("메모가 저장되었습니다!")
+
+# --- 폴스타 뷰 전용 표 ---
+if viewer_option == '폴스타':
+    # 데이터프레임 생성
+    pol_data = {
+        '1월': [72, 0, 68, 4],
+        '2월': [52, 27, 25, 0],
+        '3월': [279, 249, 20, 10],
+        '4월': [182, 146, 16, 20],
+        '5월': [332, 246, 63, 23],
+        '6월': [47, 29, 11, 7],
+        '합계': [0, 0, 0, 0],
+        '7월': [np.nan, np.nan, np.nan, np.nan],
+        '8월': [np.nan, np.nan, np.nan, np.nan],
+        '9월': [np.nan, np.nan, np.nan, np.nan],
+        '10월': [np.nan, np.nan, np.nan, np.nan],
+        '11월': [np.nan, np.nan, np.nan, np.nan],
+        '12월': [np.nan, np.nan, np.nan, np.nan],
+        '2025 총합': [964, 697, 203, 64]
+    }
+    row_idx = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+    pol_df = pd.DataFrame(pol_data, index=row_idx)
+
+    st.title("폴스타 2025")
+    # NaN 값을 '-'로 치환
+    html_pol = pol_df.fillna('-').to_html(classes='custom_table', border=0, escape=False)
+
+    import re
+
+    # <thead> 바로 뒤에 <tr><th>청구<br>세금계산서</th> ... 삽입
+    html_pol = re.sub(
+        r'(<thead>\s*<tr>)',
+        r'\1<th rowspan="2">청구<br>세금계산서</th>',
+        html_pol,
+        count=1
+    )
+
+    # ['합계'] 행(7번째 컬럼) 연주황색(#ffe0b2) 배경, ['2025 총합'] 열 연파랑색(#e3f2fd) 배경
+    # <tr>에서 <th>합계</th>가 포함된 행 전체의 <td>에 스타일 적용
+    html_pol = re.sub(
+        r'(<tr>\s*<th>합계</th>)(.*?)(</tr>)',
+        lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
+        html_pol,
+        flags=re.DOTALL
+    )
+    # <th>합계</th>에도 배경색 적용
+    html_pol = html_pol.replace('<th>합계</th>', '<th style="background-color:#ffe0b2;">합계</th>')
+
+    # ['2025 총합'] 열(마지막 컬럼) 연파랑색(#e3f2fd) 배경
+    # <thead>의 마지막 <th>에 스타일 적용
+    html_pol = re.sub(
+        r'(<th[^>]*>2025 총합</th>)',
+        r'<th style="background-color:#e3f2fd;">2025 총합</th>',
+        html_pol
+    )
+
+    # <tbody>의 각 행에서 마지막 <td>에 스타일 적용 (2025 총합 데이터 셀)
+    html_pol = re.sub(
+        r'(<tr>.*?)(<td[^>]*>[^<]*</td>)(\s*</tr>)',
+        lambda m: re.sub(
+            r'(<td[^>]*>)([^<]*)(</td>)$',
+            r'<td style="background-color:#e3f2fd;">\2</td>',
+            m.group(0)
+        ),
+        html_pol,
+        flags=re.DOTALL
+    )
+
+    # <tbody>의 각 행에서 '2025 총합'에 해당하는 <td>에도 배경색 적용 (헤더뿐 아니라 데이터까지)
+    # 위에서 이미 마지막 <td>에 칠했으나, 혹시 순서가 바뀌거나 컬럼 추가시 대비해 '2025 총합' 텍스트가 들어간 <td>도 칠함
+    html_pol = re.sub(
+        r'(<td[^>]*>)([^<]*2025 총합[^<]*)(</td>)',
+        r'<td style="background-color:#e3f2fd;">\2</td>',
+        html_pol
+    )
+
+    # <tbody>의 각 행에서 '합계' 컬럼(즉, 7번째 컬럼)에 해당하는 <td>에도 배경색 적용
+    # '합계'는 헤더에만 칠하는 것이 아니라, 데이터 셀에도 칠해야 하므로, 7번째 <td>에 칠함
+    def color_sum_column(match):
+        row = match.group(0)
+        # 7번째 <td>를 찾아서 색칠
+        tds = re.findall(r'(<td[^>]*>[^<]*</td>)', row)
+        if len(tds) >= 7:
+            tds[6] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[6])
+            # 다시 조립
+            row_new = row
+            for i, td in enumerate(tds):
+                # 첫 번째 등장하는 <td>만 순서대로 교체
+                row_new = re.sub(r'(<td[^>]*>[^<]*</td>)', lambda m: td if m.start() == 0 else m.group(0), row_new, count=1)
+            return row_new
+        else:
+            return row
+    html_pol = re.sub(r'<tr>(.*?)</tr>', color_sum_column, html_pol, flags=re.DOTALL)
+
+    st.markdown(html_pol, unsafe_allow_html=True)
+    st.stop()
 
 # --- 메인 대시보드 ---
 st.title(title)
@@ -460,47 +566,47 @@ with col1:
         start_month = 2
         months_to_show = list(range(start_month, end_month + 1))
         if months_to_show:
-            # 월별 신청 건수 집계 (메일 건수 제거)
-            df_1_monthly = df_1[
-                (df_1['날짜'].dt.year == selected_date.year) &
-                (df_1['날짜'].dt.month.isin(months_to_show))
+            # 월별 파이프라인(메일) 건수 집계
+            df_5_monthly = df_5[
+                (df_5['날짜'].dt.year == selected_date.year) &
+                (df_5['날짜'].dt.month.isin(months_to_show))
             ]
-            apply_counts = df_1_monthly.groupby(df_1_monthly['날짜'].dt.month)['개수'].sum()
+            pipeline_counts = df_5_monthly.groupby(df_5_monthly['날짜'].dt.month).size()
 
             # 차트용 데이터프레임 생성
             chart_df = pd.DataFrame(
                 {
                     '월': months_to_show,
-                    '신청 건수': [int(apply_counts.get(m, 0)) for m in months_to_show]
+                    '파이프라인 건수': [int(pipeline_counts.get(m, 0)) for m in months_to_show]
                 }
             )
             chart_df['월 라벨'] = chart_df['월'].astype(str) + '월'
 
-            # 막대 그래프 (신청 건수)
+            # 막대 그래프 (파이프라인)
             bar = alt.Chart(chart_df).mark_bar(size=25, color='#2ca02c').encode(
                 x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show]),
-                y=alt.Y('신청 건수:Q', title='건수')
+                y=alt.Y('파이프라인 건수:Q', title='건수')
             )
 
             # 선 그래프 + 포인트
             line = alt.Chart(chart_df).mark_line(color='#FF5733', strokeWidth=2).encode(
                 x='월 라벨:N',
-                y='신청 건수:Q'
+                y='파이프라인 건수:Q'
             )
             point = alt.Chart(chart_df).mark_point(color='#FF5733', size=60).encode(
                 x='월 라벨:N',
-                y='신청 건수:Q'
+                y='파이프라인 건수:Q'
             )
 
             # 값 레이블 텍스트
             text = alt.Chart(chart_df).mark_text(dy=-10, color='black').encode(
                 x='월 라벨:N',
-                y='신청 건수:Q',
-                text=alt.Text('신청 건수:Q')
+                y='파이프라인 건수:Q',
+                text=alt.Text('파이프라인 건수:Q')
             )
 
             combo_chart = (bar + line + point + text).properties(
-                title=f"{selected_date.year}년 월별 신청 건수 추이 ({start_month}월~{end_month}월)"
+                title=f"{selected_date.year}년 월별 파이프라인 추이 ({start_month}월~{end_month}월)"
             )
             st.altair_chart(combo_chart, use_container_width=True)
 
@@ -700,6 +806,44 @@ with col2:
 
     if show_monthly_summary:
         st.markdown(html_corp, unsafe_allow_html=True)
+
+        # --- 법인팀 월별 추이 그래프 (내부 뷰어 전용) ---
+        if viewer_option == '내부':
+            months_to_show_corp = [7, 8]
+            pipeline_values_corp = [july_pipeline, august_pipeline]
+
+            corp_chart_df = pd.DataFrame(
+                {
+                    '월': months_to_show_corp,
+                    '파이프라인 건수': pipeline_values_corp
+                }
+            )
+            corp_chart_df['월 라벨'] = corp_chart_df['월'].astype(str) + '월'
+
+            # 막대 그래프
+            bar_corp = alt.Chart(corp_chart_df).mark_bar(size=25, color='#2ca02c').encode(
+                x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show_corp]),
+                y=alt.Y('파이프라인 건수:Q', title='건수')
+            )
+            # 선 그래프 및 포인트
+            line_corp = alt.Chart(corp_chart_df).mark_line(color='#FF5733', strokeWidth=2).encode(
+                x='월 라벨:N',
+                y='파이프라인 건수:Q'
+            )
+            point_corp = alt.Chart(corp_chart_df).mark_point(color='#FF5733', size=60).encode(
+                x='월 라벨:N',
+                y='파이프라인 건수:Q'
+            )
+            # 레이블 텍스트
+            text_corp = alt.Chart(corp_chart_df).mark_text(dy=-10, color='black').encode(
+                x='월 라벨:N',
+                y='파이프라인 건수:Q',
+                text=alt.Text('파이프라인 건수:Q')
+            )
+            corp_combo = (bar_corp + line_corp + point_corp + text_corp).properties(
+                title=f"{selected_date.year}년 법인팀 파이프라인 추이 (7~8월)"
+            )
+            st.altair_chart(corp_combo, use_container_width=True)
 
 # --- 메모 영역 ---
 with col3:
