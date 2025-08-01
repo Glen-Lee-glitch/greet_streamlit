@@ -379,14 +379,12 @@ with col1:
         apply_total = int(df1_p['개수'].sum())
         distribute_total = int(df2_p['배분'].sum())
         # 단일 라벨로 표시하기 위해 7월 컬럼에 총합 넣고 8월은 '-' 처리
-        retail_df_data = {'선택기간': [mail_total, apply_total, distribute_total], ' ': ['-','-','-']}
+        retail_df_data = {period_option: [mail_total, apply_total, distribute_total]}
     else:
         retail_df_data = {'Q1': [4436, 4230, 4214], 'Q2': [9199, 9212, 8946], '7월': [july_mail_count, july_apply_count, july_distribute_count], '8월': [august_mail_count, august_apply_count, august_distribute_count]}
     retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청', '지급신청'])
     if period_option == '전체':
         retail_df['TTL'] = retail_df['7월'] + retail_df['8월']
-    else:
-        retail_df['TTL'] = retail_df.iloc[:,0]
 
     if period_option in ('전체', '3Q', '3분기'):
         q3_target = 10000
