@@ -932,7 +932,7 @@ with col3:
     st.subheader("기타")
     memo_etc = load_memo_file("memo_etc.txt")
     new_etc = st.text_area(
-        "",
+        "기타메모",
         value=memo_etc,
         height=150,
         key="memo_etc_input"
