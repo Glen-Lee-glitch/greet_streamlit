@@ -78,6 +78,7 @@ df_2 = data["df_2"]
 df_3 = data["df_3"]
 df_4 = data["df_4"]
 df_5 = data["df_5"]
+df_sales = data["df_sales"]
 df_fail_q3 = data["df_fail_q3"]
 df_2_fail_q3 = data["df_2_fail_q3"]
 update_time_str = data["update_time_str"]
@@ -372,25 +373,73 @@ with col1:
         return df
 
     if period_option != '전체':
+        # --- 선택 기간(분기/월) 요약 ---
         df5_p = filter_by_period(df_5)
         df1_p = filter_by_period(df_1)
         df2_p = filter_by_period(df_2)
         mail_total = int(df5_p.shape[0])
         apply_total = int(df1_p['개수'].sum())
         distribute_total = int(df2_p['배분'].sum())
-        # 단일 라벨로 표시하기 위해 7월 컬럼에 총합 넣고 8월은 '-' 처리
         retail_df_data = {period_option: [mail_total, apply_total, distribute_total]}
+        retail_index = ['파이프라인', '신청', '지급신청']
+        retail_df = pd.DataFrame(retail_df_data, index=retail_index)
     else:
-        retail_df_data = {'Q1': [4436, 4230, 4214], 'Q2': [9199, 9212, 8946], '7월': [july_mail_count, july_apply_count, july_distribute_count], '8월': [august_mail_count, august_apply_count, august_distribute_count]}
-    retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청', '지급신청'])
-    if period_option == '전체':
-        retail_df['TTL'] = retail_df['7월'] + retail_df['8월']
+        # --- 전체(1~3분기) 요약 + 판매현황 반영 ---
+        tesla_q1_sum = tesla_q2_sum = 0
+        if not df_sales.empty and {'월', '대수'}.issubset(df_sales.columns):
+            tesla_q1_sum = int(df_sales[df_sales['월'].isin([1, 2, 3])]['대수'].sum())
+            tesla_q2_sum = int(df_sales[df_sales['월'].isin([4, 5, 6])]['대수'].sum())
+        else:
+            st.warning("판매현황 데이터(df_sales)가 없거나 컬럼이 올바르지 않습니다. 판매현황을 0으로 표시합니다.")
 
-    if period_option in ('전체', '3Q', '3분기'):
+        retail_df_data = {
+            'Q1': [4436, 4230, 4214, tesla_q1_sum],
+            'Q2': [9199, 9212, 8946, tesla_q2_sum],
+            '7월': [july_mail_count, july_apply_count, july_distribute_count, np.nan],
+            '8월': [august_mail_count, august_apply_count, august_distribute_count, np.nan]
+        }
+        retail_index = ['파이프라인', '신청', '지급신청', '판매현황(KAIDA기준)']
+        retail_df = pd.DataFrame(retail_df_data, index=retail_index)
+
+        # TTL(누적) 컬럼 계산
+        retail_df['TTL'] = [
+            july_mail_count + august_mail_count,
+            july_apply_count + august_apply_count,
+            july_distribute_count + august_distribute_count,
+            tesla_q1_sum + tesla_q2_sum
+        ]
+
+        # 7월/8월 NaN 값을 '-'로 표현
+        retail_df[['7월', '8월']] = retail_df[['7월', '8월']].fillna('-')
+
+        # Q3 Target 및 진척률/판매현황 비율 계산
+        q3_target = 10000
+        progress_rate = (july_mail_count + august_mail_count) / q3_target if q3_target > 0 else 0
+        pipeline_q12_total = retail_df_data['Q1'][0] + retail_df_data['Q2'][0]
+        tesla_total = tesla_q1_sum + tesla_q2_sum
+        sales_rate = pipeline_q12_total / tesla_total if tesla_total > 0 else 0
+        formatted_progress = f"{progress_rate:.2%}"
+        formatted_sales_rate = f"{sales_rate:.2%}"
+        retail_df['Q3 Target'] = [f"{q3_target:,}", '진척률', formatted_progress, formatted_sales_rate]
+
+        # 뷰어 옵션이 '테슬라'인 경우 판매현황 행 제거
+        if viewer_option == '테슬라' and '판매현황(KAIDA기준)' in retail_df.index:
+            retail_df = retail_df.drop(index='판매현황(KAIDA기준)')
+
+    # 3분기(3Q) 뷰에서 타깃 컬럼 추가 (판매현황 행 제외)
+    if period_option in ('3Q', '3분기') and 'Q3 Target' not in retail_df.columns:
         q3_target = 10000
         progress_rate = (july_mail_count + august_mail_count) / q3_target if q3_target > 0 else 0
         retail_df['Q3 Target'] = [f"{q3_target:,}", '진척률', f"{progress_rate:.2%}"]
-    html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False).replace('<td>진척률</td>', '<td style="background-color: #e0f7fa;">진척률</td>')
+
+    # --- HTML 변환 및 스타일링 ---
+    html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False)
+    # "진척률" 셀 하이라이트
+    html_retail = html_retail.replace('<td>진척률</td>', '<td style="background-color: #e0f7fa;">진척률</td>')
+    # 판매현황 비율 셀 하이라이트(연한 주황색)
+    if 'formatted_sales_rate' in locals():
+        html_retail = html_retail.replace(f'<td>{formatted_sales_rate}</td>', f'<td style="background-color: #fff4e6;">{formatted_sales_rate}</td>')
+
     if show_monthly_summary:
         st.markdown(html_retail, unsafe_allow_html=True)
 
