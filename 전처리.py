@@ -30,6 +30,8 @@ def preprocess_and_save_data():
         df_2_q1 = pd.read_excel(q1_file, sheet_name="지급")         # 지급 데이터 (1분기)
         df_5_q1_raw = pd.read_excel(q1_file, sheet_name="PipeLine") # 파이프라인 데이터 (1분기, 집계형)
 
+        df_fail_q3 = pd.read_excel(q3_file, sheet_name="미신청건")
+
         # 1분기 PipeLine 시트는 날짜별 '개수'가 누적되어 있어 개수만큼 행을 복제하여 확장합니다.
         df_5_q1_list = []
         if {'날짜', '개수'}.issubset(df_5_q1_raw.columns):
@@ -110,6 +112,7 @@ def preprocess_and_save_data():
             "df_4": df_4,
             "df_5": df_5,
             "df_sales": df_sales,
+            "df_fail_q3": df_fail_q3,
             "update_time_str": update_time_str
         }
 
