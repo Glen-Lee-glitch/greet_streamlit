@@ -397,10 +397,21 @@ with col1:
         st.markdown(html_retail, unsafe_allow_html=True)
 
     # --- 리테일 월별 추이 그래프 (내부 뷰어 전용) ---
-    if viewer_option == '내부' and show_monthly_summary and period_option == '전체':
-        current_month = selected_date.month
-        start_month = 2  # 2월부터
-        months_to_show = list(range(start_month, current_month + 1))
+    if viewer_option == '내부' and show_monthly_summary:
+        # --- months_to_show 결정 ---
+        def get_end_month(option):
+            if option.endswith('월'):
+                try:
+                    return int(option[:-1])
+                except ValueError:
+                    pass
+            if option in ('1Q', '1분기'): return 3
+            if option in ('2Q', '2분기'): return 6
+            if option in ('3Q', '3분기'): return 9
+            return selected_date.month
+        end_month = get_end_month(period_option)
+        start_month = 2
+        months_to_show = list(range(start_month, end_month + 1))
         if months_to_show:
             df_5_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
             df_1_monthly = df_1[(df_1['날짜'].dt.year == selected_date.year) & (df_1['날짜'].dt.month.isin(months_to_show))]
@@ -418,7 +429,7 @@ with col1:
                 y=alt.Y('건수:Q', title='건수'),
                 color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
                 tooltip=['월', '구분', '건수']
-            ).properties(title=f"{selected_date.year}년 월별 추이 ({start_month}월~{current_month}월)")
+            ).properties(title=f"{selected_date.year}년 월별 추이 ({start_month}월~{end_month}월)")
             st.altair_chart(bar_chart, use_container_width=True)
 
 with col2:
