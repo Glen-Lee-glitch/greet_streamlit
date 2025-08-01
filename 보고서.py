@@ -283,6 +283,20 @@ if viewer_option == '폴스타':
         st.subheader("7월 현황")
         st.markdown(second_html, unsafe_allow_html=True)
 
+    with col2:
+        st.subheader("미접수/보완/취소 현황")
+        third_cols = pd.MultiIndex.from_tuples([
+            ('미접수량','서류미비'), ('미접수량','대기요청'),
+            ('보완 잔여 수량','서류미비'), ('보완 잔여 수량','미처리'),
+            ('취소','단순취소'), ('취소','내부지원전환')
+        ])
+        third_df = pd.DataFrame([
+            [2,2,4,0,6,3],
+            [4,4,4,4,9,9]
+        ], index=['당일','누계'], columns=third_cols)
+        third_html = third_df.to_html(classes='custom_table', border=0, escape=False)
+        st.markdown(third_html, unsafe_allow_html=True)
+
     st.stop()
 
 # --- 메인 대시보드 ---
