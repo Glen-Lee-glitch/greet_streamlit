@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import pickle
+
 import sys
 from datetime import datetime, timedelta
 import pytz
@@ -78,6 +79,7 @@ df_3 = data["df_3"]
 df_4 = data["df_4"]
 df_5 = data["df_5"]
 df_fail_q3 = data["df_fail_q3"]
+df_2_fail_q3 = data["df_2_fail_q3"]
 update_time_str = data["update_time_str"]
 
 # --- 시간대 설정 ---
@@ -212,8 +214,31 @@ def get_corporate_metrics(df3_raw, df4_raw, start, end):
 # --- 실적 계산 ---
 corporate_metrics = get_corporate_metrics(df_3, df_4, start_date, end_date)
 
+# --- 특이사항 추출 ---
+def extract_special_memo(df_fail_q3, today):
+    """
+    오늘 날짜의 df_fail_q3에서 'Greet Note'별 건수를 ['내용', '건수'] 형태로 한 줄씩 리스트로 반환합니다.
+    """
+    # '날짜' 컬럼이 datetime이 아닐 경우 변환
+    if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
+        df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
+    # 오늘 날짜 필터링
+    today_fail = df_fail_q3[df_fail_q3['날짜'].dt.date == today]
+    # 'Greet Note' 컬럼명을 유연하게 찾기 (공백·대소문자 무시)
+    lowered_cols = {c.lower().replace(' ', ''): c for c in today_fail.columns}
+    # 'greetnote' 또는 '노트' 키워드 포함 컬럼 탐색
+    note_col = next((orig for key, orig in lowered_cols.items() if 'greetnote' in key or '노트' in key), None)
+    if note_col is None:
+        return []
+    # value_counts
+    note_counts = today_fail[note_col].astype(str).value_counts().reset_index()
+    note_counts.columns = ['내용', '건수']
+    # 한 줄씩 메모 형태로 변환
+    memo_lines = [f"{row['내용']}: {row['건수']}건" for _, row in note_counts.iterrows()]
+    return memo_lines
+
 # --- 대시보드 표시 ---
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns([3.5,2,1.5])
 
 with col1:
     st.write("### 1. 리테일 금일/전일 요약")
@@ -242,20 +267,28 @@ with col1:
     cnt_yesterday_request = int(df_2.loc[df_2['날짜'].dt.date == day1, '신청'].sum())
     cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '신청'].sum())
 
-    # df_fail_q3 날짜 타입 보정
+    # df_fail_q3, df_2_fail_q3 날짜 타입 보정
     if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
         df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
+    if not pd.api.types.is_datetime64_any_dtype(df_2_fail_q3['날짜']):
+        df_2_fail_q3['날짜'] = pd.to_datetime(df_2_fail_q3['날짜'], errors='coerce')
 
     # 미신청건 계산
     cnt_yesterday_fail = int((df_fail_q3['날짜'].dt.date == day1).sum())
     cnt_today_fail = int((df_fail_q3['날짜'].dt.date == day0).sum())
     cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= day0)).sum())
 
+    # 지급 미신청건 계산
+    cnt_yesterday_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day1, '미신청건'].sum())
+    cnt_today_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day0, '미신청건'].sum())
+    cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= day0), '미신청건'].sum())
+
     delta_mail = cnt_today_mail - cnt_yesterday_mail
     delta_apply = cnt_today_apply - cnt_yesterday_apply
     delta_fail = cnt_today_fail - cnt_yesterday_fail
     delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
     delta_request = cnt_today_request - cnt_yesterday_request
+    delta_fail_2 = cnt_today_fail_2 - cnt_yesterday_fail_2
 
     def format_delta(value):
         if value > 0: return f'<span style="color:blue;">+{value}</span>'
@@ -267,7 +300,8 @@ with col1:
         ('지원', '신청', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
         ('지원', '신청', '미신청건'): [cnt_yesterday_fail, cnt_today_fail, cnt_total_fail],
         ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
-        ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request]
+        ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request],
+        ('지급', '지급 처리', '미신청건'): [cnt_yesterday_fail_2, cnt_today_fail_2, cnt_total_fail_2]
     }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계 (3분기)'])
 
     # 변동(Delta) 행 추가
@@ -276,7 +310,8 @@ with col1:
         format_delta(delta_apply),
         format_delta(delta_fail),
         format_delta(delta_distribute),
-        format_delta(delta_request)
+        format_delta(delta_request),
+        format_delta(delta_fail_2)
     ]
     html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
     st.markdown(html_table, unsafe_allow_html=True)
@@ -285,22 +320,22 @@ with col1:
 
     if show_monthly_summary:
         st.write("##### 리테일 월별 요약")
-    year = selected_date.year
-    july_end = min(selected_date, datetime(year, 7, 31).date())
+    year = today_kst.year
+    july_start = datetime(year, 7, 1).date()
+    july_end = datetime(year, 7, 31).date()
     august_start = datetime(year, 8, 1).date()
+    august_end = datetime(year, 8, 31).date()
 
     july_mail_count = int(df_5[(df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= july_end)].shape[0]) if july_end >= q3_start_default else 0
     july_apply_count = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= july_end), '개수'].sum()) if july_end >= q3_start_default else 0
     july_distribute_count = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= july_end), '배분'].sum()) if july_end >= q3_start_distribute else 0
 
-    august_mail_count, august_apply_count, august_distribute_count = 0, 0, 0
-    if selected_date >= august_start:
-        mask_august_5 = (df_5['날짜'].dt.date >= august_start) & (df_5['날짜'].dt.date <= selected_date)
-        mask_august_1 = (df_1['날짜'].dt.date >= august_start) & (df_1['날짜'].dt.date <= selected_date)
-        mask_august_2 = (df_2['날짜'].dt.date >= august_start) & (df_2['날짜'].dt.date <= selected_date)
-        august_mail_count = int(df_5.loc[mask_august_5].shape[0])
-        august_apply_count = int(df_1.loc[mask_august_1, '개수'].sum())
-        august_distribute_count = int(df_2.loc[mask_august_2, '배분'].sum())
+    mask_august_5 = (df_5['날짜'].dt.date >= august_start) & (df_5['날짜'].dt.date <= august_end)
+    mask_august_1 = (df_1['날짜'].dt.date >= august_start) & (df_1['날짜'].dt.date <= august_end)
+    mask_august_2 = (df_2['날짜'].dt.date >= august_start) & (df_2['날짜'].dt.date <= august_end)
+    august_mail_count = int(df_5.loc[mask_august_5].shape[0])
+    august_apply_count = int(df_1.loc[mask_august_1, '개수'].sum())
+    august_distribute_count = int(df_2.loc[mask_august_2, '배분'].sum())
 
     retail_df_data = {'Q1': [4436, 4230, 4214], 'Q2': [9199, 9212, 8946], '7월': [july_mail_count, july_apply_count, july_distribute_count], '8월': [august_mail_count, august_apply_count, august_distribute_count]}
     retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청', '지급신청'])
@@ -417,57 +452,55 @@ with col2:
         st.write("##### 법인팀 월별 요약")
 
     # --- 날짜 변수 설정 ---
-    year = selected_date.year
+    year = today_kst.year
     q3_apply_start = datetime(year, 6, 18).date()
     q3_distribute_start = datetime(year, 6, 18).date()
-    july_end = min(selected_date, datetime(year, 7, 31).date())
+    july_end = datetime(year, 7, 31).date()
     august_start = datetime(year, 8, 1).date()
-    august_end = selected_date
+    august_end = datetime(year, 8, 31).date()
 
     # --- 월별 계산 함수 (수정된 최종 로직) ---
     def get_corp_period_metrics(df3_raw, df4_raw, apply_start, apply_end, distribute_start, distribute_end):
         # --- df_3 (지원: 파이프라인, 지원신청) 계산 ---
         pipeline, apply = 0, 0
-        if selected_date >= apply_start:
-            df3 = df3_raw.copy()
-            date_col_3 = '신청 요청일'
-            if not pd.api.types.is_datetime64_any_dtype(df3[date_col_3]):
-                df3[date_col_3] = pd.to_datetime(df3[date_col_3], errors='coerce')
-            
-            mask3 = (df3[date_col_3].dt.date >= apply_start) & (df3[date_col_3].dt.date <= apply_end)
-            df3_period = df3.loc[mask3]
+        df3 = df3_raw.copy()
+        date_col_3 = '신청 요청일'
+        if not pd.api.types.is_datetime64_any_dtype(df3[date_col_3]):
+            df3[date_col_3] = pd.to_datetime(df3[date_col_3], errors='coerce')
+        
+        mask3 = (df3[date_col_3].dt.date >= apply_start) & (df3[date_col_3].dt.date <= apply_end)
+        df3_period = df3.loc[mask3]
 
-            df3_period = df3_period[df3_period['접수 완료'].astype(str).str.strip().isin(['O', 'ㅇ'])]
-            if '그리트 노트' in df3_period.columns:
-                is_cancelled = df3_period['그리트 노트'].astype(str).str.contains('취소', na=False)
-                is_reapplied = df3_period['그리트 노트'].astype(str).str.contains('취소 후 재신청', na=False)
-                df3_period = df3_period[~(is_cancelled & ~is_reapplied)]
-            b_col_name = df3_period.columns[1]
-            df3_period = df3_period[df3_period[b_col_name].notna() & (df3_period[b_col_name] != "")]
+        df3_period = df3_period[df3_period['접수 완료'].astype(str).str.strip().isin(['O', 'ㅇ'])]
+        if '그리트 노트' in df3_period.columns:
+            is_cancelled = df3_period['그리트 노트'].astype(str).str.contains('취소', na=False)
+            is_reapplied = df3_period['그리트 노트'].astype(str).str.contains('취소 후 재신청', na=False)
+            df3_period = df3_period[~(is_cancelled & ~is_reapplied)]
+        b_col_name = df3_period.columns[1]
+        df3_period = df3_period[df3_period[b_col_name].notna() & (df3_period[b_col_name] != "")]
 
-            pipeline = int(df3_period['신청대수'].sum())
-            mask_bulk_3 = df3_period['신청대수'] > 1
-            mask_single_3 = df3_period['신청대수'] == 1
-            apply = int(mask_bulk_3.sum() + df3_period.loc[mask_single_3, '신청대수'].sum())
+        pipeline = int(df3_period['신청대수'].sum())
+        mask_bulk_3 = df3_period['신청대수'] > 1
+        mask_single_3 = df3_period['신청대수'] == 1
+        apply = int(mask_bulk_3.sum() + df3_period.loc[mask_single_3, '신청대수'].sum())
 
         # --- df_4 (지급: 지급신청) 계산 ---
         distribute = 0
-        if selected_date >= distribute_start:
-            df4 = df4_raw.copy()
-            date_col_4 = '요청일자'
-            if not pd.api.types.is_datetime64_any_dtype(df4[date_col_4]):
-                df4[date_col_4] = pd.to_datetime(df4[date_col_4], errors='coerce')
+        df4 = df4_raw.copy()
+        date_col_4 = '요청일자'
+        if not pd.api.types.is_datetime64_any_dtype(df4[date_col_4]):
+            df4[date_col_4] = pd.to_datetime(df4[date_col_4], errors='coerce')
 
-            mask4 = (df4[date_col_4].dt.date >= distribute_start) & (df4[date_col_4].dt.date <= distribute_end)
-            df4_period = df4.loc[mask4]
+        mask4 = (df4[date_col_4].dt.date >= distribute_start) & (df4[date_col_4].dt.date <= distribute_end)
+        df4_period = df4.loc[mask4]
 
-            df4_period = df4_period[df4_period['지급신청 완료 여부'].astype(str).str.strip() == '완료']
-            unique_df4_period = df4_period.drop_duplicates(subset=['신청번호'])
+        df4_period = df4_period[df4_period['지급신청 완료 여부'].astype(str).str.strip() == '완료']
+        unique_df4_period = df4_period.drop_duplicates(subset=['신청번호'])
 
-            mask_bulk_4 = unique_df4_period['접수대수'] > 1
-            mask_single_4 = unique_df4_period['접수대수'] == 1
-            # 벌크 건의 '대수 합'이 아닌 '건수 합'을 사용하도록 변경
-            distribute = int(mask_bulk_4.sum() + unique_df4_period.loc[mask_single_4, '접수대수'].sum())
+        mask_bulk_4 = unique_df4_period['접수대수'] > 1
+        mask_single_4 = unique_df4_period['접수대수'] == 1
+        # 벌크 건의 '대수 합'이 아닌 '건수 합'을 사용하도록 변경
+        distribute = int(mask_bulk_4.sum() + unique_df4_period.loc[mask_single_4, '접수대수'].sum())
 
         return pipeline, apply, distribute
 
@@ -512,6 +545,59 @@ with col2:
     if show_monthly_summary:
         st.markdown(html_corp, unsafe_allow_html=True)
 
+# --- 메모 영역 ---
+with col3:
+
+    def load_memo_file(path:str):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except FileNotFoundError:
+            return ""
+
+    def save_memo_file(path:str, content:str):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    # 특이사항 메모에 넣을 내용
+
+
+
+    # 특이사항 메모 (자동 추가)
+    st.subheader("미신청건")
+
+    # 오늘 기준 자동 추출된 특이사항 라인들
+    auto_special_lines = extract_special_memo(df_fail_q3, selected_date)
+    if not auto_special_lines:
+        auto_special_lines = ["미신청건 없음"]
+    auto_special_text = "\n".join(auto_special_lines)
+
+    # memo_special.txt 에 저장된 사용자 메모
+    memo_special_saved = load_memo_file("memo_special.txt")
+
+    # 디폴트 값: 자동 특이사항 + 저장된 사용자 메모(있다면 이어붙임)
+    default_special = auto_special_text
+    if memo_special_saved.strip():
+        default_special += ("\n" if default_special else "") + memo_special_saved.strip()
+
+    # CSS로 폰트 크기 16px, 줄바꿈 유지, 배경 연초록색(#e0f7fa), 텍스트 Bold로 표출
+    st.markdown(
+        f"<div style='font-size:16px; white-space:pre-wrap; background-color:#e0f7fa; border-radius:8px; padding:10px'><b>{default_special}</b></div>",
+        unsafe_allow_html=True,
+    )
+
+    # 기타 메모
+    st.subheader("기타")
+    memo_etc = load_memo_file("memo_etc.txt")
+    new_etc = st.text_area(
+        "",
+        value=memo_etc,
+        height=150,
+        key="memo_etc_input"
+    )
+    if new_etc != memo_etc:
+        save_memo_file("memo_etc.txt", new_etc)
+        st.toast("기타 메모가 저장되었습니다!")
 
 st.markdown("---")
 
@@ -519,14 +605,14 @@ st.markdown("---")
 # 'no-print' 클래스를 버튼과 안내 메시지를 감싸는 컨테이너에 적용
 st.markdown('<div class="no-print">', unsafe_allow_html=True)
 
-if st.button("📄 리포트 인쇄 및 PDF 저장", type="primary"):
-    components.html(
-        """
-        <script>
-            // 컴포넌트 iframe 안이므로 상위 창을 대상으로 print 실행
-            window.parent.print();
-        </script>
-        """,
-        height=0,    # 공간 차지 X
-        width=0
-    )
+# if st.button("📄 리포트 인쇄 및 PDF 저장", type="primary"):
+#     components.html(
+#         """
+#         <script>
+#             // 컴포넌트 iframe 안이므로 상위 창을 대상으로 print 실행
+#             window.parent.print();
+#         </script>
+#         """,
+#         height=0,    # 공간 차지 X
+#         width=0
+#     )
