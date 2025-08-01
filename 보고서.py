@@ -184,14 +184,15 @@ if viewer_option == '폴스타':
         '4월': [182, 146, 16, 20],
         '5월': [332, 246, 63, 23],
         '6월': [47, 29, 11, 7],
-        '합계': [0, 0, 0, 0],
-        '7월': [np.nan, np.nan, np.nan, np.nan],
+        '합계': [964, 697, 203, 64],
+        '7월': [140, 83, 48, 9],
         '8월': [np.nan, np.nan, np.nan, np.nan],
         '9월': [np.nan, np.nan, np.nan, np.nan],
         '10월': [np.nan, np.nan, np.nan, np.nan],
         '11월': [np.nan, np.nan, np.nan, np.nan],
         '12월': [np.nan, np.nan, np.nan, np.nan],
-        '2025 총합': [964, 697, 203, 64]
+        '합계': [140, 83, 48, 9],
+        '2025 총합': [1104, 780, 251, 73]
     }
     row_idx = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
     pol_df = pd.DataFrame(pol_data, index=row_idx)
@@ -271,9 +272,9 @@ if viewer_option == '폴스타':
 
     # --- 두 번째 표: 7월 현황 (반쪽 영역) ---
     second_data = {
-        '전월 이월수량': ['-','-','-','-'],
-        '당일': [6,3,2,1],
-        '누계': [217,130,78,9]
+        '전월 이월수량': [86,54,32,0],
+        '당일': [0,0,0,0],
+        '당월_누계': [0,0,0,0]
     }
     second_df = pd.DataFrame(second_data, index=row_idx)
     second_html = second_df.to_html(classes='custom_table', border=0, escape=False)
@@ -455,8 +456,9 @@ with col1:
     html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
     st.markdown(html_table, unsafe_allow_html=True)
 
-    st.write("---")
+    # 구분선 이동에 따라 제거
 
+    st.markdown("<hr style='margin-top:1rem;margin-bottom:1rem;'>", unsafe_allow_html=True)
     # ----- 리테일 월별 요약 헤더 및 기간 선택 -----
     if show_monthly_summary:
         if viewer_option == '내부':
@@ -739,8 +741,17 @@ with col2:
         st.warning("법인팀 실적을 계산하기 위한 필수 컬럼이 누락되었습니다.")
 
     if show_monthly_summary:
-        st.write("---")
-        st.write("##### 법인팀 월별 요약")
+        # --- 여백 및 구분선 추가 ---
+        st.markdown("<div style='height:56px;'></div>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin:0 0 15px 0; border:1px solid #e0e0e0;'>", unsafe_allow_html=True)
+        # 구분선 이동에 따라 제거
+        if viewer_option == '내부':
+            header_corp, sel_corp = st.columns([4,2])
+            with header_corp:
+                st.write("##### 법인팀 월별 요약")
+            # sel_corp 자리 확보를 위해 비워둠
+        else:
+            st.write("##### 법인팀 월별 요약")
     
     # --- 날짜 변수 설정 ---
     year = today_kst.year
@@ -916,6 +927,8 @@ with col3:
     )
 
     # 기타 메모
+    st.markdown("<div style='height:115px;'></div>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:0 0 15px 0; border:1px solid #e0e0e0;'>", unsafe_allow_html=True)
     st.subheader("기타")
     memo_etc = load_memo_file("memo_etc.txt")
     new_etc = st.text_area(
