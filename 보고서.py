@@ -56,6 +56,7 @@ def load_data():
     """전처리된 데이터 파일을 로드합니다."""
     try:
         with open("preprocessed_data.pkl", "rb") as f:
+            print('yes')
             return pickle.load(f)
     except FileNotFoundError:
         st.error("전처리된 데이터 파일(preprocessed_data.pkl)을 찾을 수 없습니다.")
