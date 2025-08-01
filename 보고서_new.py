@@ -321,8 +321,23 @@ with col1:
 
     st.write("---")
 
+    # ----- 리테일 월별 요약 헤더 및 기간 선택 -----
     if show_monthly_summary:
-        st.write("##### 리테일 월별 요약")
+        if viewer_option == '내부':
+            header_col, sel_col = st.columns([4,2])
+            with header_col:
+                st.write("##### 리테일 월별 요약")
+            with sel_col:
+                period_option = st.selectbox(
+                    '기간 선택',
+                    ['3Q', '7월', '전체', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
+                    index=0,
+                    key='retail_period')
+        else:
+            st.write("##### 리테일 월별 요약")
+            period_option = '전체'
+    else:
+        period_option = '전체'
     year = today_kst.year
     july_start = datetime(year, 7, 1).date()
     july_end = datetime(year, 7, 31).date()
@@ -340,19 +355,49 @@ with col1:
     august_apply_count = int(df_1.loc[mask_august_1, '개수'].sum())
     august_distribute_count = int(df_2.loc[mask_august_2, '배분'].sum())
 
-    retail_df_data = {'Q1': [4436, 4230, 4214], 'Q2': [9199, 9212, 8946], '7월': [july_mail_count, july_apply_count, july_distribute_count], '8월': [august_mail_count, august_apply_count, august_distribute_count]}
-    retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청', '지급신청'])
-    retail_df['TTL'] = retail_df['7월'] + retail_df['8월']
+    # ----- 기간별 필터링 -----
+    def filter_by_period(df):
+        if period_option == '3Q' or period_option in ('3분기'):
+            return df[df['분기'] == '3분기']
+        if period_option == '2Q' or period_option in ('2분기'):
+            return df[df['분기'] == '2분기']
+        if period_option == '1Q' or period_option in ('1분기'):
+            return df[df['분기'] == '1분기']
+        if period_option.endswith('월'):
+            try:
+                month_num = int(period_option[:-1])
+                return df[df['날짜'].dt.month == month_num]
+            except ValueError:
+                return df
+        return df
 
-    q3_target = 10000
-    progress_rate = (july_mail_count + august_mail_count) / q3_target if q3_target > 0 else 0
-    retail_df['Q3 Target'] = [f"{q3_target:,}", '진척률', f"{progress_rate:.2%}"]
+    if period_option != '전체':
+        df5_p = filter_by_period(df_5)
+        df1_p = filter_by_period(df_1)
+        df2_p = filter_by_period(df_2)
+        mail_total = int(df5_p.shape[0])
+        apply_total = int(df1_p['개수'].sum())
+        distribute_total = int(df2_p['배분'].sum())
+        # 단일 라벨로 표시하기 위해 7월 컬럼에 총합 넣고 8월은 '-' 처리
+        retail_df_data = {'선택기간': [mail_total, apply_total, distribute_total], ' ': ['-','-','-']}
+    else:
+        retail_df_data = {'Q1': [4436, 4230, 4214], 'Q2': [9199, 9212, 8946], '7월': [july_mail_count, july_apply_count, july_distribute_count], '8월': [august_mail_count, august_apply_count, august_distribute_count]}
+    retail_df = pd.DataFrame(retail_df_data, index=['파이프라인', '신청', '지급신청'])
+    if period_option == '전체':
+        retail_df['TTL'] = retail_df['7월'] + retail_df['8월']
+    else:
+        retail_df['TTL'] = retail_df.iloc[:,0]
+
+    if period_option in ('전체', '3Q', '3분기'):
+        q3_target = 10000
+        progress_rate = (july_mail_count + august_mail_count) / q3_target if q3_target > 0 else 0
+        retail_df['Q3 Target'] = [f"{q3_target:,}", '진척률', f"{progress_rate:.2%}"]
     html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False).replace('<td>진척률</td>', '<td style="background-color: #e0f7fa;">진척률</td>')
     if show_monthly_summary:
         st.markdown(html_retail, unsafe_allow_html=True)
 
     # --- 리테일 월별 추이 그래프 (내부 뷰어 전용) ---
-    if viewer_option == '내부' and show_monthly_summary:
+    if viewer_option == '내부' and show_monthly_summary and period_option == '전체':
         current_month = selected_date.month
         start_month = 2  # 2월부터
         months_to_show = list(range(start_month, current_month + 1))
@@ -478,7 +523,7 @@ with col2:
     if show_monthly_summary:
         st.write("---")
         st.write("##### 법인팀 월별 요약")
-
+    
     # --- 날짜 변수 설정 ---
     year = today_kst.year
     q3_apply_start = datetime(year, 6, 18).date()
