@@ -88,6 +88,9 @@ today_kst = datetime.now(KST).date()
 
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
+    st.header("👁️ 뷰어 옵션")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라'), key="viewer_option")
+    st.markdown("---")
     st.header("📊 조회 옵션")
     view_option = st.radio(
         "조회 유형을 선택하세요.",
@@ -347,6 +350,31 @@ with col1:
     html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False).replace('<td>진척률</td>', '<td style="background-color: #e0f7fa;">진척률</td>')
     if show_monthly_summary:
         st.markdown(html_retail, unsafe_allow_html=True)
+
+    # --- 리테일 월별 추이 그래프 (내부 뷰어 전용) ---
+    if viewer_option == '내부' and show_monthly_summary:
+        current_month = selected_date.month
+        start_month = 2  # 2월부터
+        months_to_show = list(range(start_month, current_month + 1))
+        if months_to_show:
+            df_5_monthly = df_5[(df_5['날짜'].dt.year == selected_date.year) & (df_5['날짜'].dt.month.isin(months_to_show))]
+            df_1_monthly = df_1[(df_1['날짜'].dt.year == selected_date.year) & (df_1['날짜'].dt.month.isin(months_to_show))]
+            mail_counts = df_5_monthly.groupby(df_5_monthly['날짜'].dt.month).size()
+            apply_counts = df_1_monthly.groupby(df_1_monthly['날짜'].dt.month)['개수'].sum()
+            chart_df = pd.DataFrame(
+                {'메일 건수': mail_counts, '신청 건수': apply_counts},
+                index=pd.Index(months_to_show, name='월')
+            ).fillna(0).astype(int).reset_index()
+            chart_df['월'] = chart_df['월'].astype(str) + '월'
+            chart_long = chart_df.melt(id_vars='월', var_name='구분', value_name='건수')
+            bar_chart = alt.Chart(chart_long).mark_bar(size=25).encode(
+                x=alt.X('월:N', title='월', sort=[f"{m}월" for m in months_to_show]),
+                xOffset='구분:N',
+                y=alt.Y('건수:Q', title='건수'),
+                color=alt.Color('구분:N', scale=alt.Scale(domain=['메일 건수', '신청 건수'], range=['#1f77b4', '#2ca02c'])),
+                tooltip=['월', '구분', '건수']
+            ).properties(title=f"{selected_date.year}년 월별 추이 ({start_month}월~{current_month}월)")
+            st.altair_chart(bar_chart, use_container_width=True)
 
 with col2:
     st.write("### 2. 법인팀 금일 요약")
