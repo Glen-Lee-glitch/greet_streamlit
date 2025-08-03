@@ -595,8 +595,17 @@ with col1:
             if option in ('3Q', '3분기'): return 9
             return selected_date.month
         end_month = get_end_month(period_option)
+        # 현재 날짜가 15일 이전이면 해당 월 데이터 제외
+        if selected_date.day < 15 and end_month == selected_date.month:
+            end_month -= 1
+            # 1월인 경우 0이 되지 않도록 방어
+            if end_month == 0:
+                end_month = 12
         start_month = 2
         months_to_show = list(range(start_month, end_month + 1))
+        # 15일 이전이면 해당 월을 제외 (3Q 포함 모든 경우에 적용)
+        if selected_date.day < 15:
+            months_to_show = [m for m in months_to_show if m < selected_date.month]
         if months_to_show:
             # 월별 파이프라인(메일) 건수 집계
             df_5_monthly = df_5[
@@ -616,7 +625,7 @@ with col1:
 
             # 막대 그래프 (파이프라인)
             bar = alt.Chart(chart_df).mark_bar(size=25, color='#2ca02c').encode(
-                x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show]),
+                x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show], axis=alt.Axis(labelAngle=0)),
                 y=alt.Y('파이프라인 건수:Q', title='건수')
             )
 
