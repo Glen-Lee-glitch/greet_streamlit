@@ -1,17 +1,21 @@
 credentials:
   usernames:
     admin:
-      email: gyeonggoo.lee@greetlounge.com
+      email: admin@company.com
       name: 관리자
       password: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.i8Hy  # admin123
     user1:
-      email: tesla003@greetlounge.com
+      email: user1@company.com
       name: 사용자1
-      password: mars003t*  # user123
+      password: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.i8Hy  # user123
     user2:
-      email: tesla001@greetlounge.com
+      email: user2@company.com
       name: 사용자2
-      password: mars001t*  # user456
+      password: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.i8Hy  # user456
+    user3:
+      email: user3@company.com
+      name: 사용자3
+      password: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.i8Hy  # password123
 cookie:
   expiry_days: 30
   key: some_signature_key
