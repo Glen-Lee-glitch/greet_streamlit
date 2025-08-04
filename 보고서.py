@@ -149,7 +149,7 @@ def create_admin_map_data(df_admin_coords, selected_sido=None, selected_sigungu=
     # 각 시군구별로 고유한 랜덤 크기 데이터만 사용 (추가 포인트 생성 제거)
     
     return {'lat': lat_list, 'lon': lon_list, 'size': size_list}
-    
+
 # --- 데이터 로딩 ---
 data = load_data()
 df = data["df"]
@@ -163,6 +163,7 @@ df_fail_q3 = data["df_fail_q3"]
 df_2_fail_q3 = data["df_2_fail_q3"]
 update_time_str = data["update_time_str"]
 df_admin_coords = data.get("df_admin_coords", pd.DataFrame())  # 행정구역별 위경도 좌표 데이터
+df_master = data.get("df_master", pd.DataFrame())  # 지자체 정리 master.xlsx 데이터
 
 # --- 시간대 설정 ---
 KST = pytz.timezone('Asia/Seoul')
@@ -171,7 +172,7 @@ today_kst = datetime.now(KST).date()
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
     st.header("👁️ 뷰어 옵션")
-    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)'), key="viewer_option")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)', '지자체별 정리'), key="viewer_option")
     st.markdown("---")
     st.header("📊 조회 옵션")
     view_option = st.radio(
@@ -248,7 +249,6 @@ with st.sidebar:
         with open("memo.txt", "w", encoding="utf-8") as f:
             f.write(new_memo)
         st.toast("메모가 저장되었습니다!")
-
 
 # --- 메인 대시보드 ---
 st.title(title)
@@ -1361,3 +1361,28 @@ if viewer_option == '지도(테스트)':
                 st.dataframe(korea_map_df)
         else:
             st.warning("지도 데이터를 표시할 수 없습니다. 데이터가 비어있습니다.")
+
+    
+# --- 지자체별 정리 ---
+if viewer_option == '지자체별 정리':
+    st.header("지자체별 현황 정리")
+    if df_master.empty or '지역' not in df_master.columns:
+        st.warning("지자체 데이터가 없습니다.")
+    else:
+        region_list = df_master['지역'].dropna().unique().tolist()
+        selected_region = st.selectbox("지역 선택", region_list)
+        columns_to_show = [
+            '현황_일반', '현황_우선',
+            'Model 3 RWD_기본', 'Model 3 RWD(2024)_기본',
+            'Model 3 LongRange_기본', 'Model 3 Performance_기본',
+            'Model Y New RWD_기본', 'Model Y New LongRange_기본'
+        ]
+        filtered = df_master[df_master['지역'] == selected_region]
+        display_columns = [col.replace('_기본', '') for col in columns_to_show]
+        display_df = filtered[columns_to_show].copy()
+        display_df.columns = display_columns
+        st.dataframe(display_df, use_container_width=True)
+
+
+
+

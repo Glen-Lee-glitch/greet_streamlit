@@ -130,6 +130,10 @@ def preprocess_and_save_data():
             print(f"행정구역별 위경도 좌표를 불러오는 중 오류: {e}")
             df_admin_coords = pd.DataFrame()
 
+        # --- 추가: 지자체 정리 master.xlsx 로드
+        df_master = pd.read_excel("master.xlsx")
+        df_master = df_master[['지역', '현황_일반', '현황_우선', 'Model 3 RWD_기본', 'Model 3 RWD(2024)_기본', 'Model 3 LongRange_기본', 'Model 3 Performance_기본', 'Model Y New RWD_기본', 'Model Y New LongRange_기본']]
+
         # ---------- 2. 분기 컬럼 추가 및 병합 ----------
         df_1_q3["분기"] = "3분기"; df_1_q2["분기"] = "2분기"; df_1_q1["분기"] = "1분기"
         df_2_q3["분기"] = "3분기"; df_2_q2["분기"] = "2분기"; df_2_q1["분기"] = "1분기"
@@ -183,7 +187,8 @@ def preprocess_and_save_data():
             "df_admin_coords": df_admin_coords,  # 행정구역별 위경도 좌표 데이터
             "df_fail_q3": df_fail_q3,
             "df_2_fail_q3": df_2_fail_q3,
-            "update_time_str": update_time_str
+            "update_time_str": update_time_str,
+            "df_master": df_master
         }
 
         with open("preprocessed_data.pkl", "wb") as f:
