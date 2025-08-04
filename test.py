@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import altair as alt
@@ -6,10 +7,6 @@ import pickle
 import sys
 from datetime import datetime, timedelta
 import pytz
-import folium
-from streamlit_folium import st_folium
-import json
-import requests
 
 # --- 페이지 설정 및 기본 스타일 ---
 st.set_page_config(layout="wide")
@@ -53,12 +50,11 @@ st.markdown("""
 
 
 # --- 데이터 및 메모 로딩 함수 ---
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def load_data():
     """전처리된 데이터 파일을 로드합니다."""
     try:
         with open("preprocessed_data.pkl", "rb") as f:
-            print('yes')
             return pickle.load(f)
     except FileNotFoundError:
         st.error("전처리된 데이터 파일(preprocessed_data.pkl)을 찾을 수 없습니다.")
@@ -73,6 +69,51 @@ def load_memo():
     except FileNotFoundError:
         return ""
 
+def create_korea_map_data():
+    """간단한 한국 지도 데이터를 생성합니다."""
+    # 한국의 주요 지역 데이터 (간소화된 버전)
+    import numpy as np
+    korea_data = {
+        'region': [
+            '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', '울산광역시',
+            '세종특별자치시', '경기도', '강원도', '충청북도', '충청남도', '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도'
+        ],
+        'lat': [
+            37.5665, 35.1796, 35.8714, 37.4563, 35.1595, 36.3504, 35.5384,
+            36.4870, 37.4138, 37.8228, 36.8000, 36.5184, 35.7175, 34.8679, 36.4919, 35.4606, 33.4996
+        ],
+        'lon': [
+            126.9780, 129.0756, 128.6014, 126.7052, 126.8526, 127.3845, 129.3114,
+            127.2822, 127.5183, 128.1555, 127.7000, 126.8000, 127.1530, 126.9910, 128.8889, 128.2132, 126.5312
+        ],
+        'value': np.random.randint(10, 1000, size=17).tolist()  # 10~999 사이 랜덤값
+    }
+    return pd.DataFrame(korea_data)
+
+def create_simple_map_data(selected_region=None, sample_value=100):
+    """st.map을 위한 간단한 지도 데이터를 생성합니다."""
+    # 기본 서울 중심 데이터
+    myData = {'lat': [37.56668], 'lon': [126.9784]}
+    
+    # 선택된 지역이 있으면 해당 지역의 좌표로 변경
+    if selected_region and selected_region != "전체":
+        korea_map_df = create_korea_map_data()
+        region_data = korea_map_df[korea_map_df['region'] == selected_region]
+        if not region_data.empty:
+            myData['lat'] = [region_data['lat'].values[0]]
+            myData['lon'] = [region_data['lon'].values[0]]
+    
+    # 값에 따라 포인트 수 조정 (값이 클수록 더 많은 포인트)
+    point_count = max(1, min(50, sample_value // 10))  # 최소 1개, 최대 50개
+    
+    # 선택된 지역 주변에 랜덤 포인트 추가
+    for _ in range(point_count - 1):
+        myData['lat'].append(myData['lat'][0] + np.random.randn() / 50.0)
+        myData['lon'].append(myData['lon'][0] + np.random.randn() / 50.0)
+    
+    return myData
+
+
 # --- 데이터 로딩 ---
 data = load_data()
 df = data["df"]
@@ -85,7 +126,6 @@ df_sales = data["df_sales"]
 df_fail_q3 = data["df_fail_q3"]
 df_2_fail_q3 = data["df_2_fail_q3"]
 update_time_str = data["update_time_str"]
-geo_data = get_geojson_data()
 
 # --- 시간대 설정 ---
 KST = pytz.timezone('Asia/Seoul')
@@ -374,6 +414,7 @@ def extract_special_memo(df_fail_q3, today):
     # 한 줄씩 메모 형태로 변환
     memo_lines = [f"{row['내용']}: {row['건수']}건" for _, row in note_counts.iterrows()]
     return memo_lines
+
 
 # --- 대시보드 표시 ---
 # col1, col2, col3 = st.columns([3.5,2,1.5])
@@ -825,92 +866,52 @@ def extract_special_memo(df_fail_q3, today):
 #             )
 #             st.altair_chart(combo_chart, use_container_width=True)
 
-
-
 # 테스트 지자체별 정리 페이지
+st.markdown("---")
 # --- 대한민국 지도 시각화 ---
 st.markdown("---")
 st.header("🗺️ 대한민국 지도 시각화")
 
-if geo_data:
-    # 1. 지역 선택을 위한 데이터 준비
-    provinces = sorted(list(set(feat['properties']['name_1'] for feat in geo_data['features'])))
-    districts_by_province = {prov: sorted(list(set(
-        feat['properties']['name'] for feat in geo_data['features'] if feat['properties']['name_1'] == prov
-    ))) for prov in provinces}
+korea_map_df = create_korea_map_data()
 
-    # 2. 지역 선택 UI
-    col1, col2 = st.columns(2)
-    with col1:
-        selected_province = st.selectbox("시/도 선택", ["전체"] + provinces)
-    with col2:
-        if selected_province == "전체":
-            selected_district = st.selectbox("시/군/구 선택", ["전체"])
-        else:
-            selected_district = st.selectbox("시/군/구 선택", ["전체"] + districts_by_province[selected_province])
+if not korea_map_df.empty:
+    try:
+        # 지역 선택 UI
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            selected_region = st.selectbox("지역 선택", ["전체"] + korea_map_df['region'].tolist())
+        
+        with col2:
+            # 샘플 데이터 생성 (실제로는 여기에 실제 데이터를 연결하면 됩니다)
+            sample_value = st.number_input("지역별 값 입력", min_value=0, value=100, step=10)
+        
+        # st.map을 위한 간단한 데이터 생성
+        map_data = create_simple_map_data(selected_region, sample_value)
+        
+        # 지도 표시
+        st.subheader("📍 지역별 데이터 지도")
+        st.map(data=map_data, zoom=6)
+        
+        # 선택된 지역 정보 표시
+        if selected_region != "전체":
+            selected_data = korea_map_df[korea_map_df['region'] == selected_region]
+            st.info(f"**선택된 지역:** {selected_region}")
+            st.info(f"**위도:** {selected_data['lat'].values[0]:.4f}")
+            st.info(f"**경도:** {selected_data['lon'].values[0]:.4f}")
+            st.info(f"**값:** {sample_value}")
+            st.info(f"**생성된 포인트 수:** {len(map_data['lat'])}")
+        
+        # 전체 데이터 테이블 표시
+        st.subheader("📊 지역별 데이터 현황")
+        st.dataframe(korea_map_df, use_container_width=True)
 
-    # 3. 지도 생성
-    # 지도 중심 및 확대/축소 수준 설정
-    map_center = [36.5, 127.5]
-    zoom_level = 7
-
-    # 선택된 지역에 따라 지도 중심 및 확대/축소 수준 동적 변경
-    if selected_province != "전체":
-        zoom_level = 9
-        # 선택된 시/도의 평균 위도/경도 계산
-        province_coords = [
-            feat['geometry']['coordinates'] for feat in geo_data['features']
-            if feat['properties']['name_1'] == selected_province
-        ]
-        # 간단한 중심점 계산 (실제 중심과는 다를 수 있음)
-        all_lons = [lon for poly in province_coords for part in poly for point in part for lon in [point[0]]]
-        all_lats = [lat for poly in province_coords for part in poly for point in part for lat in [point[1]]]
-        if all_lons and all_lats:
-            map_center = [np.mean(all_lats), np.mean(all_lons)]
-
-
-    if selected_district != "전체":
-        zoom_level = 11
-        district_coords = [
-            feat['geometry']['coordinates'] for feat in geo_data['features']
-            if feat['properties']['name'] == selected_district
-        ]
-        all_lons = [lon for poly in district_coords for part in poly for point in part for lon in [point[0]]]
-        all_lats = [lat for poly in district_coords for part in poly for point in part for lat in [point[1]]]
-        if all_lons and all_lats:
-            map_center = [np.mean(all_lats), np.mean(all_lons)]
-
-
-    m = folium.Map(location=map_center, zoom_start=zoom_level, tiles="CartoDB positron")
-
-    # 4. GeoJSON 레이어 스타일링 함수
-    def style_function(feature):
-        style = {'fillOpacity': 0.5, 'weight': 1, 'color': 'gray', 'fillColor': '#d3d3d3'}
-        # 선택된 시/도 강조
-        if selected_province != "전체" and feature['properties']['name_1'] == selected_province:
-            style['fillColor'] = 'dodgerblue'
-            style['color'] = 'blue'
-            style['weight'] = 2
-        # 선택된 시/군/구 강조
-        if selected_district != "전체" and feature['properties']['name'] == selected_district:
-            style['fillColor'] = 'crimson'
-            style['color'] = 'red'
-            style['weight'] = 3
-        return style
-
-    # 5. GeoJSON 레이어 추가
-    folium.GeoJson(
-        geo_data,
-        name='korea_municipalities',
-        style_function=style_function,
-        tooltip=folium.GeoJsonTooltip(fields=['name_1', 'name'], aliases=['시/도:', '시/군/구:'])
-    ).add_to(m)
-
-    # 6. 지도 출력
-    st_folium(m, width='100%', height=500)
+    except Exception as e:
+        st.error(f"지도 데이터 처리 중 오류가 발생했습니다: {e}")
+        st.write("**전체 지도 데이터:**")
+        st.dataframe(korea_map_df)
 
 else:
-    st.warning("지도 데이터를 표시할 수 없습니다. 인터넷 연결을 확인하거나 나중에 다시 시도해주세요.")
+    st.warning("지도 데이터를 표시할 수 없습니다. 데이터가 비어있습니다.")
 
 
 

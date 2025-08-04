@@ -4,5 +4,3 @@ streamlit
 altair
 openpyxl
 streamlit-authenticator
-folium
-streamlit-folium
