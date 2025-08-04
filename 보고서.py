@@ -1048,9 +1048,6 @@ with col3:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
 
-    # 특이사항 메모에 넣을 내용
-
-
 
     # 특이사항 메모 (자동 추가)
     st.subheader("미신청건")
