@@ -727,24 +727,24 @@ with col1:
                 flags=re.DOTALL
             )
             
-            # '타겟'과 '진척률' 행을 병합된 셀로 표시
-            # 타겟 행 병합
+            # '타겟'과 '진척률' 행을 병합된 셀로 표시 (월별 컬럼 + 계 컬럼까지 전체 병합)
+            # 타겟 행 병합 (월별 3개 컬럼 + 계 컬럼까지 총 4개 컬럼 병합)
             html_retail = re.sub(
                 r'(<tr>\s*<th>타겟</th>)(.*?)(</tr>)',
                 lambda m: m.group(1) + 
-                         re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
-                                r'<td\1 colspan="3">\2</td>', m.group(2), count=1) + 
+                         re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
+                                r'<td\1 colspan="4">\2</td>', m.group(2), count=1) + 
                          m.group(3),
                 html_retail,
                 flags=re.DOTALL
             )
             
-            # 진척률 행 병합
+            # 진척률 행 병합 (월별 3개 컬럼 + 계 컬럼까지 총 4개 컬럼 병합)
             html_retail = re.sub(
                 r'(<tr>\s*<th>진척률</th>)(.*?)(</tr>)',
                 lambda m: m.group(1) + 
-                         re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
-                                r'<td\1 colspan="3">\2</td>', m.group(2), count=1) + 
+                         re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
+                                r'<td\1 colspan="4">\2</td>', m.group(2), count=1) + 
                          m.group(3),
                 html_retail,
                 flags=re.DOTALL
