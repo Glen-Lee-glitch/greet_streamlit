@@ -4,9 +4,6 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import pickle
-import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
 
 import sys
 from datetime import datetime, timedelta
@@ -14,60 +11,7 @@ import pytz
 
 # --- 페이지 설정 및 기본 스타일 ---
 st.set_page_config(layout="wide")
-
-# --- 인증 설정 ---
-def load_auth_config():
-    """인증 설정을 YAML 파일에서 로드합니다."""
-    try:
-        with open('config.yaml') as file:
-            config = yaml.load(file, Loader=SafeLoader)
-        return config
-    except FileNotFoundError:
-        # YAML 파일이 없으면 기본 설정 사용
-        st.error("config.yaml 파일을 찾을 수 없습니다. 기본 설정을 사용합니다.")
-        config = {
-            'credentials': {
-                'usernames': {
-                    'admin': {
-                        'email': 'admin@company.com',
-                        'name': '관리자',
-                        'password': stauth.Hasher(['admin123']).generate()[0]
-                    }
-                }
-            },
-            'cookie': {
-                'expiry_days': 30,
-                'key': 'some_signature_key',
-                'name': 'some_cookie_name'
-            }
-        }
-        return config
-
-# --- 인증 시스템 초기화 ---
-config = load_auth_config()
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
-)
-
-# --- 로그인 페이지 ---
-name, authentication_status, username = authenticator.login('로그인', 'main')
-
-if authentication_status == False:
-    st.error('아이디/비밀번호가 올바르지 않습니다.')
-    st.stop()
-elif authentication_status == None:
-    st.warning('아이디와 비밀번호를 입력해주세요.')
-    st.stop()
-elif authentication_status:
-    # 로그인 성공 시 메인 앱 실행
-    authenticator.logout('로그아웃', 'sidebar')
-    st.sidebar.write(f'환영합니다, **{name}**님!')
-    
-    # --- 기본 스타일 적용 ---
-    st.markdown("""
+st.markdown("""
 <style>
     /* 기본 테이블 스타일 */
     .custom_table {
@@ -105,129 +49,130 @@ elif authentication_status:
 </style>
 """, unsafe_allow_html=True)
 
-    # --- 데이터 및 메모 로딩 함수 ---
-    @st.cache_data(ttl=600)
-    def load_data():
-        """전처리된 데이터 파일을 로드합니다."""
-        try:
-            with open("preprocessed_data.pkl", "rb") as f:
-                print('yes')
-                return pickle.load(f)
-        except FileNotFoundError:
-            st.error("전처리된 데이터 파일(preprocessed_data.pkl)을 찾을 수 없습니다.")
-            st.info("먼저 '전처리.py'를 실행하여 데이터 파일을 생성해주세요.")
-            sys.exit()
 
-    def load_memo():
-        """저장된 메모를 로드합니다."""
-        try:
-            with open("memo.txt", "r", encoding="utf-8") as f:
-                return f.read()
-        except FileNotFoundError:
-            return ""
+# --- 데이터 및 메모 로딩 함수 ---
+@st.cache_data(ttl=600)
+def load_data():
+    """전처리된 데이터 파일을 로드합니다."""
+    try:
+        with open("preprocessed_data.pkl", "rb") as f:
+            print('yes')
+            return pickle.load(f)
+    except FileNotFoundError:
+        st.error("전처리된 데이터 파일(preprocessed_data.pkl)을 찾을 수 없습니다.")
+        st.info("먼저 '전처리.py'를 실행하여 데이터 파일을 생성해주세요.")
+        sys.exit()
 
-    # --- 데이터 로딩 ---
-    data = load_data()
-    df = data["df"]
-    df_1 = data["df_1"]
-    df_2 = data["df_2"]
-    df_3 = data["df_3"]
-    df_4 = data["df_4"]
-    df_5 = data["df_5"]
-    df_sales = data["df_sales"]
-    df_fail_q3 = data["df_fail_q3"]
-    df_2_fail_q3 = data["df_2_fail_q3"]
-    update_time_str = data["update_time_str"]
+def load_memo():
+    """저장된 메모를 로드합니다."""
+    try:
+        with open("memo.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
 
-    # --- 시간대 설정 ---
-    KST = pytz.timezone('Asia/Seoul')
-    today_kst = datetime.now(KST).date()
+# --- 데이터 로딩 ---
+data = load_data()
+df = data["df"]
+df_1 = data["df_1"]
+df_2 = data["df_2"]
+df_3 = data["df_3"]
+df_4 = data["df_4"]
+df_5 = data["df_5"]
+df_sales = data["df_sales"]
+df_fail_q3 = data["df_fail_q3"]
+df_2_fail_q3 = data["df_2_fail_q3"]
+update_time_str = data["update_time_str"]
 
-    # --- 사이드바: 조회 옵션 설정 ---
-    with st.sidebar:
-        st.header("👁️ 뷰어 옵션")
-        viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타'), key="viewer_option")
-        st.markdown("---")
-        st.header("📊 조회 옵션")
-        view_option = st.radio(
-            "조회 유형을 선택하세요.",
-            ('금일', '특정일 조회', '기간별 조회', '분기별 조회', '월별 조회', '전체 누적'),
-            key="view_option"
+# --- 시간대 설정 ---
+KST = pytz.timezone('Asia/Seoul')
+today_kst = datetime.now(KST).date()
+
+# --- 사이드바: 조회 옵션 설정 ---
+with st.sidebar:
+    st.header("👁️ 뷰어 옵션")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타'), key="viewer_option")
+    st.markdown("---")
+    st.header("📊 조회 옵션")
+    view_option = st.radio(
+        "조회 유형을 선택하세요.",
+        ('금일', '특정일 조회', '기간별 조회', '분기별 조회', '월별 조회', '전체 누적'),
+        key="view_option"
+    )
+
+    start_date, end_date = None, None
+    title = f"{view_option} 리포트"
+
+    if view_option == '금일':
+        start_date = end_date = today_kst
+    elif view_option == '특정일 조회':
+        # 6월 24일부터만 선택 가능하도록 최소 날짜 제한 설정
+        earliest_date = datetime(today_kst.year, 6, 24).date()
+        # 만약 오늘이 6월 24일 이전이라면 전년도 6월 24일을 최소값으로 사용
+        if today_kst < earliest_date:
+            earliest_date = datetime(today_kst.year - 1, 6, 24).date()
+        selected_date = st.date_input(
+            '날짜 선택',
+            value=max(today_kst, earliest_date),
+            min_value=earliest_date,
+            max_value=today_kst
         )
+        start_date = end_date = selected_date
+        title = f"{selected_date.strftime('%Y-%m-%d')} 리포트"
+    elif view_option == '기간별 조회':
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input('시작일', value=today_kst.replace(day=1))
+        with col2:
+            end_date = st.date_input('종료일', value=today_kst)
+        if start_date > end_date:
+            st.error("시작일이 종료일보다 늦을 수 없습니다.")
+            st.stop()
+        title = f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')} 리포트"
+    elif view_option == '분기별 조회':
+        year = today_kst.year
+        quarter = st.selectbox('분기 선택', [f'{q}분기' for q in range(1, 5)], index=(today_kst.month - 1) // 3)
+        q_num = int(quarter[0])
+        start_month = 3 * q_num - 2
+        end_month = 3 * q_num
+        start_date = datetime(year, start_month, 1).date()
+        end_day = (datetime(year, end_month % 12 + 1, 1) - timedelta(days=1)).day if end_month < 12 else 31
+        end_date = datetime(year, end_month, end_day).date()
+        title = f"{year}년 {quarter} 리포트"
+    elif view_option == '월별 조회':
+        year = today_kst.year
+        month = st.selectbox('월 선택', [f'{m}월' for m in range(1, 13)], index=today_kst.month - 1)
+        month_num = int(month[:-1])
+        start_date = datetime(year, month_num, 1).date()
+        end_day = (datetime(year, (month_num % 12) + 1, 1) - timedelta(days=1)).day if month_num < 12 else 31
+        end_date = datetime(year, month_num, end_day).date()
+        title = f"{year}년 {month} 리포트"
+    elif view_option == '전체 누적':
+        min_date_1 = df_1['날짜'].min().date() if not df_1.empty else today_kst
+        min_date_5 = df_5['날짜'].min().date() if not df_5.empty else today_kst
+        start_date = min(min_date_1, min_date_5)
+        end_date = today_kst
+        title = "전체 누적 리포트"
 
-        start_date, end_date = None, None
-        title = f"{view_option} 리포트"
+    # 월별 요약은 항상 표시
+    show_monthly_summary = True
 
-        if view_option == '금일':
-            start_date = end_date = today_kst
-        elif view_option == '특정일 조회':
-            # 6월 24일부터만 선택 가능하도록 최소 날짜 제한 설정
-            earliest_date = datetime(today_kst.year, 6, 24).date()
-            # 만약 오늘이 6월 24일 이전이라면 전년도 6월 24일을 최소값으로 사용
-            if today_kst < earliest_date:
-                earliest_date = datetime(today_kst.year - 1, 6, 24).date()
-            selected_date = st.date_input(
-                '날짜 선택',
-                value=max(today_kst, earliest_date),
-                min_value=earliest_date,
-                max_value=today_kst
-            )
-            start_date = end_date = selected_date
-            title = f"{selected_date.strftime('%Y-%m-%d')} 리포트"
-        elif view_option == '기간별 조회':
-            col1, col2 = st.columns(2)
-            with col1:
-                start_date = st.date_input('시작일', value=today_kst.replace(day=1))
-            with col2:
-                end_date = st.date_input('종료일', value=today_kst)
-            if start_date > end_date:
-                st.error("시작일이 종료일보다 늦을 수 없습니다.")
-                st.stop()
-            title = f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')} 리포트"
-        elif view_option == '분기별 조회':
-            year = today_kst.year
-            quarter = st.selectbox('분기 선택', [f'{q}분기' for q in range(1, 5)], index=(today_kst.month - 1) // 3)
-            q_num = int(quarter[0])
-            start_month = 3 * q_num - 2
-            end_month = 3 * q_num
-            start_date = datetime(year, start_month, 1).date()
-            end_day = (datetime(year, end_month % 12 + 1, 1) - timedelta(days=1)).day if end_month < 12 else 31
-            end_date = datetime(year, end_month, end_day).date()
-            title = f"{year}년 {quarter} 리포트"
-        elif view_option == '월별 조회':
-            year = today_kst.year
-            month = st.selectbox('월 선택', [f'{m}월' for m in range(1, 13)], index=today_kst.month - 1)
-            month_num = int(month[:-1])
-            start_date = datetime(year, month_num, 1).date()
-            end_day = (datetime(year, (month_num % 12) + 1, 1) - timedelta(days=1)).day if month_num < 12 else 31
-            end_date = datetime(year, month_num, end_day).date()
-            title = f"{year}년 {month} 리포트"
-        elif view_option == '전체 누적':
-            min_date_1 = df_1['날짜'].min().date() if not df_1.empty else today_kst
-            min_date_5 = df_5['날짜'].min().date() if not df_5.empty else today_kst
-            start_date = min(min_date_1, min_date_5)
-            end_date = today_kst
-            title = "전체 누적 리포트"
+    st.markdown("---")
+    st.header("📝 메모")
+    memo_content = load_memo()
+    new_memo = st.text_area(
+        "메모를 입력하거나 수정하세요.",
+        value=memo_content, height=250, key="memo_input"
+    )
+    if new_memo != memo_content:
+        with open("memo.txt", "w", encoding="utf-8") as f:
+            f.write(new_memo)
+        st.toast("메모가 저장되었습니다!")
 
-        # 월별 요약은 항상 표시
-        show_monthly_summary = True
-
-        st.markdown("---")
-        st.header("📝 메모")
-        memo_content = load_memo()
-        new_memo = st.text_area(
-            "메모를 입력하거나 수정하세요.",
-            value=memo_content, height=250, key="memo_input"
-        )
-        if new_memo != memo_content:
-            with open("memo.txt", "w", encoding="utf-8") as f:
-                f.write(new_memo)
-            st.toast("메모가 저장되었습니다!")
-
-    # --- 폴스타 뷰 전용 표 ---
-    if viewer_option == '폴스타':
-        # 데이터프레임 생성
-        pol_data = {
+# --- 폴스타 뷰 전용 표 ---
+if viewer_option == '폴스타':
+    # 데이터프레임 생성
+    pol_data = {
         '1월': [72, 0, 68, 4],
         '2월': [52, 27, 25, 0],
         '3월': [279, 249, 20, 10],
