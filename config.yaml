@@ -1,0 +1,18 @@
+credentials:
+  usernames:
+    admin:
+      email: gyeonggoo.lee@greetlounge.com
+      name: 관리자
+      password: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.i8Hy  # admin123
+    user1:
+      email: tesla003@greetlounge.com
+      name: 사용자1
+      password: mars003t*  # user123
+    user2:
+      email: tesla001@greetlounge.com
+      name: 사용자2
+      password: mars001t*  # user456
+cookie:
+  expiry_days: 30
+  key: some_signature_key
+  name: some_cookie_name 

@@ -4,10 +4,64 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import pickle
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 
 import sys
 from datetime import datetime, timedelta
 import pytz
+
+# --- 인증 설정 ---
+def load_auth_config():
+    """인증 설정을 YAML 파일에서 로드합니다."""
+    try:
+        with open('config.yaml') as file:
+            config = yaml.load(file, Loader=SafeLoader)
+        return config
+    except FileNotFoundError:
+        # YAML 파일이 없으면 기본 설정 사용
+        st.error("config.yaml 파일을 찾을 수 없습니다. 기본 설정을 사용합니다.")
+        config = {
+            'credentials': {
+                'usernames': {
+                    'admin': {
+                        'email': 'admin@company.com',
+                        'name': '관리자',
+                        'password': stauth.Hasher(['admin123']).generate()[0]
+                    }
+                }
+            },
+            'cookie': {
+                'expiry_days': 30,
+                'key': 'some_signature_key',
+                'name': 'some_cookie_name'
+            }
+        }
+        return config
+
+# --- 인증 시스템 초기화 ---
+config = load_auth_config()
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
+)
+
+# --- 로그인 페이지 ---
+name, authentication_status, username = authenticator.login('로그인', 'main')
+
+if authentication_status == False:
+    st.error('아이디/비밀번호가 올바르지 않습니다.')
+    st.stop()
+elif authentication_status == None:
+    st.warning('아이디와 비밀번호를 입력해주세요.')
+    st.stop()
+elif authentication_status:
+    # 로그인 성공 시 메인 앱 실행
+    authenticator.logout('로그아웃', 'sidebar')
+    st.sidebar.write(f'환영합니다, **{name}**님!')
 
 # --- 페이지 설정 및 기본 스타일 ---
 st.set_page_config(layout="wide")
