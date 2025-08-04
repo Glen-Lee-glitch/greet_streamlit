@@ -1031,8 +1031,13 @@ with col2:
 
         # --- 법인팀 월별 추이 그래프 (내부 뷰어 전용) ---
         if viewer_option == '내부':
-            months_to_show_corp = [7, 8]
-            pipeline_values_corp = [july_pipeline, august_pipeline]
+            # 현재 날짜가 15일 이전이면 해당 월 데이터 제외
+            months_to_show_corp = [7]
+            pipeline_values_corp = [july_pipeline]
+            
+            if selected_date.day >= 15:
+                months_to_show_corp.append(8)
+                pipeline_values_corp.append(august_pipeline)
 
             corp_chart_df = pd.DataFrame(
                 {
@@ -1044,26 +1049,33 @@ with col2:
 
             # 막대 그래프
             bar_corp = alt.Chart(corp_chart_df).mark_bar(size=25, color='#2ca02c').encode(
-                x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show_corp]),
+                x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show_corp], axis=alt.Axis(labelAngle=0)),
                 y=alt.Y('파이프라인 건수:Q', title='건수')
             )
             # 선 그래프 및 포인트
             line_corp = alt.Chart(corp_chart_df).mark_line(color='#FF5733', strokeWidth=2).encode(
-                x='월 라벨:N',
+                x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
                 y='파이프라인 건수:Q'
             )
             point_corp = alt.Chart(corp_chart_df).mark_point(color='#FF5733', size=60).encode(
-                x='월 라벨:N',
+                x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
                 y='파이프라인 건수:Q'
             )
             # 레이블 텍스트
             text_corp = alt.Chart(corp_chart_df).mark_text(dy=-10, color='black').encode(
-                x='월 라벨:N',
+                x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
                 y='파이프라인 건수:Q',
                 text=alt.Text('파이프라인 건수:Q')
             )
+            
+            # 제목 동적 설정
+            if len(months_to_show_corp) == 1:
+                title_corp = f"{selected_date.year}년 법인팀 파이프라인 추이 (7월)"
+            else:
+                title_corp = f"{selected_date.year}년 법인팀 파이프라인 추이 (7~8월)"
+                
             corp_combo = (bar_corp + line_corp + point_corp + text_corp).properties(
-                title=f"{selected_date.year}년 법인팀 파이프라인 추이 (7~8월)"
+                title=title_corp
             )
             st.altair_chart(corp_combo, use_container_width=True)
 

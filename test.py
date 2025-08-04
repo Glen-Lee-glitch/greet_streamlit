@@ -90,7 +90,7 @@ def create_korea_map_data():
     }
     return pd.DataFrame(korea_data)
 
-def create_simple_map_data(selected_region=None, sample_value=100):
+def create_simple_map_data(selected_region=None):
     """st.map을 위한 간단한 지도 데이터를 생성합니다."""
     # 기본 서울 중심 데이터
     myData = {'lat': [37.56668], 'lon': [126.9784]}
@@ -103,8 +103,8 @@ def create_simple_map_data(selected_region=None, sample_value=100):
             myData['lat'] = [region_data['lat'].values[0]]
             myData['lon'] = [region_data['lon'].values[0]]
     
-    # 값에 따라 포인트 수 조정 (값이 클수록 더 많은 포인트)
-    point_count = max(1, min(50, sample_value // 10))  # 최소 1개, 최대 50개
+    # 고정된 포인트 수로 랜덤 포인트 추가
+    point_count = 10  # 고정된 포인트 수
     
     # 선택된 지역 주변에 랜덤 포인트 추가
     for _ in range(point_count - 1):
@@ -113,11 +113,11 @@ def create_simple_map_data(selected_region=None, sample_value=100):
     
     return myData
 
-def create_admin_map_data(df_admin_coords, selected_sido=None, selected_sigungu=None, sample_value=100):
+def create_admin_map_data(df_admin_coords, selected_sido=None, selected_sigungu=None):
     """행정구역별 위경도 좌표 데이터를 사용하여 지도 데이터를 생성합니다."""
     if df_admin_coords.empty:
         # 데이터가 없으면 기본 서울 중심 데이터 반환
-        return {'lat': [37.56668], 'lon': [126.9784]}
+        return {'lat': [37.56668], 'lon': [126.9784], 'size': [100]}
     
     # 필터링된 데이터
     filtered_data = df_admin_coords.copy()
@@ -131,28 +131,24 @@ def create_admin_map_data(df_admin_coords, selected_sido=None, selected_sigungu=
     
     if filtered_data.empty:
         # 필터링 결과가 없으면 기본 서울 중심 데이터 반환
-        return {'lat': [37.56668], 'lon': [126.9784]}
+        return {'lat': [37.56668], 'lon': [126.9784], 'size': [100]}
     
     # 위도, 경도 데이터 추출
     lat_list = filtered_data['위도'].tolist()
     lon_list = filtered_data['경도'].tolist()
     
-    # 값에 따라 포인트 수 조정 (값이 클수록 더 많은 포인트)
-    point_count = max(1, min(50, sample_value // 10))  # 최소 1개, 최대 50개
+    # 각 시군구별로 랜덤 데이터 생성 (10~1000 사이)
+    size_list = []
+    for i in range(len(filtered_data)):
+        # 시군구별로 고유한 랜덤값 생성 (시드 고정으로 일관성 유지)
+        sigungu_name = str(filtered_data.iloc[i]['시군구'])
+        np.random.seed(hash(sigungu_name) % 2**32)  # 시군구명을 시드로 사용
+        random_value = np.random.randint(10, 1001)  # 10~1000 사이 랜덤값
+        size_list.append(random_value)
     
-    # 선택된 지역 주변에 랜덤 포인트 추가
-    for _ in range(point_count - len(lat_list)):
-        if lat_list:  # 기존 포인트가 있으면 그 주변에 추가
-            base_lat = lat_list[0]
-            base_lon = lon_list[0]
-        else:  # 기존 포인트가 없으면 서울 중심
-            base_lat = 37.56668
-            base_lon = 126.9784
-        
-        lat_list.append(base_lat + np.random.randn() / 50.0)
-        lon_list.append(base_lon + np.random.randn() / 50.0)
+    # 각 시군구별로 고유한 랜덤 크기 데이터만 사용 (추가 포인트 생성 제거)
     
-    return {'lat': lat_list, 'lon': lon_list}
+    return {'lat': lat_list, 'lon': lon_list, 'size': size_list}
 
 
 # --- 데이터 로딩 ---
@@ -914,7 +910,7 @@ st.header("🗺️ 대한민국 지도 시각화")
 
 # 행정구역 좌표 데이터가 있는지 확인
 if not df_admin_coords.empty:
-    st.success("✅ 행정구역별 위경도 좌표 데이터가 로드되었습니다!")
+    st.success("행정구역별 위경도 좌표 데이터가 로드되었습니다!")
     
     try:
         # 시도 목록 가져오기
@@ -935,10 +931,6 @@ if not df_admin_coords.empty:
                 sigungu_list = ["전체"]
             selected_sigungu = st.selectbox("시군구 선택", sigungu_list)
         
-        with col3:
-            # 샘플 데이터 생성 (실제로는 여기에 실제 데이터를 연결하면 됩니다)
-            sample_value = st.number_input("지역별 값 입력", min_value=0, value=100, step=10)
-        
         # --- 지도 확대/축소 로직 추가 ---
         zoom_level = 6  # 기본 전국 뷰
         if selected_sido != "전체":
@@ -946,13 +938,24 @@ if not df_admin_coords.empty:
         if selected_sigungu != "전체" and selected_sigungu:
             zoom_level = 11 # 시군구 선택 시 더 확대
 
-        # 행정구역 좌표 데이터를 사용한 지도 데이터 생성
-        map_data = create_admin_map_data(df_admin_coords, selected_sido, selected_sigungu, sample_value)
+        # 행정구역 좌표 데이터를 사용한 지도 데이터 생성 (sample_value 제거)
+        map_data = create_admin_map_data(df_admin_coords, selected_sido, selected_sigungu)
         
         # 지도 표시 (동적 zoom_level 적용)
-        st.subheader("� 행정구역별 데이터 지도")
+        st.subheader("행정구역별 데이터 지도")
         if map_data and map_data['lat']:
-            st.map(data=map_data, zoom=zoom_level+2)
+            # size 데이터가 있으면 사용, 없으면 기본값 사용
+            if 'size' in map_data:
+                # size 데이터를 사용하여 지도 표시
+                map_df = pd.DataFrame({
+                    'lat': map_data['lat'],
+                    'lon': map_data['lon'],
+                    'size': map_data['size']
+                })
+                st.map(data=map_df, zoom=zoom_level+2)
+            else:
+                # 기존 방식으로 지도 표시
+                st.map(data=map_data, zoom=zoom_level+2)
         else:
             st.warning("선택한 조건에 맞는 데이터가 없어 지도를 표시할 수 없습니다.")
         
@@ -961,8 +964,14 @@ if not df_admin_coords.empty:
             st.info(f"**선택된 시도:** {selected_sido}")
             if selected_sigungu != "전체":
                 st.info(f"**선택된 시군구:** {selected_sigungu}")
-            st.info(f"**값:** {sample_value}")
             st.info(f"**생성된 포인트 수:** {len(map_data['lat'])}")
+            
+            # size 데이터가 있으면 표시
+            if 'size' in map_data and map_data['size']:
+                avg_size = sum(map_data['size']) / len(map_data['size'])
+                min_size = min(map_data['size'])
+                max_size = max(map_data['size'])
+                st.info(f"**원 크기 데이터:** 평균 {avg_size:.1f}, 최소 {min_size}, 최대 {max_size}")
         
         # 필터링된 데이터 테이블 표시
         st.subheader("📊 선택된 지역 데이터 현황")
@@ -973,7 +982,17 @@ if not df_admin_coords.empty:
             filtered_data = filtered_data[filtered_data['시군구'].astype(str) == selected_sigungu]
         
         if not filtered_data.empty:
-            st.dataframe(filtered_data, use_container_width=True)
+            # size 데이터 추가
+            display_data = filtered_data.copy()
+            size_list = []
+            for i in range(len(display_data)):
+                sigungu_name = str(display_data.iloc[i]['시군구'])
+                np.random.seed(hash(sigungu_name) % 2**32)
+                random_value = np.random.randint(10, 1001)
+                size_list.append(random_value)
+            display_data['원_크기_데이터'] = size_list
+            
+            st.dataframe(display_data, use_container_width=True)
             st.info(f"총 {len(filtered_data)}개의 행정구역이 표시됩니다.")
         else:
             st.warning("선택한 조건에 맞는 데이터가 없습니다.")
@@ -998,11 +1017,8 @@ else:
             with col1:
                 selected_region = st.selectbox("지역 선택", ["전체"] + korea_map_df['region'].tolist())
             
-            with col2:
-                sample_value = st.number_input("지역별 값 입력", min_value=0, value=100, step=10)
-            
-            # st.map을 위한 간단한 데이터 생성
-            map_data = create_simple_map_data(selected_region, sample_value)
+            # st.map을 위한 간단한 데이터 생성 (sample_value 제거)
+            map_data = create_simple_map_data(selected_region)
             
             # 지도 표시
             st.map(data=map_data, zoom=6)
@@ -1013,7 +1029,6 @@ else:
                 st.info(f"**선택된 지역:** {selected_region}")
                 st.info(f"**위도:** {selected_data['lat'].values[0]:.4f}")
                 st.info(f"**경도:** {selected_data['lon'].values[0]:.4f}")
-                st.info(f"**값:** {sample_value}")
                 st.info(f"**생성된 포인트 수:** {len(map_data['lat'])}")
             
             # 전체 데이터 테이블 표시
