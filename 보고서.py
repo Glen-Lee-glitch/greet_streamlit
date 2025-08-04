@@ -154,14 +154,8 @@ with st.sidebar:
         end_date = today_kst
         title = "전체 누적 리포트"
 
-    # 월별 요약 표시 옵션
-    show_monthly_summary_option = st.radio(
-        "월별 요약 펼치기",
-        ('보이기', '숨기기'),
-        index=0,
-        key="show_monthly_summary_option"
-    )
-    show_monthly_summary = (show_monthly_summary_option == '보이기')
+    # 월별 요약은 항상 표시
+    show_monthly_summary = True
 
     st.markdown("---")
     st.header("📝 메모")
@@ -461,22 +455,15 @@ with col1:
 
     st.markdown("<hr style='margin-top:1rem;margin-bottom:1rem;'>", unsafe_allow_html=True)
     # ----- 리테일 월별 요약 헤더 및 기간 선택 -----
-    if show_monthly_summary:
-        if viewer_option == '내부':
-            header_col, sel_col = st.columns([4,2])
-            with header_col:
-                st.write("##### 리테일 월별 요약")
-            with sel_col:
-                period_option = st.selectbox(
-                    '기간 선택',
-                    ['3Q', '7월', '전체', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
-                    index=0,
-                    key='retail_period')
-        else:
-            st.write("##### 리테일 월별 요약")
-            period_option = '전체'
-    else:
-        period_option = '전체'
+    header_col, sel_col = st.columns([4,2])
+    with header_col:
+        st.write("##### 리테일 월별 요약")
+    with sel_col:
+        period_option = st.selectbox(
+            '기간 선택',
+            ['3Q', '7월', '전체', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
+            index=0,
+            key='retail_period')
     year = today_kst.year
     july_start = datetime(year, 7, 1).date()
     july_end = datetime(year, 7, 31).date()
@@ -510,8 +497,172 @@ with col1:
                 return df
         return df
 
-    if period_option != '전체':
-        # --- 선택 기간(분기/월) 요약 ---
+    
+    # --- 월별/분기별 요약 계산 ---
+    current_year = day0.year
+    # 날짜 변수 정의
+    june_23 = datetime(current_year, 6, 23).date()
+    june_24 = datetime(current_year, 6, 24).date()
+    july_1 = datetime(current_year, 7, 1).date()
+    july_31 = datetime(current_year, 7, 31).date()
+    august_1 = datetime(current_year, 8, 1).date()
+    september_1 = datetime(current_year, 9, 1).date()
+
+    retail_df = pd.DataFrame() # 초기화
+
+    # --- 이미지 형태의 월별 요약 표 생성 ---
+    if period_option == '전체':
+        # (1Q, 2Q 계산 로직은 기존과 동일)
+        q1_total_mail = int(df_5[df_5['날짜'].dt.month.isin([1,2,3])].shape[0])
+        q1_total_apply = int(df_1[df_1['날짜'].dt.month.isin([1,2,3])]['개수'].sum())
+        q1_total_distribute = int(df_2[df_2['날짜'].dt.month.isin([1,2,3])]['배분'].sum())
+        q2_total_mail = int(df_5[df_5['날짜'].dt.month.isin([4,5,6])].shape[0])
+        q2_apply_mask = (df_1['날짜'].dt.month.isin([4,5])) | ((df_1['날짜'].dt.month == 6) & (df_1['날짜'].dt.date <= june_23))
+        q2_total_apply = int(df_1[q2_apply_mask]['개수'].sum())
+        q2_total_distribute = int(df_2[df_2['날짜'].dt.month.isin([4,5,6])]['배분'].sum())
+        
+        # --- 3Q 데이터 계산 (수정된 로직) ---
+        july_mail_total = int(df_5[(df_5['날짜'].dt.date >= june_24) & (df_5['날짜'].dt.date <= july_31)].shape[0])
+        july_apply_total = int(df_1[(df_1['날짜'].dt.date >= june_24) & (df_1['날짜'].dt.date <= july_31)]['개수'].sum())
+        july_distribute_total = int(df_2[(df_2['날짜'].dt.date >= july_1) & (df_2['날짜'].dt.date <= july_31)]['배분'].sum())
+
+        august_cumulative_mail = int(df_5[(df_5['날짜'].dt.date >= august_1) & (df_5['날짜'].dt.date <= day0)].shape[0])
+        august_cumulative_apply = int(df_1[(df_1['날짜'].dt.date >= august_1) & (df_1['날짜'].dt.date <= day0)]['개수'].sum())
+        august_cumulative_distribute = int(df_2[(df_2['날짜'].dt.date >= august_1) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
+        
+        september_cumulative_mail = int(df_5[(df_5['날짜'].dt.date >= september_1) & (df_5['날짜'].dt.date <= day0)].shape[0])
+        september_cumulative_apply = int(df_1[(df_1['날짜'].dt.date >= september_1) & (df_1['날짜'].dt.date <= day0)]['개수'].sum())
+        september_cumulative_distribute = int(df_2[(df_2['날짜'].dt.date >= september_1) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
+
+        q3_total_mail = july_mail_total + august_cumulative_mail + september_cumulative_mail
+        q3_total_apply = july_apply_total + august_cumulative_apply + september_cumulative_apply
+        q3_total_distribute = july_distribute_total + august_cumulative_distribute + september_cumulative_distribute
+
+        q1_target, q2_target, q3_target = 4300, 10000, 10000
+        q1_progress = q1_total_mail / q1_target if q1_target > 0 else 0
+        q2_progress = q2_total_mail / q2_target if q2_target > 0 else 0
+        q3_progress = q3_total_mail / q3_target if q3_target > 0 else 0
+
+        retail_df_data = {
+            'Q1': [q1_target, q1_total_mail, q1_total_apply, f"{q1_progress:.1%}", '', q1_total_distribute],
+            'Q2': [q2_target, q2_total_mail, q2_total_apply, f"{q2_progress:.1%}", '', q2_total_distribute],
+            'Q3': [q3_target, q3_total_mail, q3_total_apply, f"{q3_progress:.1%}", '', q3_total_distribute]
+        }
+        retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
+        retail_df = pd.DataFrame(retail_df_data, index=retail_index)
+    elif period_option == '1Q' or period_option == '1분기':
+        # Q1 데이터 계산 (1, 2, 3월)
+        q1_monthly_data = {}
+        for month in [1, 2, 3]:
+            month_mail = int(df_5[df_5['날짜'].dt.month == month].shape[0])
+            month_apply = int(df_1[df_1['날짜'].dt.month == month]['개수'].sum())
+            month_distribute = int(df_2[df_2['날짜'].dt.month == month]['배분'].sum())
+            q1_monthly_data[f'{month}'] = [month_mail, month_apply, month_distribute]
+        
+        # Q1 합계 계산
+        q1_total_mail = sum(q1_monthly_data[f'{m}'][0] for m in [1, 2, 3])
+        q1_total_apply = sum(q1_monthly_data[f'{m}'][1] for m in [1, 2, 3])
+        q1_total_distribute = sum(q1_monthly_data[f'{m}'][2] for m in [1, 2, 3])
+        
+        # 타겟 설정
+        q1_target = 4300
+        
+        # 진척률 계산
+        q1_progress_rate = q1_total_mail / q1_target if q1_target > 0 else 0
+        
+        # 데이터프레임 생성
+        retail_df_data = {
+            '1': [q1_target, q1_monthly_data['1'][0], q1_monthly_data['1'][1], f"{q1_progress_rate:.1%}", '', q1_monthly_data['1'][2]],
+            '2': ['', q1_monthly_data['2'][0], q1_monthly_data['2'][1], '', '', q1_monthly_data['2'][2]],
+            '3': ['', q1_monthly_data['3'][0], q1_monthly_data['3'][1], '', '', q1_monthly_data['3'][2]],
+            '계': [q1_target, q1_total_mail, q1_total_apply, f"{q1_progress_rate:.1%}", '', q1_total_distribute]
+        }
+        retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
+        retail_df = pd.DataFrame(retail_df_data, index=retail_index)
+    elif period_option == '2Q' or period_option == '2분기':
+        # Q2 데이터 계산 (4, 5, 6월) - 6월은 6월 23일까지
+        q2_monthly_data = {}
+        
+        # 6월 23일 날짜 객체 생성 (현재 연도 기준)
+        current_year = datetime.now().year
+        june_23 = datetime(current_year, 6, 23).date()
+        
+        for month in [4, 5, 6]:
+            month_mail = int(df_5[df_5['날짜'].dt.month == month].shape[0])
+            
+            # 6월의 경우 6월 23일까지의 데이터만 포함
+            if month == 6:
+                month_apply = int(df_1[
+                    (df_1['날짜'].dt.month == 6) & 
+                    (df_1['날짜'].dt.date <= june_23)
+                ]['개수'].sum())
+            else:
+                month_apply = int(df_1[df_1['날짜'].dt.month == month]['개수'].sum())
+            
+            month_distribute = int(df_2[df_2['날짜'].dt.month == month]['배분'].sum())
+            q2_monthly_data[f'{month}'] = [month_mail, month_apply, month_distribute]
+        
+        # Q2 합계 계산
+        q2_total_mail = sum(q2_monthly_data[f'{m}'][0] for m in [4, 5, 6])
+        q2_total_apply = sum(q2_monthly_data[f'{m}'][1] for m in [4, 5, 6])
+        q2_total_distribute = sum(q2_monthly_data[f'{m}'][2] for m in [4, 5, 6])
+        
+        # 타겟 설정
+        q2_target = 10000
+        
+        # 진척률 계산
+        q2_progress_rate = q2_total_mail / q2_target if q2_target > 0 else 0
+        
+        # 데이터프레임 생성
+        retail_df_data = {
+            '4': [q2_target, q2_monthly_data['4'][0], q2_monthly_data['4'][1], f"{q2_progress_rate:.1%}", '', q2_monthly_data['4'][2]],
+            '5': ['', q2_monthly_data['5'][0], q2_monthly_data['5'][1], '', '', q2_monthly_data['5'][2]],
+            '6': ['', q2_monthly_data['6'][0], q2_monthly_data['6'][1], '', '', q2_monthly_data['6'][2]],
+            '계': [q2_target, q2_total_mail, q2_total_apply, f"{q2_progress_rate:.1%}", '', q2_total_distribute]
+        }
+        retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
+        retail_df = pd.DataFrame(retail_df_data, index=retail_index)
+    elif period_option in ('3Q', '3분기'):
+        # --- 3Q 월별 데이터 계산 (수정된 로직) ---
+        q3_monthly_data = {}
+        
+        # 7월 데이터 (전체 월)
+        q3_monthly_data['7'] = [
+            int(df_5[(df_5['날짜'].dt.date >= june_24) & (df_5['날짜'].dt.date <= july_31)].shape[0]),
+            int(df_1[(df_1['날짜'].dt.date >= june_24) & (df_1['날짜'].dt.date <= july_31)]['개수'].sum()),
+            int(df_2[(df_2['날짜'].dt.date >= july_1) & (df_2['날짜'].dt.date <= july_31)]['배분'].sum())
+        ]
+        # 8월 데이터 (월초 ~ 현재)
+        q3_monthly_data['8'] = [
+            int(df_5[(df_5['날짜'].dt.date >= august_1) & (df_5['날짜'].dt.date <= day0)].shape[0]),
+            int(df_1[(df_1['날짜'].dt.date >= august_1) & (df_1['날짜'].dt.date <= day0)]['개수'].sum()),
+            int(df_2[(df_2['날짜'].dt.date >= august_1) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
+        ]
+        # 9월 데이터 (월초 ~ 현재)
+        q3_monthly_data['9'] = [
+            int(df_5[(df_5['날짜'].dt.date >= september_1) & (df_5['날짜'].dt.date <= day0)].shape[0]),
+            int(df_1[(df_1['날짜'].dt.date >= september_1) & (df_1['날짜'].dt.date <= day0)]['개수'].sum()),
+            int(df_2[(df_2['날짜'].dt.date >= september_1) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
+        ]
+        
+        q3_total_mail = sum(q3_monthly_data[m][0] for m in ['7', '8', '9'])
+        q3_total_apply = sum(q3_monthly_data[m][1] for m in ['7', '8', '9'])
+        q3_total_distribute = sum(q3_monthly_data[m][2] for m in ['7', '8', '9'])
+        
+        q3_target = 10000
+        q3_progress = q3_total_mail / q3_target if q3_target > 0 else 0
+        
+        retail_df_data = {
+            '7': [q3_target, q3_monthly_data['7'][0], q3_monthly_data['7'][1], f"{q3_progress:.1%}", '', q3_monthly_data['7'][2]],
+            '8': ['', q3_monthly_data['8'][0], q3_monthly_data['8'][1], '', '', q3_monthly_data['8'][2]],
+            '9': ['', q3_monthly_data['9'][0], q3_monthly_data['9'][1], '', '', q3_monthly_data['9'][2]],
+            '계': [q3_target, q3_total_mail, q3_total_apply, f"{q3_progress:.1%}", '', q3_total_distribute]
+        }
+        retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
+        retail_df = pd.DataFrame(retail_df_data, index=retail_index)
+
+    else:
+        # 기존 로직 유지 (다른 기간 선택 시)
         df5_p = filter_by_period(df_5)
         df1_p = filter_by_period(df_1)
         df2_p = filter_by_period(df_2)
@@ -521,68 +672,88 @@ with col1:
         retail_df_data = {period_option: [mail_total, apply_total, distribute_total]}
         retail_index = ['파이프라인', '신청', '지급신청']
         retail_df = pd.DataFrame(retail_df_data, index=retail_index)
-    else:
-        # --- 전체(1~3분기) 요약 + 판매현황 반영 ---
-        tesla_q1_sum = tesla_q2_sum = 0
-        if not df_sales.empty and {'월', '대수'}.issubset(df_sales.columns):
-            tesla_q1_sum = int(df_sales[df_sales['월'].isin([1, 2, 3])]['대수'].sum())
-            tesla_q2_sum = int(df_sales[df_sales['월'].isin([4, 5, 6])]['대수'].sum())
-        else:
-            st.warning("판매현황 데이터(df_sales)가 없거나 컬럼이 올바르지 않습니다. 판매현황을 0으로 표시합니다.")
-
-        retail_df_data = {
-            'Q1': [4436, 4230, 4214, tesla_q1_sum],
-            'Q2': [9199, 9212, 8946, tesla_q2_sum],
-            '7월': [july_mail_count, july_apply_count, july_distribute_count, np.nan],
-            '8월': [august_mail_count, august_apply_count, august_distribute_count, np.nan]
-        }
-        retail_index = ['파이프라인', '신청', '지급신청', '판매현황(KAIDA기준)']
-        retail_df = pd.DataFrame(retail_df_data, index=retail_index)
-
-        # TTL(누적) 컬럼 계산
-        retail_df['TTL'] = [
-            july_mail_count + august_mail_count,
-            july_apply_count + august_apply_count,
-            july_distribute_count + august_distribute_count,
-            tesla_q1_sum + tesla_q2_sum
-        ]
-
-        # 7월/8월 NaN 값을 '-'로 표현
-        retail_df[['7월', '8월']] = retail_df[['7월', '8월']].fillna('-')
-
-        # Q3 Target 및 진척률/판매현황 비율 계산
-        q3_target = 10000
-        progress_rate = (july_mail_count + august_mail_count) / q3_target if q3_target > 0 else 0
-        pipeline_q12_total = retail_df_data['Q1'][0] + retail_df_data['Q2'][0]
-        tesla_total = tesla_q1_sum + tesla_q2_sum
-        sales_rate = pipeline_q12_total / tesla_total if tesla_total > 0 else 0
-        formatted_progress = f"{progress_rate:.2%}"
-        formatted_sales_rate = f"{sales_rate:.2%}"
-        retail_df['Q3 Target'] = [f"{q3_target:,}", '진척률', formatted_progress, formatted_sales_rate]
-
-        # 뷰어 옵션이 '테슬라'인 경우 판매현황 행 제거
-        if viewer_option == '테슬라' and '판매현황(KAIDA기준)' in retail_df.index:
-            retail_df = retail_df.drop(index='판매현황(KAIDA기준)')
-
-    # 3분기(3Q) 뷰에서 타깃 컬럼 추가 (판매현황 행 제외)
-    if period_option in ('3Q', '3분기') and 'Q3 Target' not in retail_df.columns:
-        q3_target = 10000
-        progress_rate = (july_mail_count + august_mail_count) / q3_target if q3_target > 0 else 0
-        retail_df['Q3 Target'] = [f"{q3_target:,}", '진척률', f"{progress_rate:.2%}"]
 
     # --- HTML 변환 및 스타일링 ---
     html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False)
-    # "진척률" 셀 하이라이트
-    html_retail = html_retail.replace('<td>진척률</td>', '<td style="background-color: #e0f7fa;">진척률</td>')
-    # 판매현황 비율 셀 하이라이트(연한 주황색)
-    if 'formatted_sales_rate' in locals():
-        html_retail = html_retail.replace(f'<td>{formatted_sales_rate}</td>', f'<td style="background-color: #fff4e6;">{formatted_sales_rate}</td>')
+    
+    # 이미지 형태에 맞는 스타일링 적용
+    if period_option in ['전체', '1Q', '1분기', '2Q', '2분기', '3Q', '3분기']:
+        # 타겟 값들에 배경색 적용
+        target_values = ['4300', '10000']
+        for target in target_values:
+            html_retail = html_retail.replace(f'<td>{target}</td>', f'<td style="background-color: #f0f0f0;">{target}</td>')
+        
+        # 진척률 셀 하이라이트 (모든 진척률 값에 대해)
+        import re
+        html_retail = re.sub(
+            r'<td>(\d+\.\d+)%</td>',
+            r'<td style="background-color: #e0f7fa;">\1%</td>',
+            html_retail
+        )
+        
+        # 빈 셀들을 공백으로 표시
+        html_retail = html_retail.replace('<td></td>', '<td style="background-color: #fafafa;">&nbsp;</td>')
+        
+        # '전체' 선택 시 Q1, Q2, Q3 컬럼 헤더 하이라이트
+        if period_option == '전체':
+            html_retail = re.sub(
+                r'(<th[^>]*>Q1</th>)',
+                r'<th style="background-color: #ffe0b2;">Q1</th>',
+                html_retail
+            )
+            html_retail = re.sub(
+                r'(<th[^>]*>Q2</th>)',
+                r'<th style="background-color: #ffe0b2;">Q2</th>',
+                html_retail
+            )
+            html_retail = re.sub(
+                r'(<th[^>]*>Q3</th>)',
+                r'<th style="background-color: #ffe0b2;">Q3</th>',
+                html_retail
+            )
+        else:
+            # "계" 컬럼 하이라이트 (개별 분기 선택 시)
+            html_retail = re.sub(
+                r'(<th[^>]*>계</th>)',
+                r'<th style="background-color: #ffe0b2;">계</th>',
+                html_retail
+            )
+            
+            # "계" 행의 데이터 셀들도 하이라이트
+            html_retail = re.sub(
+                r'(<tr>\s*<th>계</th>)(.*?)(</tr>)',
+                lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
+                html_retail,
+                flags=re.DOTALL
+            )
+            
+            # '타겟'과 '진척률' 행을 병합된 셀로 표시 (월별 컬럼 + 계 컬럼까지 전체 병합)
+            # 타겟 행 병합 (월별 3개 컬럼 + 계 컬럼까지 총 4개 컬럼 병합)
+            html_retail = re.sub(
+                r'(<tr>\s*<th>타겟</th>)(.*?)(</tr>)',
+                lambda m: m.group(1) + 
+                         re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
+                                r'<td\1 colspan="4">\2</td>', m.group(2), count=1) + 
+                         m.group(3),
+                html_retail,
+                flags=re.DOTALL
+            )
+            
+            # 진척률 행 병합 (월별 3개 컬럼 + 계 컬럼까지 총 4개 컬럼 병합)
+            html_retail = re.sub(
+                r'(<tr>\s*<th>진척률</th>)(.*?)(</tr>)',
+                lambda m: m.group(1) + 
+                         re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
+                                r'<td\1 colspan="4">\2</td>', m.group(2), count=1) + 
+                         m.group(3),
+                html_retail,
+                flags=re.DOTALL
+            )
 
-    if show_monthly_summary:
-        st.markdown(html_retail, unsafe_allow_html=True)
+    st.markdown(html_retail, unsafe_allow_html=True)
 
-    # --- 리테일 월별 추이 그래프 (내부 뷰어 전용) ---
-    if viewer_option == '내부' and show_monthly_summary:
+    # --- 리테일 월별 추이 그래프 ---
+    if viewer_option == '내부':
         # --- months_to_show 결정 ---
         def get_end_month(option):
             if option.endswith('월'):
@@ -650,6 +821,7 @@ with col1:
                 title=f"{selected_date.year}년 월별 파이프라인 추이 ({start_month}월~{end_month}월)"
             )
             st.altair_chart(combo_chart, use_container_width=True)
+
 
 with col2:
     st.write("### 2. 법인팀 금일 요약")
