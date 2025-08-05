@@ -645,8 +645,8 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             retail_df_data = {
                 'Q1': [q1_target, q1_total_mail, q1_total_apply, f"{q1_progress:.1%}", '', q1_total_distribute],
                 'Q2': [q2_target, q2_total_mail, q2_total_apply, f"{q2_progress:.1%}", '', q2_total_distribute],
-                'Q3': [q3_target, q3_total_mail, q3_total_apply, f"{q3_progress:.1%}", '', q3_total_distribute],
-                '계': [total_target, total_mail, total_apply, '', '', total_distribute]
+                'Q3': [q3_target, q3_total_mail, q3_total_apply, f"{q3_progress:.1%}", 288, q3_total_distribute],
+                '계': [total_target, total_mail, total_apply, '', 288, total_distribute]
             }
             retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
@@ -756,7 +756,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 '7': ['', q3_monthly_data['7'][0], q3_monthly_data['7'][1], '', q3_monthly_data['7'][2]],
                 '8': ['', q3_monthly_data['8'][0], q3_monthly_data['8'][1], '', q3_monthly_data['8'][2]],
                 '9': ['', q3_monthly_data['9'][0], q3_monthly_data['9'][1], '', q3_monthly_data['9'][2]],
-                '계': ['', q3_total_mail, q3_total_apply, '', q3_total_distribute]
+                '계': ['', q3_total_mail, q3_total_apply, 288, q3_total_distribute]
             }
             retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
@@ -1138,7 +1138,6 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 title=title_corp
             )
             st.altair_chart(corp_combo, use_container_width=True)
-
 
 # --- 폴스타 뷰 전용 표 ---
 if viewer_option == '폴스타':
