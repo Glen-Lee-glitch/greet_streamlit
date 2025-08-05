@@ -1022,12 +1022,34 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             if selected_date.day < 15:
                 months_to_show = [m for m in months_to_show if m < selected_date.month]
             if months_to_show:
-                # 월별 파이프라인(메일) 건수 집계
-                df_5_monthly = df_5[
-                    (df_5['날짜'].dt.year == selected_date.year) &
-                    (df_5['날짜'].dt.month.isin(months_to_show))
-                ]
-                pipeline_counts = df_5_monthly.groupby(df_5_monthly['날짜'].dt.month).size()
+                # 월별 파이프라인(메일) 건수 집계 - 6월과 7월 특별 처리
+                pipeline_counts = {}
+                
+                for month in months_to_show:
+                    if month == 6:
+                        # 6월은 6월 23일까지만 집계
+                        june_23 = datetime(selected_date.year, 6, 23).date()
+                        month_count = int(df_5[
+                            (df_5['날짜'].dt.year == selected_date.year) &
+                            (df_5['날짜'].dt.month == 6) &
+                            (df_5['날짜'].dt.date <= june_23)
+                        ].shape[0])
+                    elif month == 7:
+                        # 7월은 6월 24일부터 7월 31일까지 집계
+                        june_24 = datetime(selected_date.year, 6, 24).date()
+                        july_31 = datetime(selected_date.year, 7, 31).date()
+                        month_count = int(df_5[
+                            (df_5['날짜'].dt.date >= june_24) &
+                            (df_5['날짜'].dt.date <= july_31)
+                        ].shape[0])
+                    else:
+                        # 다른 월들은 전체 월 집계
+                        month_count = int(df_5[
+                            (df_5['날짜'].dt.year == selected_date.year) &
+                            (df_5['날짜'].dt.month == month)
+                        ].shape[0])
+                    
+                    pipeline_counts[month] = month_count
 
                 # 차트용 데이터프레임 생성
                 chart_df = pd.DataFrame(
