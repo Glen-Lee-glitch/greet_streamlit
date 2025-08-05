@@ -671,14 +671,13 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             # 진척률 계산
             q1_progress_rate = q1_total_mail / q1_target if q1_target > 0 else 0
             
-            # 데이터프레임 생성
             retail_df_data = {
-                '1': [q1_target, q1_monthly_data['1'][0], q1_monthly_data['1'][1], f"{q1_progress_rate:.1%}", '', q1_monthly_data['1'][2]],
-                '2': ['', q1_monthly_data['2'][0], q1_monthly_data['2'][1], '', '', q1_monthly_data['2'][2]],
-                '3': ['', q1_monthly_data['3'][0], q1_monthly_data['3'][1], '', '', q1_monthly_data['3'][2]],
-                '계': [q1_target, q1_total_mail, q1_total_apply, f"{q1_progress_rate:.1%}", '', q1_total_distribute]
+                '1': ['', q1_monthly_data['1'][0], q1_monthly_data['1'][1], '', q1_monthly_data['1'][2]],
+                '2': ['', q1_monthly_data['2'][0], q1_monthly_data['2'][1], '', q1_monthly_data['2'][2]],
+                '3': ['', q1_monthly_data['3'][0], q1_monthly_data['3'][1], '', q1_monthly_data['3'][2]],
+                '계': ['', q1_total_mail, q1_total_apply, '', q1_total_distribute]
             }
-            retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
+            retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
         elif period_option == '2Q' or period_option == '2분기':
             # Q2 데이터 계산 (4, 5, 6월) - 6월은 6월 23일까지
@@ -716,12 +715,12 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             
             # 데이터프레임 생성
             retail_df_data = {
-                '4': [q2_target, q2_monthly_data['4'][0], q2_monthly_data['4'][1], f"{q2_progress_rate:.1%}", '', q2_monthly_data['4'][2]],
-                '5': ['', q2_monthly_data['5'][0], q2_monthly_data['5'][1], '', '', q2_monthly_data['5'][2]],
-                '6': ['', q2_monthly_data['6'][0], q2_monthly_data['6'][1], '', '', q2_monthly_data['6'][2]],
-                '계': [q2_target, q2_total_mail, q2_total_apply, f"{q2_progress_rate:.1%}", '', q2_total_distribute]
+                '4': ['', q2_monthly_data['4'][0], q2_monthly_data['4'][1], '', q2_monthly_data['4'][2]],
+                '5': ['', q2_monthly_data['5'][0], q2_monthly_data['5'][1], '', q2_monthly_data['5'][2]],
+                '6': ['', q2_monthly_data['6'][0], q2_monthly_data['6'][1], '', q2_monthly_data['6'][2]],
+                '계': ['', q2_total_mail, q2_total_apply, '', q2_total_distribute]
             }
-            retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
+            retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
         elif period_option in ('3Q', '3분기'):
             # --- 3Q 월별 데이터 계산 (수정된 로직) ---
@@ -754,12 +753,12 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             q3_progress = q3_total_mail / q3_target if q3_target > 0 else 0
             
             retail_df_data = {
-                '7': [q3_target, q3_monthly_data['7'][0], q3_monthly_data['7'][1], f"{q3_progress:.1%}", '', q3_monthly_data['7'][2]],
-                '8': ['', q3_monthly_data['8'][0], q3_monthly_data['8'][1], '', '', q3_monthly_data['8'][2]],
-                '9': ['', q3_monthly_data['9'][0], q3_monthly_data['9'][1], '', '', q3_monthly_data['9'][2]],
-                '계': [q3_target, q3_total_mail, q3_total_apply, f"{q3_progress:.1%}", '', q3_total_distribute]
+                '7': ['', q3_monthly_data['7'][0], q3_monthly_data['7'][1], '', q3_monthly_data['7'][2]],
+                '8': ['', q3_monthly_data['8'][0], q3_monthly_data['8'][1], '', q3_monthly_data['8'][2]],
+                '9': ['', q3_monthly_data['9'][0], q3_monthly_data['9'][1], '', q3_monthly_data['9'][2]],
+                '계': ['', q3_total_mail, q3_total_apply, '', q3_total_distribute]
             }
-            retail_index = ['타겟', '파이프라인', '지원신청완료', '진척률', '취소', '지급신청']
+            retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
         else:
             # 기존 로직 유지 (다른 기간 선택 시)
@@ -785,11 +784,53 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             
             # 진척률 셀 하이라이트 (모든 진척률 값에 대해)
             import re
-            html_retail = re.sub(
-                r'<td>(\d+\.\d+)%</td>',
-                r'<td style="background-color: #e0f7fa;">\1%</td>',
-                html_retail
-            )
+            # 1Q/1분기에서 '타겟 (진척률)' 행을 병합하고 배경색 적용 (3분기 방식과 동일하게)
+            if period_option in ('1Q', '1분기'):
+                target_text = f"{q1_target} ({q1_progress_rate:.1%})"
+                html_retail = re.sub(
+                    r'(<tr>\s*<th>타겟 \(진척률\)</th>)(.*?)(</tr>)',
+                    lambda m: m.group(1) + 
+                                re.sub(
+                                    r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>',
+                                    f'<td\\1 colspan="4" style="background-color:#e0f7fa;">{target_text}</td>',
+                                    m.group(2), count=1
+                                ) + 
+                                m.group(3),
+                    html_retail,
+                    flags=re.DOTALL
+                )
+
+            # 2Q/2분기에서 '타겟 (진척률)' 행을 병합하고 배경색 적용 (3분기 방식과 동일하게)
+            elif period_option in ('2Q', '2분기'):
+                target_text = f"{q2_target} ({q2_progress_rate:.1%})"
+                html_retail = re.sub(
+                    r'(<tr>\s*<th>타겟 \(진척률\)</th>)(.*?)(</tr>)',
+                    lambda m: m.group(1) + 
+                                re.sub(
+                                    r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>',
+                                    f'<td\\1 colspan="4" style="background-color:#e0f7fa;">{target_text}</td>',
+                                    m.group(2), count=1
+                                ) + 
+                                m.group(3),
+                    html_retail,
+                    flags=re.DOTALL
+                )
+
+            # 3Q/3분기에서 '타겟 (진척률)' 행을 병합하고 배경색 적용
+            elif period_option in ('3Q', '3분기'):
+                target_text = f"{q3_target} ({q3_progress:.1%})"
+                html_retail = re.sub(
+                    r'(<tr>\s*<th>타겟 \(진척률\)</th>)(.*?)(</tr>)',
+                    lambda m: m.group(1) + 
+                                re.sub(
+                                    r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>',
+                                    f'<td\\1 colspan="4" style="background-color:#e0f7fa;">{target_text}</td>',
+                                    m.group(2), count=1
+                                ) + 
+                                m.group(3),
+                    html_retail,
+                    flags=re.DOTALL
+                )
             
             # 빈 셀들을 공백으로 표시
             html_retail = html_retail.replace('<td></td>', '<td style="background-color: #fafafa;">&nbsp;</td>')
@@ -811,6 +852,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                     r'<th style="background-color: #ffe0b2;">Q3</th>',
                     html_retail
                 )
+
             else:
                 # "계" 컬럼 하이라이트 (개별 분기 선택 시)
                 html_retail = re.sub(
@@ -826,29 +868,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                     html_retail,
                     flags=re.DOTALL
                 )
-                
-                # '타겟'과 '진척률' 행을 병합된 셀로 표시 (월별 컬럼 + 계 컬럼까지 전체 병합)
-                # 타겟 행 병합 (월별 3개 컬럼 + 계 컬럼까지 총 4개 컬럼 병합)
-                html_retail = re.sub(
-                    r'(<tr>\s*<th>타겟</th>)(.*?)(</tr>)',
-                    lambda m: m.group(1) + 
-                                re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
-                                    r'<td\1 colspan="4">\2</td>', m.group(2), count=1) + 
-                                m.group(3),
-                    html_retail,
-                    flags=re.DOTALL
-                )
-                
-                # 진척률 행 병합 (월별 3개 컬럼 + 계 컬럼까지 총 4개 컬럼 병합)
-                html_retail = re.sub(
-                    r'(<tr>\s*<th>진척률</th>)(.*?)(</tr>)',
-                    lambda m: m.group(1) + 
-                                re.sub(r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>', 
-                                    r'<td\1 colspan="4">\2</td>', m.group(2), count=1) + 
-                                m.group(3),
-                    html_retail,
-                    flags=re.DOTALL
-                )
+            
 
         st.markdown(html_retail, unsafe_allow_html=True)
 
