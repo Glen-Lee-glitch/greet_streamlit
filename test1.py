@@ -91,7 +91,7 @@ def load_and_process_data(excel_path, geojson_path):
     try:
         # 1. Excel 파일 로드 및 주소 파싱
         df = pd.read_excel(excel_path)
-        df[['sido', 'sgg']] = df['주소'].apply(lambda x: pd.Series(parse_address(x)))
+        df[['sido', 'sgg']] = df['주소\n(등록주소지)'].apply(lambda x: pd.Series(parse_address(x)))
         
         df_valid = df.dropna(subset=['sido'])
         
@@ -127,38 +127,6 @@ def load_and_process_data(excel_path, geojson_path):
         # 2. GeoJSON 파일 로드 및 구조 확인
         with open(geojson_path, 'r', encoding='utf-8') as f:
             geojson_data = json.load(f)
-        
-        # GeoJSON 구조 디버깅
-        st.subheader("🔍 GeoJSON 구조 분석")
-        
-        # 첫 번째 feature의 properties 확인
-        if geojson_data['features']:
-            first_feature = geojson_data['features'][0]
-            st.write("**첫 번째 feature의 properties:**")
-            st.json(first_feature['properties'])
-            
-            # 모든 properties 키 확인
-            all_properties = set()
-            for feature in geojson_data['features']:
-                all_properties.update(feature['properties'].keys())
-            
-            st.write("**GeoJSON의 모든 properties 키:**")
-            st.write(list(all_properties))
-            
-            # 시도명과 시군구명 샘플 확인
-            sido_samples = set()
-            sgg_samples = set()
-            for feature in geojson_data['features'][:100]:  # 처음 100개만 확인
-                props = feature['properties']
-                if 'sidonm' in props:
-                    sido_samples.add(props['sidonm'])
-                if 'sggnm' in props:
-                    sgg_samples.add(props['sggnm'])
-            
-            st.write("**시도명 샘플 (처음 100개 feature에서):**")
-            st.write(list(sido_samples))
-            st.write("**시군구명 샘플 (처음 100개 feature에서):**")
-            st.write(list(sgg_samples))
         
         # 3. 시군구별 그룹화 (정규화된 버전도 고려)
         sggnm_groups = {}
@@ -227,7 +195,7 @@ def load_and_process_data(excel_path, geojson_path):
         # 6. 매칭되지 않은 주소 찾기
         unmatched_df = pd.DataFrame()
         if unmatched_sgg_keys:
-            unmatched_df = df_valid[df_valid['sggnm'].isin(unmatched_sgg_keys)][['주소', 'sido', 'sgg', 'sggnm']].drop_duplicates()
+            unmatched_df = df_valid[df_valid['sggnm'].isin(unmatched_sgg_keys)][['주소\n(등록주소지)', 'sido', 'sgg', 'sggnm']].drop_duplicates()
 
         merged_geojson = {'type': 'FeatureCollection', 'features': merged_features}
         
@@ -264,7 +232,7 @@ def create_korea_map(merged_geojson, map_style, color_scale_name):
         color_discrete_map=color_map,
         category_orders={'category': labels},
         mapbox_style=map_style,
-        zoom=5.5,
+        zoom=7,
         center={'lat': 36.5, 'lon': 127.5},
         opacity=0.7,
         labels={'category': '신청 건수', 'sggnm': '시군구'},
