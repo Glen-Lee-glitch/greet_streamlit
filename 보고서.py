@@ -4,6 +4,11 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import pickle
+import json
+import re
+import plotly.express as px
+from shapely.geometry import shape
+from shapely.ops import unary_union
 
 import sys
 from datetime import datetime, timedelta
@@ -60,6 +65,152 @@ def load_data():
         st.error("전처리된 데이터 파일(preprocessed_data.pkl)을 찾을 수 없습니다.")
         st.info("먼저 '전처리.py'를 실행하여 데이터 파일을 생성해주세요.")
         sys.exit()
+
+def load_and_process_data(excel_path, geojson_path):
+    """
+    Excel과 GeoJSON 파일을 로드하고, 지역구분 데이터를 기반으로 집계하여
+    지도 시각화에 사용할 최종 GeoJSON과 매칭되지 않은 지역 목록을 반환합니다.
+    """
+    try:
+        # --- 1. GeoJSON을 시군구 단위로 병합하여 기본 지도 생성 ---
+        with open(geojson_path, 'r', encoding='utf-8') as f:
+            geojson_data = json.load(f)
+        
+        # 시도별로 그룹화 (1단계 매칭용)
+        sido_groups = {}
+        sgg_groups = {}
+        
+        for feature in geojson_data['features']:
+            properties = feature['properties']
+            sido = properties.get('sidonm', '')
+            sgg = properties.get('sggnm', '')
+            
+            if sido and sgg:
+                # 시도별 그룹화 (서울특별시, 광역시 등)
+                if sido not in sido_groups:
+                    sido_groups[sido] = []
+                sido_groups[sido].append(shape(feature['geometry']))
+                
+                # 시군구별 그룹화 (기존 로직)
+                key = f"{sido} {sgg}"
+                if key not in sgg_groups:
+                    sgg_groups[key] = []
+                sgg_groups[key].append(shape(feature['geometry']))
+        
+        # 시도별 지오메트리 병합
+        sido_map_geoms = {}
+        for sido, geoms in sido_groups.items():
+            if geoms:
+                try:
+                    sido_map_geoms[sido] = unary_union(geoms)
+                except Exception:
+                    continue
+        
+        # 시군구별 지오메트리 병합 (기존 로직)
+        sgg_map_geoms = {}
+        for sggnm, geoms in sgg_groups.items():
+            if geoms:
+                try:
+                    sgg_map_geoms[sggnm] = unary_union(geoms)
+                except Exception:
+                    continue
+
+        # --- 2. Excel 데이터 로드 및 집계 ---
+        df = pd.read_excel(excel_path)
+        region_counts = df['지역구분'].value_counts().to_dict()
+
+        # --- 3. 3단계 매칭 로직 구현 ---
+        final_counts = {}
+        unmatched_regions = []
+
+        # 시도명 목록 (1단계 매칭용)
+        sido_list = [
+            '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', 
+            '울산광역시', '세종특별자치시', '제주특별자치도'
+        ]
+
+        for region, count in region_counts.items():
+            region_str = str(region).strip()
+            matched = False
+
+            # 1단계: 서울, 광역시, 제주, 세종은 sidonm에 따라 매칭 (시도 단위로 통합)
+            if region_str in sido_list:
+                if region_str in sido_map_geoms:
+                    final_counts[region_str] = final_counts.get(region_str, 0) + count
+                    matched = True
+            
+            # 2단계: sggnm이 5글자 이상인 것들은 앞 3글자로 매칭
+            elif len(region_str) >= 3:
+                for sggnm_key in sgg_map_geoms.keys():
+                    # sggnm에서 시도명 제거하고 시군구명만 추출
+                    sgg_part = sggnm_key.split(' ', 1)[1] if ' ' in sggnm_key else sggnm_key
+                    
+                    # sggnm이 5글자 이상이고 앞 3글자가 일치하는 경우
+                    if len(sgg_part) >= 5 and sgg_part[:3] == region_str[:3]:
+                        final_counts[sggnm_key] = final_counts.get(sggnm_key, 0) + count
+                        matched = True
+            
+            # 3단계: 나머지는 sggnm에 따라 매칭
+            if not matched:
+                for sggnm_key in sgg_map_geoms.keys():
+                    # sggnm에서 시도명 제거하고 시군구명만 추출
+                    sgg_part = sggnm_key.split(' ', 1)[1] if ' ' in sggnm_key else sggnm_key
+                    
+                    # 정확히 일치하는 경우
+                    if sgg_part == region_str:
+                        final_counts[sggnm_key] = final_counts.get(sggnm_key, 0) + count
+                        matched = True
+                        break
+            
+            if not matched:
+                unmatched_regions.append(region)
+
+        # --- 4. 최종 GeoJSON 생성 ---
+        merged_features = []
+        
+        # 시도 단위로 매칭된 지역들 (통합된 경계선)
+        for sido, geom in sido_map_geoms.items():
+            if sido in final_counts:
+                merged_feature = {
+                    'type': 'Feature',
+                    'geometry': geom.__geo_interface__,
+                    'properties': {
+                        'sggnm': sido,
+                        'value': final_counts[sido]
+                    }
+                }
+                merged_features.append(merged_feature)
+        
+        # 시군구 단위로 매칭된 지역들 (개별 경계선)
+        for sggnm, geom in sgg_map_geoms.items():
+            if sggnm in final_counts and sggnm not in sido_list:  # 시도 단위가 아닌 경우만
+                merged_feature = {
+                    'type': 'Feature',
+                    'geometry': geom.__geo_interface__,
+                    'properties': {
+                        'sggnm': sggnm,
+                        'value': final_counts[sggnm]
+                    }
+                }
+                merged_features.append(merged_feature)
+
+        merged_geojson = {'type': 'FeatureCollection', 'features': merged_features}
+        
+        # 매칭 실패한 지역 정보 DataFrame 생성
+        unmatched_df = pd.DataFrame({
+            '지역구분': unmatched_regions,
+            '카운트': [region_counts[r] for r in unmatched_regions]
+        })
+
+        return merged_geojson, unmatched_df
+        
+    except FileNotFoundError as e:
+        st.error(f"파일을 찾을 수 없습니다: {e.filename}")
+        return None, pd.DataFrame()
+    except Exception as e:
+        st.error(f"데이터 처리 중 오류가 발생했습니다: {e}")
+        return None, pd.DataFrame()
+
 
 def load_memo():
     """저장된 메모를 로드합니다."""
@@ -164,6 +315,7 @@ df_2_fail_q3 = data["df_2_fail_q3"]
 update_time_str = data["update_time_str"]
 df_admin_coords = data.get("df_admin_coords", pd.DataFrame())  # 행정구역별 위경도 좌표 데이터
 df_master = data.get("df_master", pd.DataFrame())  # 지자체 정리 master.xlsx 데이터
+df_6 = data.get("df_6", pd.DataFrame())  # 지역구분 데이터
 
 # --- 시간대 설정 ---
 KST = pytz.timezone('Asia/Seoul')
@@ -1267,143 +1419,136 @@ if viewer_option == '폴스타':
 
 # --- 지도 뷰어 ---
 if viewer_option == '지도(테스트)':
-    # --- 대한민국 지도 시각화 ---
-    st.markdown("---")
-    st.header("🗺️ 대한민국 지도 시각화")
-
-    # 행정구역 좌표 데이터가 있는지 확인
-    if not df_admin_coords.empty:
-        st.success("행정구역별 위경도 좌표 데이터가 로드되었습니다!")
-        
+    # --- 지도 관련 파일들을 지연 로드 ---
+    @st.cache_data
+    def load_map_data():
+        """지도 뷰어가 선택되었을 때만 지도 관련 파일들을 로드합니다."""
         try:
-            # 시도 목록 가져오기
-            sido_list = ["전체"] + sorted(df_admin_coords['시도'].unique().tolist())
-            
-            # 지역 선택 UI
-            col1, col2, col3 = st.columns([1, 1, 1])
-            with col1:
-                selected_sido = st.selectbox("시도 선택", sido_list)
-            
-            with col2:
-                # 선택된 시도에 따른 시군구 목록
-                if selected_sido and selected_sido != "전체":
-                    # 시군구 데이터를 문자열로 변환하여 안전하게 정렬
-                    sigungu_data = df_admin_coords[df_admin_coords['시도'] == selected_sido]['시군구'].unique()
-                    sigungu_list = ["전체"] + sorted([str(x) for x in sigungu_data if pd.notna(x)])
-                else:
-                    sigungu_list = ["전체"]
-                selected_sigungu = st.selectbox("시군구 선택", sigungu_list)
-            
-            # --- 지도 확대/축소 로직 추가 ---
-            zoom_level = 6  # 기본 전국 뷰
-            if selected_sido != "전체":
-                zoom_level = 8  # 시도 선택 시 확대
-            if selected_sigungu != "전체" and selected_sigungu:
-                zoom_level = 11 # 시군구 선택 시 더 확대
-
-            # 행정구역 좌표 데이터를 사용한 지도 데이터 생성 (sample_value 제거)
-            map_data = create_admin_map_data(df_admin_coords, selected_sido, selected_sigungu)
-            
-            # 지도 표시 (동적 zoom_level 적용)
-            st.subheader("행정구역별 데이터 지도")
-            if map_data and map_data['lat']:
-                # size 데이터가 있으면 사용, 없으면 기본값 사용
-                if 'size' in map_data:
-                    # size 데이터를 사용하여 지도 표시
-                    map_df = pd.DataFrame({
-                        'lat': map_data['lat'],
-                        'lon': map_data['lon'],
-                        'size': map_data['size']
-                    })
-                    st.map(data=map_df, zoom=zoom_level+2)
-                else:
-                    # 기존 방식으로 지도 표시
-                    st.map(data=map_data, zoom=zoom_level+2)
+            # df_6에서 지역구분 데이터 추출 (sample.xlsx 대신 사용)
+            if not df_6.empty and '지역구분' in df_6.columns:
+                region_counts = df_6['지역구분'].value_counts().to_dict()
             else:
-                st.warning("선택한 조건에 맞는 데이터가 없어 지도를 표시할 수 없습니다.")
+                # df_6이 없거나 지역구분 컬럼이 없는 경우 빈 딕셔너리
+                region_counts = {}
             
-            # 선택된 지역 정보 표시
-            if selected_sido != "전체":
-                st.info(f"**선택된 시도:** {selected_sido}")
-                if selected_sigungu != "전체":
-                    st.info(f"**선택된 시군구:** {selected_sigungu}")
-                st.info(f"**생성된 포인트 수:** {len(map_data['lat'])}")
-                
-                # size 데이터가 있으면 표시
-                if 'size' in map_data and map_data['size']:
-                    avg_size = sum(map_data['size']) / len(map_data['size'])
-                    min_size = min(map_data['size'])
-                    max_size = max(map_data['size'])
-                    st.info(f"**원 크기 데이터:** 평균 {avg_size:.1f}, 최소 {min_size}, 최대 {max_size}")
+            # load_and_process_data 함수를 사용하여 GeoJSON 처리
+            merged_geojson, unmatched_df = load_and_process_data('sample.xlsx', 'HangJeongDong_ver20250401.geojson')
             
-            # 필터링된 데이터 테이블 표시
-            st.subheader("📊 선택된 지역 데이터 현황")
-            filtered_data = df_admin_coords.copy()
-            if selected_sido != "전체":
-                filtered_data = filtered_data[filtered_data['시도'] == selected_sido]
-            if selected_sigungu != "전체":
-                filtered_data = filtered_data[filtered_data['시군구'].astype(str) == selected_sigungu]
-            
-            if not filtered_data.empty:
-                # size 데이터 추가
-                display_data = filtered_data.copy()
-                size_list = []
-                for i in range(len(display_data)):
-                    sigungu_name = str(display_data.iloc[i]['시군구'])
-                    np.random.seed(hash(sigungu_name) % 2**32)
-                    random_value = np.random.randint(10, 1001)
-                    size_list.append(random_value)
-                display_data['원_크기_데이터'] = size_list
-                
-                st.dataframe(display_data, use_container_width=True)
-                st.info(f"총 {len(filtered_data)}개의 행정구역이 표시됩니다.")
-            else:
-                st.warning("선택한 조건에 맞는 데이터가 없습니다.")
-
+            return merged_geojson, region_counts, unmatched_df
+        except FileNotFoundError as e:
+            st.error(f"지도 파일을 찾을 수 없습니다: {e}")
+            return None, {}, pd.DataFrame()
         except Exception as e:
-            st.error(f"지도 데이터 처리 중 오류가 발생했습니다: {e}")
-            st.write("**전체 행정구역 데이터:**")
-            st.dataframe(df_admin_coords.head(10))
+            st.error(f"지도 데이터 로드 중 오류: {e}")
+            return None, {}, pd.DataFrame()
 
-    else:
-        st.warning("⚠️ 행정구역별 위경도 좌표 데이터가 없습니다.")
-        st.info("'전처리.py'를 실행하여 '행정구역별_위경도_좌표.xlsx' 파일을 처리해주세요.")
-        
-        # 기존 간단한 지도 데이터로 대체
-        st.subheader("📍 기본 지도 (임시)")
-        korea_map_df = create_korea_map_data()
-        
-        if not korea_map_df.empty:
-            try:
-                # 지역 선택 UI
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    selected_region = st.selectbox("지역 선택", ["전체"] + korea_map_df['region'].tolist())
-                
-                # st.map을 위한 간단한 데이터 생성 (sample_value 제거)
-                map_data = create_simple_map_data(selected_region)
-                
-                # 지도 표시
-                st.map(data=map_data, zoom=6)
-                
-                # 선택된 지역 정보 표시
-                if selected_region != "전체":
-                    selected_data = korea_map_df[korea_map_df['region'] == selected_region]
-                    st.info(f"**선택된 지역:** {selected_region}")
-                    st.info(f"**위도:** {selected_data['lat'].values[0]:.4f}")
-                    st.info(f"**경도:** {selected_data['lon'].values[0]:.4f}")
-                    st.info(f"**생성된 포인트 수:** {len(map_data['lat'])}")
-                
-                # 전체 데이터 테이블 표시
-                st.subheader("📊 지역별 데이터 현황")
-                st.dataframe(korea_map_df, use_container_width=True)
+    # process_map_data 함수는 load_and_process_data가 이미 모든 처리를 해주므로 제거
 
-            except Exception as e:
-                st.error(f"지도 데이터 처리 중 오류가 발생했습니다: {e}")
-                st.write("**전체 지도 데이터:**")
-                st.dataframe(korea_map_df)
+    def create_korea_map(merged_geojson, map_style, color_scale_name):
+        """Plotly를 사용하여 8단계로 구분된 Choropleth 지도를 생성합니다."""
+        if not merged_geojson or not merged_geojson['features']:
+            return None
+
+        plot_df = pd.DataFrame([f['properties'] for f in merged_geojson['features']])
+        
+        # 값이 있는 경우에만 동적으로 구간 설정
+        if not plot_df.empty and plot_df['value'].max() > 0:
+            max_value = plot_df['value'].max()
+            if max_value <= 10:
+                bins = [-1, 0, 1, 2, 3, 5, 10, float('inf')]
+                labels = ["0", "1", "2", "3", "4-5", "6-10", "11+"]
+            elif max_value <= 100:
+                bins = [-1, 0, 10, 20, 30, 50, 100, float('inf')]
+                labels = ["0", "1-10", "11-20", "21-30", "31-50", "51-100", "101+"]
+            else:
+                bins = [-1, 0, 20, 50, 100, 200, 500, float('inf')]
+                labels = ["0", "1-20", "21-50", "51-100", "101-200", "201-500", "501+"]
         else:
-            st.warning("지도 데이터를 표시할 수 없습니다. 데이터가 비어있습니다.")
+            bins = [-1, 0, float('inf')]
+            labels = ["0", "1+"]
+        
+        plot_df['category'] = pd.cut(plot_df['value'], bins=bins, labels=labels, right=True).astype(str)
+        
+        # 색상표 생성
+        colors = px.colors.sequential.__getattribute__(color_scale_name)
+        color_map = {label: colors[i % len(colors)] for i, label in enumerate(labels)}
+
+        fig = px.choropleth_mapbox(
+            plot_df,
+            geojson=merged_geojson,
+            locations='sggnm',
+            featureidkey='properties.sggnm',
+            color='category',
+            color_discrete_map=color_map,
+            category_orders={'category': labels},
+            mapbox_style=map_style,
+            zoom=6,
+            center={'lat': 36.5, 'lon': 127.5},
+            opacity=0.7,
+            labels={'category': '신청 건수', 'sggnm': '지역'},
+            hover_name='sggnm',
+            hover_data={'value': True}
+        )
+        
+        fig.update_layout(
+            height=700,
+            margin={'r': 0, 't': 0, 'l': 0, 'b': 0},
+            legend_title_text='신청 건수 (구간)'
+        )
+        
+        return fig, plot_df
+
+    # --- 대한민국 지도 시각화 ---
+    st.header("🗺️ 대한민국 지도 시각화")
+    st.markdown("`df_6`의 '지역구분' 데이터를 집계하여 지도에 시각화합니다.")
+
+    # 로딩 메시지 표시
+    with st.spinner("지도 데이터를 로드하고 있습니다..."):
+        # 지도 데이터 로드
+        merged_geojson, region_counts, unmatched_df = load_map_data()
+        
+        if merged_geojson:
+            # 사이드바 설정
+            st.sidebar.header("⚙️ 지도 설정")
+            map_styles = {
+                "기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter", 
+                "위성 지도": "satellite-streets", "지형도": "stamen-terrain"
+            }
+            color_scales = ["Reds","Blues", "Greens", "Viridis", "Cividis", "Inferno"]
+            
+            selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
+            selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
+            
+            # 지도 생성 및 표시
+            fig, df = create_korea_map(merged_geojson, map_styles[selected_style], selected_color)
+            
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.sidebar.markdown("---")
+                st.sidebar.header("📊 데이터 요약")
+                st.sidebar.metric("총 시군구 수", len(df))
+                st.sidebar.metric("데이터가 있는 시군구", len(df[df['value'] > 0]))
+                st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
+                
+                st.subheader("데이터 테이블 (신청 건수 높은 순)")
+                st.dataframe(df[['sggnm', 'value']].sort_values('value', ascending=False), use_container_width=True)
+
+                # 매칭되지 않은 지역 표시
+                st.markdown("---")
+                if not unmatched_df.empty:
+                    st.subheader("⚠️ 매칭되지 않은 지역 목록")
+                    st.warning(
+                        "아래 목록의 지역들은 GeoJSON 지도 데이터에서 찾을 수 없어 지도에 포함되지 않았습니다."
+                    )
+                    st.dataframe(unmatched_df, use_container_width=True)
+                else:
+                    st.success("✅ 모든 지역이 지도 데이터와 성공적으로 매칭되었습니다.")
+            else:
+                st.error("지도 생성에 실패했습니다.")
+        else:
+            st.error("지도 파일을 로드할 수 없습니다.")
+            st.info("'HangJeongDong_ver20250401.geojson' 파일이 필요합니다.")
 
 # --- 지자체별 정리 ---
 if viewer_option == '지자체별 정리':

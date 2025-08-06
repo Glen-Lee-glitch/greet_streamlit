@@ -4,7 +4,6 @@ import json
 import pandas as pd
 from shapely.geometry import shape
 from shapely.ops import unary_union
-import re
 
 # 페이지 설정
 st.set_page_config(
