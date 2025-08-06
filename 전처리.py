@@ -175,6 +175,12 @@ def preprocess_and_save_data():
             df_3 = pd.DataFrame()
             df_4 = pd.DataFrame()
 
+        try:
+            df_6 = pd.read_excel("08_06_1258_EV_merged.xlsx")
+            df_6 = df_6[['지역구분', '주소\n(등록주소지)']]
+        except FileNotFoundError:
+            df_6 = pd.DataFrame()
+
         # ---------- 6. 저장 ----------
         data_to_save = {
             "df": pd.DataFrame(),  # 더 이상 사용되지 않지만 구조 유지
@@ -188,7 +194,8 @@ def preprocess_and_save_data():
             "df_fail_q3": df_fail_q3,
             "df_2_fail_q3": df_2_fail_q3,
             "update_time_str": update_time_str,
-            "df_master": df_master
+            "df_master": df_master,
+            "df_6": df_6
         }
 
         with open("preprocessed_data.pkl", "wb") as f:

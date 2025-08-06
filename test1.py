@@ -157,18 +157,12 @@ def load_and_process_data(excel_path, geojson_path):
         
         # Excel에서 파싱된 시군구명들
         excel_sgg_keys = set(sgg_counts.keys())
-        st.write("**Excel에서 파싱된 시군구명들:**")
-        st.write(list(excel_sgg_keys)[:10])  # 처음 10개만 표시
-        
+
         # GeoJSON에서 생성된 시군구명들
         geojson_sgg_keys = set(sggnm_groups.keys())
-        st.write("**GeoJSON에서 생성된 시군구명들:**")
-        st.write(list(geojson_sgg_keys)[:10])  # 처음 10개만 표시
-        
+
         # 매칭되지 않은 키들
         unmatched_sgg_keys = excel_sgg_keys - geojson_sgg_keys
-        st.write("**매칭되지 않은 Excel 시군구명들:**")
-        st.write(list(unmatched_sgg_keys)[:10])  # 처음 10개만 표시
 
         # 5. 시군구 경계 병합 및 카운트 데이터 결합
         merged_features = []
