@@ -63,73 +63,6 @@ def preprocess_and_save_data():
             print(f"테슬라 판매현황을 불러오는 중 오류: {e}")
             df_sales = pd.DataFrame()
 
-        # ---------- 추가: 행정구역별 위경도 좌표 로드 (시트별) ----------
-        admin_coords_file = "행정구역별_위경도_좌표.xlsx"
-        try:
-            # 모든 시트를 읽어서 시트명을 '시도'로 사용
-            excel_file = pd.ExcelFile(admin_coords_file)
-            sheet_names = excel_file.sheet_names
-            
-            print(f"발견된 시트: {sheet_names}")
-            
-            df_admin_coords_list = []
-            
-            for sheet_name in sheet_names:
-                try:
-                    # 각 시트를 읽기
-                    df_sheet = pd.read_excel(admin_coords_file, sheet_name=sheet_name)
-                    
-                    # 필요한 컬럼 확인 ('시군구', '위도', '경도')
-                    required_columns = ['시군구', '위도', '경도']
-                    if all(col in df_sheet.columns for col in required_columns):
-                        # 시트명을 '시도' 컬럼으로 추가 (이미 '시도' 컬럼이 있지만 시트명으로 덮어쓰기)
-                        df_sheet['시도'] = sheet_name
-                        
-                        # 필요한 컬럼만 추출하고 순서 조정
-                        df_sheet = df_sheet[['시도', '시군구', '위도', '경도']].copy()
-                        
-                        # 위도, 경도 컬럼을 숫자형으로 변환
-                        df_sheet['위도'] = pd.to_numeric(df_sheet['위도'], errors='coerce')
-                        df_sheet['경도'] = pd.to_numeric(df_sheet['경도'], errors='coerce')
-                        
-                        # NaN 값 제거
-                        df_sheet = df_sheet.dropna(subset=['위도', '경도'])
-                        
-                        # 시도, 시군구 레벨에서 중복 제거 (첫 번째 데이터만 유지)
-                        df_sheet = df_sheet.drop_duplicates(subset=['시도', '시군구'], keep='first')
-                        
-                        if not df_sheet.empty:
-                            df_admin_coords_list.append(df_sheet)
-                            print(f"  - {sheet_name}: {len(df_sheet)}개 행정구역 데이터 로드 (중복 제거 후)")
-                        else:
-                            print(f"  - {sheet_name}: 유효한 데이터 없음")
-                    else:
-                        print(f"  - {sheet_name}: 필요한 컬럼('시군구', '위도', '경도')이 없습니다.")
-                        
-                except Exception as e:
-                    print(f"  - {sheet_name} 시트 처리 중 오류: {e}")
-                    continue
-            
-            # 모든 시트 데이터를 하나로 합치기
-            if df_admin_coords_list:
-                df_admin_coords = pd.concat(df_admin_coords_list, ignore_index=True)
-                print(f"행정구역별 위경도 좌표 데이터를 성공적으로 로드했습니다.")
-                print(f"총 {len(df_admin_coords)}개의 행정구역 데이터가 로드되었습니다.")
-                print(f"시도별 데이터 수:")
-                for sido in df_admin_coords['시도'].unique():
-                    count = len(df_admin_coords[df_admin_coords['시도'] == sido])
-                    print(f"  - {sido}: {count}개")
-            else:
-                print("유효한 행정구역 데이터가 없습니다.")
-                df_admin_coords = pd.DataFrame()
-                
-        except FileNotFoundError:
-            print("'행정구역별_위경도_좌표.xlsx' 파일을 찾을 수 없습니다. 행정구역 좌표 데이터는 빈 DataFrame으로 저장됩니다.")
-            df_admin_coords = pd.DataFrame()
-        except Exception as e:
-            print(f"행정구역별 위경도 좌표를 불러오는 중 오류: {e}")
-            df_admin_coords = pd.DataFrame()
-
         # --- 추가: 지자체 정리 master.xlsx 로드
         df_master = pd.read_excel("master.xlsx")
         df_master = df_master[['지역', '현황_일반', '현황_우선', 'Model 3 RWD_기본', 'Model 3 RWD(2024)_기본', 'Model 3 LongRange_기본', 'Model 3 Performance_기본', 'Model Y New RWD_기본', 'Model Y New LongRange_기본']]
@@ -190,7 +123,6 @@ def preprocess_and_save_data():
             "df_4": df_4,
             "df_5": df_5,
             "df_sales": df_sales,
-            "df_admin_coords": df_admin_coords,  # 행정구역별 위경도 좌표 데이터
             "df_fail_q3": df_fail_q3,
             "df_2_fail_q3": df_2_fail_q3,
             "update_time_str": update_time_str,

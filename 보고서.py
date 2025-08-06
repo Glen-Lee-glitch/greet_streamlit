@@ -66,9 +66,9 @@ def load_data():
         st.info("먼저 '전처리.py'를 실행하여 데이터 파일을 생성해주세요.")
         sys.exit()
 
-def load_and_process_data(excel_path, geojson_path):
+def load_and_process_data(region_counts, geojson_path):
     """
-    Excel과 GeoJSON 파일을 로드하고, 지역구분 데이터를 기반으로 집계하여
+    region_counts와 GeoJSON 파일을 로드하고, 지역구분 데이터를 기반으로 집계하여
     지도 시각화에 사용할 최종 GeoJSON과 매칭되지 않은 지역 목록을 반환합니다.
     """
     try:
@@ -115,9 +115,8 @@ def load_and_process_data(excel_path, geojson_path):
                 except Exception:
                     continue
 
-        # --- 2. Excel 데이터 로드 및 집계 ---
-        df = pd.read_excel(excel_path)
-        region_counts = df['지역구분'].value_counts().to_dict()
+        # --- 2. region_counts 사용 (Excel 파일 로드 대신) ---
+        # region_counts는 이미 df_6에서 추출된 딕셔너리 형태
 
         # --- 3. 3단계 매칭 로직 구현 ---
         final_counts = {}
@@ -313,7 +312,6 @@ df_sales = data["df_sales"]
 df_fail_q3 = data["df_fail_q3"]
 df_2_fail_q3 = data["df_2_fail_q3"]
 update_time_str = data["update_time_str"]
-df_admin_coords = data.get("df_admin_coords", pd.DataFrame())  # 행정구역별 위경도 좌표 데이터
 df_master = data.get("df_master", pd.DataFrame())  # 지자체 정리 master.xlsx 데이터
 df_6 = data.get("df_6", pd.DataFrame())  # 지역구분 데이터
 
@@ -1427,12 +1425,20 @@ if viewer_option == '지도(테스트)':
             # df_6에서 지역구분 데이터 추출 (sample.xlsx 대신 사용)
             if not df_6.empty and '지역구분' in df_6.columns:
                 region_counts = df_6['지역구분'].value_counts().to_dict()
+                st.write(f"df_6에서 추출된 지역 수: {len(region_counts)}")
+                st.write(f"지역구분 샘플: {list(region_counts.keys())[:5]}")
             else:
                 # df_6이 없거나 지역구분 컬럼이 없는 경우 빈 딕셔너리
                 region_counts = {}
+                st.warning("df_6이 비어있거나 '지역구분' 컬럼이 없습니다.")
             
             # load_and_process_data 함수를 사용하여 GeoJSON 처리
-            merged_geojson, unmatched_df = load_and_process_data('sample.xlsx', 'HangJeongDong_ver20250401.geojson')
+            merged_geojson, unmatched_df = load_and_process_data(region_counts, 'HangJeongDong_ver20250401.geojson')
+            
+            if merged_geojson and 'features' in merged_geojson:
+                st.write(f"GeoJSON features 수: {len(merged_geojson['features'])}")
+            else:
+                st.warning("GeoJSON features가 비어있습니다.")
             
             return merged_geojson, region_counts, unmatched_df
         except FileNotFoundError as e:
@@ -1520,9 +1526,10 @@ if viewer_option == '지도(테스트)':
             selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
             
             # 지도 생성 및 표시
-            fig, df = create_korea_map(merged_geojson, map_styles[selected_style], selected_color)
+            result = create_korea_map(merged_geojson, map_styles[selected_style], selected_color)
             
-            if fig:
+            if result is not None:
+                fig, df = result
                 st.plotly_chart(fig, use_container_width=True)
                 
                 st.sidebar.markdown("---")
@@ -1546,6 +1553,12 @@ if viewer_option == '지도(테스트)':
                     st.success("✅ 모든 지역이 지도 데이터와 성공적으로 매칭되었습니다.")
             else:
                 st.error("지도 생성에 실패했습니다.")
+                st.write("디버깅 정보:")
+                st.write(f"- merged_geojson이 None인가: {merged_geojson is None}")
+                if merged_geojson:
+                    st.write(f"- features 수: {len(merged_geojson.get('features', []))}")
+                    if merged_geojson.get('features'):
+                        st.write(f"- 첫 번째 feature properties: {merged_geojson['features'][0].get('properties', {})}")
         else:
             st.error("지도 파일을 로드할 수 없습니다.")
             st.info("'HangJeongDong_ver20250401.geojson' 파일이 필요합니다.")
