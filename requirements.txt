@@ -1,11 +1,6 @@
-pandas
-numpy
 streamlit
-altair
-openpyxl
-streamlit-authenticator
-folium
-streamlit-folium
 plotly
+pandas
 geopandas
 shapely
+openpyxl
