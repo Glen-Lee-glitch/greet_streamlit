@@ -6,3 +6,5 @@ openpyxl
 streamlit-authenticator
 folium
 streamlit-folium
+plotly
+geopandas
