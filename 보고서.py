@@ -742,15 +742,19 @@ if viewer_option == '내부' or viewer_option == '테슬라':
 
     with col4:
         # ----- 리테일 월별 요약 헤더 및 기간 선택 -----
-        header_col, sel_col = st.columns([4,2])
-        with header_col:
+        if viewer_option == '내부':
+            header_col, sel_col = st.columns([4,2])
+            with header_col:
+                st.write("##### 리테일 월별 요약")
+            with sel_col:
+                period_option = st.selectbox(
+                    '기간 선택',
+                    ['3Q', '7월', '전체', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
+                    index=0,
+                    key='retail_period')
+        else:
             st.write("##### 리테일 월별 요약")
-        with sel_col:
-            period_option = st.selectbox(
-                '기간 선택',
-                ['3Q', '7월', '전체', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
-                index=0,
-                key='retail_period')
+            period_option = '전체'  # 테슬라 옵션일 때는 기본값으로 '전체' 사용
         year = today_kst.year
         july_start = datetime(year, 7, 1).date()
         july_end = datetime(year, 7, 31).date()
@@ -1068,7 +1072,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
     with col5:
         if show_monthly_summary:
            
-            # 구분선 이동에 따라 제거
+            # ----- 법인팀 월별 요약 헤더 및 기간 선택 -----
             if viewer_option == '내부':
                 header_corp, sel_corp = st.columns([4,2])
                 with header_corp:
@@ -1081,11 +1085,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                         key='corp_period')
             else:
                 st.write("##### 법인팀 월별 요약")
-                corp_period_option = st.selectbox(
-                    '기간 선택',
-                    ['전체'],
-                    index=0,
-                    key='corp_period')
+                corp_period_option = '전체'  # 테슬라 옵션일 때는 기본값으로 '전체' 사용
         
         # --- 날짜 변수 설정 ---
         year = today_kst.year
