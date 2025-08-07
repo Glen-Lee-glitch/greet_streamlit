@@ -493,68 +493,111 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         q3_start_default = datetime(year, 6, 24).date()
         q3_start_distribute = datetime(year, 7, 1).date()
 
-        cnt_today_mail = (df_5['날짜'].dt.date == day0).sum()
-        cnt_yesterday_mail = (df_5['날짜'].dt.date == day1).sum()
-        cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= day0)).sum()
+        # 기간별 조회인지 확인
+        is_period_view = view_option == '기간별 조회'
 
-        cnt_today_apply = int(df_1.loc[df_1['날짜'].dt.date == day0, '개수'].sum())
-        cnt_yesterday_apply = int(df_1.loc[df_1['날짜'].dt.date == day1, '개수'].sum())
-        cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= day0), '개수'].sum())
+        if is_period_view:
+            # 기간별 조회: 선택한 기간의 합계와 누적 총계만 표시
+            cnt_period_mail = ((df_5['날짜'].dt.date >= start_date) & (df_5['날짜'].dt.date <= end_date)).sum()
+            cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= end_date)).sum()
 
-        cnt_today_distribute = int(df_2.loc[df_2['날짜'].dt.date == day0, '배분'].sum())
-        cnt_yesterday_distribute = int(df_2.loc[df_2['날짜'].dt.date == day1, '배분'].sum())
-        cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '배분'].sum())
+            cnt_period_apply = int(df_1.loc[(df_1['날짜'].dt.date >= start_date) & (df_1['날짜'].dt.date <= end_date), '개수'].sum())
+            cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= end_date), '개수'].sum())
 
-        cnt_today_request = int(df_2.loc[df_2['날짜'].dt.date == day0, '신청'].sum())
-        cnt_yesterday_request = int(df_2.loc[df_2['날짜'].dt.date == day1, '신청'].sum())
-        cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '신청'].sum())
+            cnt_period_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= start_date) & (df_2['날짜'].dt.date <= end_date), '배분'].sum())
+            cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= end_date), '배분'].sum())
 
-        # df_fail_q3, df_2_fail_q3 날짜 타입 보정
-        if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
-            df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
-        if not pd.api.types.is_datetime64_any_dtype(df_2_fail_q3['날짜']):
-            df_2_fail_q3['날짜'] = pd.to_datetime(df_2_fail_q3['날짜'], errors='coerce')
+            cnt_period_request = int(df_2.loc[(df_2['날짜'].dt.date >= start_date) & (df_2['날짜'].dt.date <= end_date), '신청'].sum())
+            cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= end_date), '신청'].sum())
 
-        # 미신청건 계산
-        cnt_yesterday_fail = int((df_fail_q3['날짜'].dt.date == day1).sum())
-        cnt_today_fail = int((df_fail_q3['날짜'].dt.date == day0).sum())
-        cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= day0)).sum())
+            # df_fail_q3, df_2_fail_q3 날짜 타입 보정
+            if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
+                df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
+            if not pd.api.types.is_datetime64_any_dtype(df_2_fail_q3['날짜']):
+                df_2_fail_q3['날짜'] = pd.to_datetime(df_2_fail_q3['날짜'], errors='coerce')
 
-        # 지급 미신청건 계산
-        cnt_yesterday_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day1, '미신청건'].sum())
-        cnt_today_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day0, '미신청건'].sum())
-        cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= day0), '미신청건'].sum())
+            # 미신청건 계산 (기간별)
+            cnt_period_fail = int(((df_fail_q3['날짜'].dt.date >= start_date) & (df_fail_q3['날짜'].dt.date <= end_date)).sum())
+            cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= end_date)).sum())
 
-        delta_mail = cnt_today_mail - cnt_yesterday_mail
-        delta_apply = cnt_today_apply - cnt_yesterday_apply
-        delta_fail = cnt_today_fail - cnt_yesterday_fail
-        delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
-        delta_request = cnt_today_request - cnt_yesterday_request
-        delta_fail_2 = cnt_today_fail_2 - cnt_yesterday_fail_2
+            # 지급 미신청건 계산 (기간별)
+            cnt_period_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= start_date) & (df_2_fail_q3['날짜'].dt.date <= end_date), '미신청건'].sum())
+            cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= end_date), '미신청건'].sum())
 
-        def format_delta(value):
-            if value > 0: return f'<span style="color:blue;">+{value}</span>'
-            elif value < 0: return f'<span style="color:red;">{value}</span>'
-            return str(value)
+            table_data = pd.DataFrame({
+                ('지원', '파이프라인', '메일 건수'): [cnt_period_mail, cnt_total_mail],
+                ('지원', '신청', '신청 건수'): [cnt_period_apply, cnt_total_apply],
+                ('지원', '신청', '미신청건'): [cnt_period_fail, cnt_total_fail],
+                ('지급', '지급 처리', '지급 배분건'): [cnt_period_distribute, cnt_total_distribute],
+                ('지급', '지급 처리', '지급신청 건수'): [cnt_period_request, cnt_total_request],
+                ('지급', '지급 처리', '미신청건'): [cnt_period_fail_2, cnt_total_fail_2]
+            }, index=['선택기간', '누적 총계 (3분기)'])
 
-        table_data = pd.DataFrame({
-            ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
-            ('지원', '신청', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
-            ('지원', '신청', '미신청건'): [cnt_yesterday_fail, cnt_today_fail, cnt_total_fail],
-            ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
-            ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request],
-            ('지급', '지급 처리', '미신청건'): [cnt_yesterday_fail_2, cnt_today_fail_2, cnt_total_fail_2]
-        }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계 (3분기)'])
+        else:
+            # 기존 로직: 금일/전일/누적 표시
+            cnt_today_mail = (df_5['날짜'].dt.date == day0).sum()
+            cnt_yesterday_mail = (df_5['날짜'].dt.date == day1).sum()
+            cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= day0)).sum()
 
-        # 변동(Delta) 행 추가
-        table_data.loc['변동'] = [
-            format_delta(delta_mail),
-            format_delta(delta_apply),
-            format_delta(delta_fail),
-            format_delta(delta_distribute),
-            format_delta(delta_request),
-            format_delta(delta_fail_2)
-        ]
+            cnt_today_apply = int(df_1.loc[df_1['날짜'].dt.date == day0, '개수'].sum())
+            cnt_yesterday_apply = int(df_1.loc[df_1['날짜'].dt.date == day1, '개수'].sum())
+            cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= day0), '개수'].sum())
+
+            cnt_today_distribute = int(df_2.loc[df_2['날짜'].dt.date == day0, '배분'].sum())
+            cnt_yesterday_distribute = int(df_2.loc[df_2['날짜'].dt.date == day1, '배분'].sum())
+            cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '배분'].sum())
+
+            cnt_today_request = int(df_2.loc[df_2['날짜'].dt.date == day0, '신청'].sum())
+            cnt_yesterday_request = int(df_2.loc[df_2['날짜'].dt.date == day1, '신청'].sum())
+            cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '신청'].sum())
+
+            # df_fail_q3, df_2_fail_q3 날짜 타입 보정
+            if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
+                df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
+            if not pd.api.types.is_datetime64_any_dtype(df_2_fail_q3['날짜']):
+                df_2_fail_q3['날짜'] = pd.to_datetime(df_2_fail_q3['날짜'], errors='coerce')
+
+            # 미신청건 계산
+            cnt_yesterday_fail = int((df_fail_q3['날짜'].dt.date == day1).sum())
+            cnt_today_fail = int((df_fail_q3['날짜'].dt.date == day0).sum())
+            cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= day0)).sum())
+
+            # 지급 미신청건 계산
+            cnt_yesterday_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day1, '미신청건'].sum())
+            cnt_today_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day0, '미신청건'].sum())
+            cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= day0), '미신청건'].sum())
+
+            delta_mail = cnt_today_mail - cnt_yesterday_mail
+            delta_apply = cnt_today_apply - cnt_yesterday_apply
+            delta_fail = cnt_today_fail - cnt_yesterday_fail
+            delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
+            delta_request = cnt_today_request - cnt_yesterday_request
+            delta_fail_2 = cnt_today_fail_2 - cnt_yesterday_fail_2
+
+            def format_delta(value):
+                if value > 0: return f'<span style="color:blue;">+{value}</span>'
+                elif value < 0: return f'<span style="color:red;">{value}</span>'
+                return str(value)
+
+            table_data = pd.DataFrame({
+                ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
+                ('지원', '신청', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
+                ('지원', '신청', '미신청건'): [cnt_yesterday_fail, cnt_today_fail, cnt_total_fail],
+                ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
+                ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request],
+                ('지급', '지급 처리', '미신청건'): [cnt_yesterday_fail_2, cnt_today_fail_2, cnt_total_fail_2]
+            }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계 (3분기)'])
+
+            # 변동(Delta) 행 추가
+            table_data.loc['변동'] = [
+                format_delta(delta_mail),
+                format_delta(delta_apply),
+                format_delta(delta_fail),
+                format_delta(delta_distribute),
+                format_delta(delta_request),
+                format_delta(delta_fail_2)
+            ]
+
         html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
         st.markdown(html_table, unsafe_allow_html=True)
 
@@ -676,7 +719,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         # 오늘 기준 자동 추출된 특이사항 라인들
         auto_special_lines = extract_special_memo(df_fail_q3, selected_date)
         if not auto_special_lines:
-            auto_special_lines = ["미신청건 없음"]
+            auto_special_lines = ["없음"]
         auto_special_text = "\n".join(auto_special_lines)
 
         # memo_special.txt 에 저장된 사용자 메모
@@ -1023,7 +1066,6 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         st.markdown(html_retail, unsafe_allow_html=True)
 
     with col5:
-
         if show_monthly_summary:
            
             # 구분선 이동에 따라 제거
@@ -1031,9 +1073,19 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 header_corp, sel_corp = st.columns([4,2])
                 with header_corp:
                     st.write("##### 법인팀 월별 요약")
-                # sel_corp 자리 확보를 위해 비워둠
+                with sel_corp:
+                    corp_period_option = st.selectbox(
+                        '기간 선택',
+                        ['전체'],
+                        index=0,
+                        key='corp_period')
             else:
                 st.write("##### 법인팀 월별 요약")
+                corp_period_option = st.selectbox(
+                    '기간 선택',
+                    ['전체'],
+                    index=0,
+                    key='corp_period')
         
         # --- 날짜 변수 설정 ---
         year = today_kst.year
@@ -1098,32 +1150,47 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         )
         # --- 데이터프레임 생성 ---
         corp_df_data = {
-            '7월': [july_pipeline, july_apply, july_distribute],
-            '8월': [august_pipeline, august_apply, august_distribute]
+            '7월': ['', july_pipeline, july_apply, july_distribute],
+            '8월': ['', august_pipeline, august_apply, august_distribute]
         }
-        corp_df = pd.DataFrame(corp_df_data, index=['파이프라인', '지원신청', '지급신청'])
-        corp_df['TTL'] = corp_df['7월'] + corp_df['8월']
+        corp_df = pd.DataFrame(corp_df_data, index=['타겟 (진척률)', '파이프라인', '지원신청', '지급신청'])
+        corp_df['계'] = corp_df['7월'] + corp_df['8월']
 
-        # --- 'Q3 Target' 및 진척률 추가 ---
+        # --- '타겟 (진척률)' 데이터 계산 ---
         q3_target_corp = 1500
-        ttl_apply_corp = corp_df.loc['지원신청', 'TTL']
+        ttl_apply_corp = corp_df.loc['지원신청', '계']
         progress_rate_corp = ttl_apply_corp / q3_target_corp if q3_target_corp > 0 else 0
         formatted_progress_corp = f"{progress_rate_corp:.2%}"
-
-        corp_df['Q3 Target'] = ''
-        corp_df.loc['파이프라인', 'Q3 Target'] = f"{q3_target_corp}"
-        corp_df.loc['지원신청', 'Q3 Target'] = '진척률'
-        corp_df.loc['지급신청', 'Q3 Target'] = formatted_progress_corp
+        target_text = f"{q3_target_corp} ({formatted_progress_corp})"
 
         # --- HTML로 변환 및 스타일 적용 ---
         html_corp = corp_df.to_html(classes='custom_table', border=0, escape=False)
-        html_corp = html_corp.replace(
-            '<td>진척률</td>',
-            '<td style="background-color: #e0f7fa;">진척률</td>'
-        ).replace(
-            f'<td>{formatted_progress_corp}</td>',
-            f'<td>{formatted_progress_corp}</td>'
+        
+        # '타겟 (진척률)' 행을 병합하고 배경색 적용 (col4와 동일한 방식)
+        import re
+        html_corp = re.sub(
+            r'(<tr>\s*<th>타겟 \(진척률\)</th>)(.*?)(</tr>)',
+            lambda m: m.group(1) + 
+                        re.sub(
+                            r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>',
+                            f'<td\\1 colspan="3" style="background-color:#e0f7fa;">{target_text}</td>',
+                            m.group(2), count=1
+                        ) + 
+                        m.group(3),
+            html_corp,
+            flags=re.DOTALL
         )
+        
+        # '계' 헤더에 배경색 적용 (리테일과 동일한 색상 #ffe0b2)
+        html_corp = re.sub(
+            r'(<th[^>]*>계</th>)',
+            r'<th style="background-color: #ffe0b2;">계</th>',
+            html_corp
+        )
+
+        # 빈 셀들을 공백으로 표시
+        html_corp = html_corp.replace('<td></td>', '<td style="background-color: #fafafa;">&nbsp;</td>')
+        
         if show_monthly_summary:
             st.markdown(html_corp, unsafe_allow_html=True)
 

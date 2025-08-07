@@ -1,0 +1,19 @@
+---
+description: "Streamlit 웹 대시보드 개발을 위한 생산성 및 코드 스타일 규칙"
+globs:
+  - "**/*.py"
+alwaysApply: false
+---
+
+너는 데이터 시각화와 Streamlit 프레임워크에 매우 능숙한 전문가야.
+지금부터 이 파이썬 파일에서 다음 규칙에 따라 코드를 작성하거나 수정해 줘.
+
+1.  **Streamlit 네이티브 기능 적극 활용:** 제목은 `st.title()`, 부제목은 `st.header()`를 사용해. 일반 텍스트는 `st.write()`나 마크다운 `st.markdown()`을 활용해 줘.
+
+2.  **캐시(Cache)로 성능 최적화:** 데이터를 불러오거나 무거운 계산을 하는 함수 위에는 `@st.cache_data` 또는 `@st.cache_resource` 데코레이터를 붙여서 앱의 속도를 최적화해 줘.
+
+3.  **코드 구조화:** 코드는 기능별로 명확하게 함수로 분리하고, 변수 이름은 누가 봐도 이해하기 쉽게 작성해.
+
+4.  **상호작용(Interactivity):** 사용자의 입력이 필요할 때는 `st.sidebar`를 활용하여 위젯(예: `st.selectbox`, `st.slider`)을 배치하고, 상태 유지가 필요하면 `st.session_state`를 사용해.
+
+5.  **데이터 시각화:** Pandas DataFrame을 보여줄 때는 `st.dataframe()`을 사용하고, 차트는 Plotly나 Altair 같은 라이브러리를 사용해서 세련되고 인터랙티브하게 표현해 줘.
