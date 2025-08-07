@@ -110,7 +110,7 @@ def preprocess_and_save_data():
 
         try:
             df_6 = pd.read_excel("2025년 테슬라 EV추출파일.xlsx")
-            df_6 = df_6[['지역구분', '주소\n(등록주소지)']]
+            df_6 = df_6[['지역구분', '신청일자', '주소\n(등록주소지)']]
         except FileNotFoundError:
             df_6 = pd.DataFrame()
 

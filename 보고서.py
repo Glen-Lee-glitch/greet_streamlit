@@ -1580,14 +1580,48 @@ if viewer_option == '지도(테스트)':
             return None, pd.DataFrame()
 
     @st.cache_data
-    def load_map_data():
+    def load_map_data(quarter_filter='전체'):
         """지도 뷰어가 선택되었을 때만 지도 관련 파일들을 로드합니다."""
         try:
-            if not df_6.empty and '지역구분' in df_6.columns:
-                region_counts = df_6['지역구분'].value_counts().to_dict()
+            if not df_6.empty and '지역구분' in df_6.columns and '신청일자' in df_6.columns:
+                # 분기별 필터링 적용
+                filtered_df = df_6.copy()
+                
+                if quarter_filter != '전체':
+                    # 신청일자를 datetime으로 변환
+                    filtered_df['신청일자'] = pd.to_datetime(filtered_df['신청일자'])
+                    
+                    if quarter_filter == '1Q':
+                        # 1Q: 1~3월
+                        filtered_df = filtered_df[
+                            (filtered_df['신청일자'].dt.month >= 1) & 
+                            (filtered_df['신청일자'].dt.month <= 3)
+                        ]
+                    elif quarter_filter == '2Q':
+                        # 2Q: 4월~6월 23일
+                        filtered_df = filtered_df[
+                            ((filtered_df['신청일자'].dt.month == 4) | 
+                             (filtered_df['신청일자'].dt.month == 5) |
+                             ((filtered_df['신청일자'].dt.month == 6) & (filtered_df['신청일자'].dt.day <= 23)))
+                        ]
+                    elif quarter_filter == '3Q':
+                        # 3Q: 6월 24일 ~ 9월 30일
+                        filtered_df = filtered_df[
+                            ((filtered_df['신청일자'].dt.month == 6) & (filtered_df['신청일자'].dt.day >= 24)) |
+                            (filtered_df['신청일자'].dt.month == 7) |
+                            (filtered_df['신청일자'].dt.month == 8) |
+                            (filtered_df['신청일자'].dt.month == 9)
+                        ]
+                
+                region_counts = filtered_df['지역구분'].value_counts().to_dict()
             else:
                 region_counts = {}
-                st.warning("df_6이 비어있거나 '지역구분' 컬럼이 없습니다.")
+                if df_6.empty:
+                    st.warning("df_6이 비어있습니다.")
+                elif '지역구분' not in df_6.columns:
+                    st.warning("df_6에 '지역구분' 컬럼이 없습니다.")
+                elif '신청일자' not in df_6.columns:
+                    st.warning("df_6에 '신청일자' 컬럼이 없습니다.")
             
             merged_geojson, unmatched_df = load_and_process_data(region_counts, 'HangJeongDong_ver20250401.geojson')
             
@@ -1646,10 +1680,28 @@ if viewer_option == '지도(테스트)':
 
     # --- 대한민국 지도 시각화 ---
     st.header("🗺️ 지도 시각화")
-    st.markdown("`df_6`의 '지역구분' 데이터를 집계하여 지도에 시각화합니다.")
+    
+    # 분기 선택
+    quarter_options = ['전체', '1Q', '2Q', '3Q']
+    selected_quarter = st.selectbox(
+        "분기 선택",
+        quarter_options,
+        help="신청일자 기준으로 분기별 데이터를 필터링합니다.\n1Q: 1~3월\n2Q: 4월~6월 23일\n3Q: 6월 24일 ~ 9월 30일"
+    )
+    
+    # 분기별 제목 표시
+    if selected_quarter == '전체':
+        st.markdown("`df_6`의 '지역구분' 데이터를 집계하여 지도에 시각화합니다. (전체 기간)")
+    else:
+        quarter_periods = {
+            '1Q': '1월~3월',
+            '2Q': '4월~6월 23일',
+            '3Q': '6월 24일~9월 30일'
+        }
+        st.markdown(f"`df_6`의 '지역구분' 데이터를 집계하여 지도에 시각화합니다. ({quarter_periods[selected_quarter]})")
 
     with st.spinner("지도 데이터를 로드하고 있습니다..."):
-        merged_geojson, region_counts, unmatched_df = load_map_data()
+        merged_geojson, region_counts, unmatched_df = load_map_data(selected_quarter)
         
         if merged_geojson:
             st.sidebar.header("⚙️ 지도 설정")
@@ -1670,11 +1722,12 @@ if viewer_option == '지도(테스트)':
                 
                 st.sidebar.markdown("---")
                 st.sidebar.header("📊 데이터 요약")
+                st.sidebar.markdown(f"**선택된 분기:** {selected_quarter}")
                 st.sidebar.metric("총 지역 수", len(df))
                 st.sidebar.metric("데이터가 있는 지역", len(df[df['value'] > 0]))
                 st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
                 
-                st.subheader("데이터 테이블 (신청 건수 높은 순)")
+                st.subheader(f"데이터 테이블 (신청 건수 높은 순) - {selected_quarter}")
                 st.dataframe(df[['sggnm', 'value']].sort_values('value', ascending=False), use_container_width=True)
 
                 st.markdown("---")
