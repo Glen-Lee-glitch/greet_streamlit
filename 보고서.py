@@ -66,13 +66,49 @@ def load_data():
         st.info("먼저 '전처리.py'를 실행하여 데이터 파일을 생성해주세요.")
         sys.exit()
 
+def get_base_city_name(sggnm_str):
+    """
+    시군구명에서 기본 시 이름을 추출합니다.
+    예: '수원시팔달구' -> '수원시', '청주시흥덕구' -> '청주시'
+    """
+    import re
+    
+    # 패턴: ~시로 끝나는 부분을 찾아서 ~시까지만 추출
+    # 예: '수원시팔달구' -> '수원시', '청주시흥덕구' -> '청주시'
+    match = re.search(r'(.+?시)', sggnm_str)
+    if match:
+        return match.group(1)
+    
+    # 시가 아닌 경우 원본 반환
+    return sggnm_str
+
 def load_and_process_data(region_counts, geojson_path):
     """
     region_counts와 GeoJSON 파일을 로드하고, 지역구분 데이터를 기반으로 집계하여
     지도 시각화에 사용할 최종 GeoJSON과 매칭되지 않은 지역 목록을 반환합니다.
     """
     try:
-        # --- 1. GeoJSON을 시군구 단위로 병합하여 기본 지도 생성 ---
+        # --- 1. region_counts 통합 처리 (동적 방식) ---
+        consolidated_counts = {}
+        consolidation_log = []
+        for region, count in region_counts.items():
+            region_str = str(region).strip()
+            
+            # 동적 통합: ~시로 끝나는 지역은 기본 시 이름으로 통합
+            consolidated_region = get_base_city_name(region_str)
+            consolidated_counts[consolidated_region] = consolidated_counts.get(consolidated_region, 0) + count
+            
+            # 통합이 적용된 경우 로그 기록
+            if consolidated_region != region_str:
+                consolidation_log.append(f"{region_str} → {consolidated_region}")
+        
+        # 통합 로그 출력 (디버깅용)
+        if consolidation_log:
+            st.write("🔗 지역 통합 적용:")
+            for log in consolidation_log:
+                st.write(f"  - {log}")
+        
+        # --- 2. GeoJSON을 시군구 단위로 병합하여 기본 지도 생성 ---
         with open(geojson_path, 'r', encoding='utf-8') as f:
             geojson_data = json.load(f)
         
@@ -91,11 +127,15 @@ def load_and_process_data(region_counts, geojson_path):
                     sido_groups[sido] = []
                 sido_groups[sido].append(shape(feature['geometry']))
                 
-                # 시군구별 그룹화 (기존 로직)
-                key = f"{sido} {sgg}"
+                # 시군구별 그룹화 (동적 통합 적용)
+                # sgg에서 동적 통합 매핑 적용
+                consolidated_sgg = get_base_city_name(sgg)
+                key = f"{sido} {consolidated_sgg}"
                 if key not in sgg_groups:
                     sgg_groups[key] = []
                 sgg_groups[key].append(shape(feature['geometry']))
+                
+
         
         # 시도별 지오메트리 병합
         sido_map_geoms = {}
@@ -111,12 +151,11 @@ def load_and_process_data(region_counts, geojson_path):
         for sggnm, geoms in sgg_groups.items():
             if geoms:
                 try:
-                    sgg_map_geoms[sggnm] = unary_union(geoms)
-                except Exception:
+                    merged_geom = unary_union(geoms)
+                    sgg_map_geoms[sggnm] = merged_geom
+                except Exception as e:
+                    st.write(f"❌ 지오메트리 병합 실패: {sggnm}, 오류: {e}")
                     continue
-
-        # --- 2. region_counts 사용 (Excel 파일 로드 대신) ---
-        # region_counts는 이미 df_6에서 추출된 딕셔너리 형태
 
         # --- 3. 3단계 매칭 로직 구현 ---
         final_counts = {}
@@ -128,7 +167,7 @@ def load_and_process_data(region_counts, geojson_path):
             '울산광역시', '세종특별자치시', '제주특별자치도'
         ]
 
-        for region, count in region_counts.items():
+        for region, count in consolidated_counts.items():
             region_str = str(region).strip()
             matched = False
 
@@ -138,31 +177,26 @@ def load_and_process_data(region_counts, geojson_path):
                     final_counts[region_str] = final_counts.get(region_str, 0) + count
                     matched = True
             
-            # 2단계: sggnm이 5글자 이상인 것들은 앞 3글자로 매칭
-            elif len(region_str) >= 3:
-                for sggnm_key in sgg_map_geoms.keys():
-                    # sggnm에서 시도명 제거하고 시군구명만 추출
-                    sgg_part = sggnm_key.split(' ', 1)[1] if ' ' in sggnm_key else sggnm_key
-                    
-                    # sggnm이 5글자 이상이고 앞 3글자가 일치하는 경우
-                    if len(sgg_part) >= 5 and sgg_part[:3] == region_str[:3]:
-                        final_counts[sggnm_key] = final_counts.get(sggnm_key, 0) + count
-                        matched = True
-            
-            # 3단계: 나머지는 sggnm에 따라 매칭
+            # 2단계: 통합된 시군구명으로 매칭 (예: '수원시' -> '경기도 수원시')
             if not matched:
                 for sggnm_key in sgg_map_geoms.keys():
                     # sggnm에서 시도명 제거하고 시군구명만 추출
                     sgg_part = sggnm_key.split(' ', 1)[1] if ' ' in sggnm_key else sggnm_key
                     
-                    # 정확히 일치하는 경우
+                    # 통합된 시군구명과 정확히 일치하는 경우
                     if sgg_part == region_str:
                         final_counts[sggnm_key] = final_counts.get(sggnm_key, 0) + count
                         matched = True
                         break
             
             if not matched:
-                unmatched_regions.append(region)
+                # 원본 region_counts에서 해당 지역을 찾아서 추가
+                for original_region, original_count in region_counts.items():
+                    original_region_str = str(original_region).strip()
+                    consolidated_original = get_base_city_name(original_region_str)
+                    if consolidated_original == region:
+                        unmatched_regions.append(original_region)
+                        break
 
         # --- 4. 최종 GeoJSON 생성 ---
         merged_features = []
@@ -180,20 +214,28 @@ def load_and_process_data(region_counts, geojson_path):
                 }
                 merged_features.append(merged_feature)
         
-        # 시군구 단위로 매칭된 지역들 (개별 경계선)
+        # 통합된 시군구 단위로 매칭된 지역들 (통합된 경계선)
         for sggnm, geom in sgg_map_geoms.items():
             if sggnm in final_counts and sggnm not in sido_list:  # 시도 단위가 아닌 경우만
+                # sggnm에서 시도명 제거하고 시군구명만 추출하여 표시명으로 사용
+                display_name = sggnm.split(' ', 1)[1] if ' ' in sggnm else sggnm
+                
                 merged_feature = {
                     'type': 'Feature',
                     'geometry': geom.__geo_interface__,
                     'properties': {
-                        'sggnm': sggnm,
+                        'sggnm': display_name,  # '경기도 수원시' -> '수원시'로 표시
                         'value': final_counts[sggnm]
                     }
                 }
                 merged_features.append(merged_feature)
 
         merged_geojson = {'type': 'FeatureCollection', 'features': merged_features}
+        
+        # 디버깅: 최종 GeoJSON에서 수원시 관련 features 확인
+        suwon_features = [f for f in merged_features if '수원시' in f['properties']['sggnm']]
+        if suwon_features:
+            st.write(f"🔍 최종 GeoJSON에서 수원시 features: {[f['properties']['sggnm'] for f in suwon_features]}")
         
         # 매칭 실패한 지역 정보 DataFrame 생성
         unmatched_df = pd.DataFrame({
@@ -209,7 +251,6 @@ def load_and_process_data(region_counts, geojson_path):
     except Exception as e:
         st.error(f"데이터 처리 중 오류가 발생했습니다: {e}")
         return None, pd.DataFrame()
-
 
 def load_memo():
     """저장된 메모를 로드합니다."""
@@ -1478,28 +1519,137 @@ if viewer_option == '폴스타':
 
 # --- 지도 뷰어 ---
 if viewer_option == '지도(테스트)':
-    # --- 지도 관련 파일들을 지연 로드 ---
+    # --- 지도 관련 라이브러리 임포트 ---
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+    import re
+
+    @st.cache_data
+    def load_and_process_data(region_counts, geojson_path):
+        """
+        Excel 데이터를 GeoJSON과 매칭하고, 데이터의 지역 단위에 맞춰
+        GeoJSON의 경계를 동적으로 병합하여 최종 지도 데이터를 생성합니다.
+        """
+        try:
+            # 1. GeoJSON 파일 로드
+            with open(geojson_path, 'r', encoding='utf-8') as f:
+                geojson_data = json.load(f)
+
+            # --- 2. GeoJSON 그룹화 ---
+            # Case 1을 위한 그룹 (예: 서울특별시)
+            sido_geoms_for_merge = {} 
+            # Case 2, 3을 위한 그룹 (예: 경기도 수원시, 경기도 가평군)
+            sgg_geoms_for_merge = {}  
+
+            # 광역시/특별시/특별자치시 목록
+            metro_sido_list = [
+                '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', 
+                '울산광역시', '세종특별자치시', '제주특별자치도'
+            ]
+            # 행정구를 가진 일반시 목록
+            general_si_with_gu = ['고양시', '성남시', '수원시', '안산시', '안양시', '용인시', '창원시', '청주시', '포항시', '천안시', '전주시']
+
+            for feature in geojson_data['features']:
+                properties = feature['properties']
+                sido = properties.get('sidonm', '')
+                sgg = properties.get('sggnm', '')
+                if not (sido and sgg and feature.get('geometry')):
+                    continue
+
+                geom = shape(feature['geometry'])
+
+                # Case 1: 광역시/특별시 등은 sido 단위로 그룹화
+                if sido in metro_sido_list:
+                    if sido not in sido_geoms_for_merge:
+                        sido_geoms_for_merge[sido] = []
+                    sido_geoms_for_merge[sido].append(geom)
+                
+                # Case 2 & 3: 일반 도(道)의 시/군은 sgg 단위로 그룹화
+                else:
+                    base_sgg = sgg
+                    # 일반시의 하위 행정구는 '시' 단위로 통합
+                    for city in general_si_with_gu:
+                        if city in sgg:
+                            base_sgg = city
+                            break
+                    
+                    key = f"{sido} {base_sgg}"
+                    if key not in sgg_geoms_for_merge:
+                        sgg_geoms_for_merge[key] = []
+                    sgg_geoms_for_merge[key].append(geom)
+
+            # --- 3. 지오메트리 병합 ---
+            base_map_geoms = {}
+            # Case 1 병합
+            for sido, geoms in sido_geoms_for_merge.items():
+                if geoms:
+                    base_map_geoms[sido] = unary_union(geoms)
+            # Case 2, 3 병합
+            for sgg, geoms in sgg_geoms_for_merge.items():
+                if geoms:
+                    base_map_geoms[sgg] = unary_union(geoms)
+
+            # --- 4. df_6 데이터를 병합된 지도에 매핑 ---
+            final_counts = {key: 0 for key in base_map_geoms.keys()}
+            unmatched_regions = set(region_counts.keys())
+
+            for region, count in region_counts.items():
+                region_str = str(region).strip()
+                matched = False
+                
+                # Case 1: '서울특별시'와 같은 시도명 직접 매칭
+                if region_str in final_counts:
+                    final_counts[region_str] += count
+                    unmatched_regions.discard(region_str)
+                    matched = True
+                
+                # Case 2, 3: '수원시' -> '경기도 수원시'와 같은 시군구명 매칭
+                if not matched:
+                    for key in final_counts.keys():
+                        if key.endswith(" " + region_str):
+                            final_counts[key] += count
+                            unmatched_regions.discard(region_str)
+                            # 하나의 시군구는 하나의 시도에만 속하므로 break
+                            matched = True
+                            break
+            
+            # --- 5. 최종 GeoJSON 생성 ---
+            merged_features = []
+            for region_key, geom in base_map_geoms.items():
+                merged_feature = {
+                    'type': 'Feature',
+                    'geometry': geom.__geo_interface__,
+                    'properties': {
+                        'sggnm': region_key, # 병합된 지역의 이름을 key로 사용
+                        'value': final_counts.get(region_key, 0)
+                    }
+                }
+                merged_features.append(merged_feature)
+
+            merged_geojson = {'type': 'FeatureCollection', 'features': merged_features}
+            
+            unmatched_df = pd.DataFrame({
+                '지역구분': list(unmatched_regions),
+                '카운트': [region_counts.get(r, 0) for r in unmatched_regions]
+            })
+
+            return merged_geojson, unmatched_df
+
+        except Exception as e:
+            st.error(f"데이터 처리 중 오류가 발생했습니다: {e}")
+            return None, pd.DataFrame()
+
     @st.cache_data
     def load_map_data():
         """지도 뷰어가 선택되었을 때만 지도 관련 파일들을 로드합니다."""
         try:
-            # df_6에서 지역구분 데이터 추출 (sample.xlsx 대신 사용)
             if not df_6.empty and '지역구분' in df_6.columns:
                 region_counts = df_6['지역구분'].value_counts().to_dict()
-                st.write(f"df_6에서 추출된 지역 수: {len(region_counts)}")
-                st.write(f"지역구분 샘플: {list(region_counts.keys())[:5]}")
             else:
-                # df_6이 없거나 지역구분 컬럼이 없는 경우 빈 딕셔너리
                 region_counts = {}
                 st.warning("df_6이 비어있거나 '지역구분' 컬럼이 없습니다.")
             
-            # load_and_process_data 함수를 사용하여 GeoJSON 처리
             merged_geojson, unmatched_df = load_and_process_data(region_counts, 'HangJeongDong_ver20250401.geojson')
-            
-            if merged_geojson and 'features' in merged_geojson:
-                st.write(f"GeoJSON features 수: {len(merged_geojson['features'])}")
-            else:
-                st.warning("GeoJSON features가 비어있습니다.")
             
             return merged_geojson, region_counts, unmatched_df
         except FileNotFoundError as e:
@@ -1509,8 +1659,6 @@ if viewer_option == '지도(테스트)':
             st.error(f"지도 데이터 로드 중 오류: {e}")
             return None, {}, pd.DataFrame()
 
-    # process_map_data 함수는 load_and_process_data가 이미 모든 처리를 해주므로 제거
-
     def create_korea_map(merged_geojson, map_style, color_scale_name):
         """Plotly를 사용하여 8단계로 구분된 Choropleth 지도를 생성합니다."""
         if not merged_geojson or not merged_geojson['features']:
@@ -1518,25 +1666,16 @@ if viewer_option == '지도(테스트)':
 
         plot_df = pd.DataFrame([f['properties'] for f in merged_geojson['features']])
         
-        # 값이 있는 경우에만 동적으로 구간 설정
         if not plot_df.empty and plot_df['value'].max() > 0:
-            max_value = plot_df['value'].max()
-            if max_value <= 10:
-                bins = [-1, 0, 1, 2, 3, 5, 10, float('inf')]
-                labels = ["0", "1", "2", "3", "4-5", "6-10", "11+"]
-            elif max_value <= 100:
-                bins = [-1, 0, 10, 20, 30, 50, 100, float('inf')]
-                labels = ["0", "1-10", "11-20", "21-30", "31-50", "51-100", "101+"]
-            else:
-                bins = [-1, 0, 20, 50, 100, 200, 500, float('inf')]
-                labels = ["0", "1-20", "21-50", "51-100", "101-200", "201-500", "501+"]
+            # 9단계 색상 범위 설정 (사용자 요청 범위)
+            bins = [-1, 0, 15, 60, 100, 200, 500, 1000, 3000, float('inf')]
+            labels = ["0", "1-15", "16-60", "61-100", "101-200", "201-500", "501-1000", "1001-3000", "3001+"]
         else:
             bins = [-1, 0, float('inf')]
             labels = ["0", "1+"]
         
         plot_df['category'] = pd.cut(plot_df['value'], bins=bins, labels=labels, right=True).astype(str)
         
-        # 색상표 생성
         colors = px.colors.sequential.__getattribute__(color_scale_name)
         color_map = {label: colors[i % len(colors)] for i, label in enumerate(labels)}
 
@@ -1566,16 +1705,13 @@ if viewer_option == '지도(테스트)':
         return fig, plot_df
 
     # --- 대한민국 지도 시각화 ---
-    st.header("🗺️ 대한민국 지도 시각화")
+    st.header("🗺️ 지도 시각화")
     st.markdown("`df_6`의 '지역구분' 데이터를 집계하여 지도에 시각화합니다.")
 
-    # 로딩 메시지 표시
     with st.spinner("지도 데이터를 로드하고 있습니다..."):
-        # 지도 데이터 로드
         merged_geojson, region_counts, unmatched_df = load_map_data()
         
         if merged_geojson:
-            # 사이드바 설정
             st.sidebar.header("⚙️ 지도 설정")
             map_styles = {
                 "기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter", 
@@ -1586,7 +1722,6 @@ if viewer_option == '지도(테스트)':
             selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
             selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
             
-            # 지도 생성 및 표시
             result = create_korea_map(merged_geojson, map_styles[selected_style], selected_color)
             
             if result is not None:
@@ -1595,14 +1730,13 @@ if viewer_option == '지도(테스트)':
                 
                 st.sidebar.markdown("---")
                 st.sidebar.header("📊 데이터 요약")
-                st.sidebar.metric("총 시군구 수", len(df))
-                st.sidebar.metric("데이터가 있는 시군구", len(df[df['value'] > 0]))
+                st.sidebar.metric("총 지역 수", len(df))
+                st.sidebar.metric("데이터가 있는 지역", len(df[df['value'] > 0]))
                 st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
                 
                 st.subheader("데이터 테이블 (신청 건수 높은 순)")
                 st.dataframe(df[['sggnm', 'value']].sort_values('value', ascending=False), use_container_width=True)
 
-                # 매칭되지 않은 지역 표시
                 st.markdown("---")
                 if not unmatched_df.empty:
                     st.subheader("⚠️ 매칭되지 않은 지역 목록")
@@ -1614,15 +1748,8 @@ if viewer_option == '지도(테스트)':
                     st.success("✅ 모든 지역이 지도 데이터와 성공적으로 매칭되었습니다.")
             else:
                 st.error("지도 생성에 실패했습니다.")
-                st.write("디버깅 정보:")
-                st.write(f"- merged_geojson이 None인가: {merged_geojson is None}")
-                if merged_geojson:
-                    st.write(f"- features 수: {len(merged_geojson.get('features', []))}")
-                    if merged_geojson.get('features'):
-                        st.write(f"- 첫 번째 feature properties: {merged_geojson['features'][0].get('properties', {})}")
         else:
             st.error("지도 파일을 로드할 수 없습니다.")
-            st.info("'HangJeongDong_ver20250401.geojson' 파일이 필요합니다.")
 
 # --- 지자체별 정리 ---
 if viewer_option == '지자체별 정리':
@@ -1643,7 +1770,5 @@ if viewer_option == '지자체별 정리':
         display_df = filtered[columns_to_show].copy()
         display_df.columns = display_columns
         st.dataframe(display_df, use_container_width=True)
-
-
 
 

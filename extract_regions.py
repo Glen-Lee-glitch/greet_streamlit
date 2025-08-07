@@ -46,3 +46,9 @@ print(f"총 열 수: {len(df.columns)}")
 print("\n컬럼 목록:")
 for col in df.columns:
     print(f"- {col}")
+
+# sggnm 문자열이 5자 이상인 것만 추출
+df_spe = df[df['sggnm'].str.len() >= 5]
+
+print(df_spe.head(10))
+
