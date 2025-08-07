@@ -327,7 +327,7 @@ with st.sidebar:
     st.header("📊 조회 옵션")
     view_option = st.radio(
         "조회 유형을 선택하세요.",
-        ('금일', '특정일 조회', '기간별 조회', '분기별 조회', '월별 조회', '전체 누적'),
+        ('금일', '특정일 조회', '기간별 조회', '분기별 조회', '월별 조회'),
         key="view_option"
     )
 
@@ -378,12 +378,6 @@ with st.sidebar:
         end_day = (datetime(year, (month_num % 12) + 1, 1) - timedelta(days=1)).day if month_num < 12 else 31
         end_date = datetime(year, month_num, end_day).date()
         title = f"{year}년 {month} 리포트"
-    elif view_option == '전체 누적':
-        min_date_1 = df_1['날짜'].min().date() if not df_1.empty else today_kst
-        min_date_5 = df_5['날짜'].min().date() if not df_5.empty else today_kst
-        start_date = min(min_date_1, min_date_5)
-        end_date = today_kst
-        title = "전체 누적 리포트"
 
     # 월별 요약은 항상 표시
     show_monthly_summary = True
