@@ -281,66 +281,6 @@ def create_korea_map_data():
     }
     return pd.DataFrame(korea_data)
 
-def create_simple_map_data(selected_region=None):
-    """st.map을 위한 간단한 지도 데이터를 생성합니다."""
-    # 기본 서울 중심 데이터
-    myData = {'lat': [37.56668], 'lon': [126.9784]}
-    
-    # 선택된 지역이 있으면 해당 지역의 좌표로 변경
-    if selected_region and selected_region != "전체":
-        korea_map_df = create_korea_map_data()
-        region_data = korea_map_df[korea_map_df['region'] == selected_region]
-        if not region_data.empty:
-            myData['lat'] = [region_data['lat'].values[0]]
-            myData['lon'] = [region_data['lon'].values[0]]
-    
-    # 고정된 포인트 수로 랜덤 포인트 추가
-    point_count = 10  # 고정된 포인트 수
-    
-    # 선택된 지역 주변에 랜덤 포인트 추가
-    for _ in range(point_count - 1):
-        myData['lat'].append(myData['lat'][0] + np.random.randn() / 50.0)
-        myData['lon'].append(myData['lon'][0] + np.random.randn() / 50.0)
-    
-    return myData
-
-def create_admin_map_data(df_admin_coords, selected_sido=None, selected_sigungu=None):
-    """행정구역별 위경도 좌표 데이터를 사용하여 지도 데이터를 생성합니다."""
-    if df_admin_coords.empty:
-        # 데이터가 없으면 기본 서울 중심 데이터 반환
-        return {'lat': [37.56668], 'lon': [126.9784], 'size': [100]}
-    
-    # 필터링된 데이터
-    filtered_data = df_admin_coords.copy()
-    
-    if selected_sido and selected_sido != "전체":
-        filtered_data = filtered_data[filtered_data['시도'] == selected_sido]
-    
-    if selected_sigungu and selected_sigungu != "전체":
-        # 시군구 데이터를 문자열로 변환하여 비교
-        filtered_data = filtered_data[filtered_data['시군구'].astype(str) == selected_sigungu]
-    
-    if filtered_data.empty:
-        # 필터링 결과가 없으면 기본 서울 중심 데이터 반환
-        return {'lat': [37.56668], 'lon': [126.9784], 'size': [100]}
-    
-    # 위도, 경도 데이터 추출
-    lat_list = filtered_data['위도'].tolist()
-    lon_list = filtered_data['경도'].tolist()
-    
-    # 각 시군구별로 랜덤 데이터 생성 (10~1000 사이)
-    size_list = []
-    for i in range(len(filtered_data)):
-        # 시군구별로 고유한 랜덤값 생성 (시드 고정으로 일관성 유지)
-        sigungu_name = str(filtered_data.iloc[i]['시군구'])
-        np.random.seed(hash(sigungu_name) % 2**32)  # 시군구명을 시드로 사용
-        random_value = np.random.randint(10, 1001)  # 10~1000 사이 랜덤값
-        size_list.append(random_value)
-    
-    # 각 시군구별로 고유한 랜덤 크기 데이터만 사용 (추가 포인트 생성 제거)
-    
-    return {'lat': lat_list, 'lon': lon_list, 'size': size_list}
-
 # --- 데이터 로딩 ---
 data = load_data()
 df = data["df"]
@@ -1234,7 +1174,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         st.subheader("기타")
         memo_etc = load_memo_file("memo_etc.txt")
         new_etc = st.text_area(
-            "기타메모",
+            "",
             value=memo_etc,
             height=150,
             key="memo_etc_input"
