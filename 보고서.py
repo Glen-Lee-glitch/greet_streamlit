@@ -232,7 +232,7 @@ today_kst = datetime.now(KST).date()
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
     st.header("👁️ 뷰어 옵션")
-    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)', '분석'), key="viewer_option")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타(테스트)', '지도(테스트)', '분석'), key="viewer_option")
     st.markdown("---")
     st.header("📊 조회 옵션")
     view_option = st.radio(
@@ -1274,7 +1274,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             st.altair_chart(corp_combo, use_container_width=True)
 
 # --- 폴스타 뷰 (test.py 기반 구성) ---
-if viewer_option == '폴스타(테스트)s':
+if viewer_option == '폴스타(테스트)':
     # 제목 영역
     st.title(f"📊 폴스타 2025 보고서 - {today_kst.strftime('%Y년 %m월 %d일')}")
 
