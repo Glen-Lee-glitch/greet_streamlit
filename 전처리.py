@@ -74,8 +74,16 @@ def preprocess_and_save_data():
             df_sales = pd.DataFrame()
 
         # --- 추가: 지자체 정리 master.xlsx 로드
-        df_master = pd.read_excel("master.xlsx")
-        df_master = df_master[['지역', '현황_일반', '현황_우선', 'Model 3 RWD_기본', 'Model 3 RWD(2024)_기본', 'Model 3 LongRange_기본', 'Model 3 Performance_기본', 'Model Y New RWD_기본', 'Model Y New LongRange_기본', '지원신청서류', '지급신청서류']]
+        try:
+            df_master = pd.read_excel("master.xlsx")
+            df_master = df_master[['지역', '현황_일반', '현황_우선', 'Model 3 RWD_기본', 'Model 3 RWD(2024)_기본', 'Model 3 LongRange_기본', 'Model 3 Performance_기본', 'Model Y New RWD_기본', 'Model Y New LongRange_기본', '지원신청서류', '지급신청서류']]
+            print("지자체 정리 데이터를 로드했습니다.")
+        except FileNotFoundError:
+            print("'master.xlsx' 파일을 찾을 수 없습니다. 지자체 정리 데이터는 빈 DataFrame으로 저장됩니다.")
+            df_master = pd.DataFrame()
+        except Exception as e:
+            print(f"지자체 정리 데이터 로드 중 오류: {e}")
+            df_master = pd.DataFrame()
 
         # ---------- 2. 분기 컬럼 추가 및 병합 ----------
         df_1_q3["분기"] = "3분기"; df_1_q2["분기"] = "2분기"; df_1_q1["분기"] = "1분기"

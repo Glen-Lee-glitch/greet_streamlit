@@ -222,6 +222,7 @@ df_2_fail_q3 = data["df_2_fail_q3"]
 update_time_str = data["update_time_str"]
 df_master = data.get("df_master", pd.DataFrame())  # 지자체 정리 master.xlsx 데이터
 df_6 = data.get("df_6", pd.DataFrame())  # 지역구분 데이터
+df_tesla_ev = data["df_tesla_ev"]
 
 # --- 시간대 설정 ---
 KST = pytz.timezone('Asia/Seoul')
@@ -230,7 +231,7 @@ today_kst = datetime.now(KST).date()
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
     st.header("👁️ 뷰어 옵션")
-    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)', '지자체별 정리'), key="viewer_option")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)', '분석'), key="viewer_option")
     st.markdown("---")
     st.header("📊 조회 옵션")
     view_option = st.radio(
@@ -241,55 +242,64 @@ with st.sidebar:
 
     start_date, end_date = None, None
     
-    if view_option == '금일':
-        title = f"금일 리포트 - {today_kst.strftime('%Y년 %m월 %d일')}"
-    else:
-        title = f"{view_option} 리포트"
+    lst_1 = ['내부', '테슬라', '폴스타']
 
-    if view_option == '금일':
-        start_date = end_date = today_kst
-    elif view_option == '특정일 조회':
-        # 6월 24일부터만 선택 가능하도록 최소 날짜 제한 설정
-        earliest_date = datetime(today_kst.year, 6, 24).date()
-        # 만약 오늘이 6월 24일 이전이라면 전년도 6월 24일을 최소값으로 사용
-        if today_kst < earliest_date:
-            earliest_date = datetime(today_kst.year - 1, 6, 24).date()
-        selected_date = st.date_input(
-            '날짜 선택',
-            value=max(today_kst, earliest_date),
-            min_value=earliest_date,
-            max_value=today_kst
-        )
-        start_date = end_date = selected_date
-        title = f"{selected_date.strftime('%Y-%m-%d')} 리포트"
-    elif view_option == '기간별 조회':
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input('시작일', value=today_kst.replace(day=1))
-        with col2:
-            end_date = st.date_input('종료일', value=today_kst)
-        if start_date > end_date:
-            st.error("시작일이 종료일보다 늦을 수 없습니다.")
-            st.stop()
-        title = f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')} 리포트"
-    elif view_option == '분기별 조회':
-        year = today_kst.year
-        quarter = st.selectbox('분기 선택', [f'{q}분기' for q in range(1, 5)], index=(today_kst.month - 1) // 3)
-        q_num = int(quarter[0])
-        start_month = 3 * q_num - 2
-        end_month = 3 * q_num
-        start_date = datetime(year, start_month, 1).date()
-        end_day = (datetime(year, end_month % 12 + 1, 1) - timedelta(days=1)).day if end_month < 12 else 31
-        end_date = datetime(year, end_month, end_day).date()
-        title = f"{year}년 {quarter} 리포트"
-    elif view_option == '월별 조회':
-        year = today_kst.year
-        month = st.selectbox('월 선택', [f'{m}월' for m in range(1, 13)], index=today_kst.month - 1)
-        month_num = int(month[:-1])
-        start_date = datetime(year, month_num, 1).date()
-        end_day = (datetime(year, (month_num % 12) + 1, 1) - timedelta(days=1)).day if month_num < 12 else 31
-        end_date = datetime(year, month_num, end_day).date()
-        title = f"{year}년 {month} 리포트"
+    if viewer_option in lst_1:
+
+        if view_option == '금일' :
+            title = f"금일 리포트 - {today_kst.strftime('%Y년 %m월 %d일')}"
+        else:
+            title = f"{view_option} 리포트"
+
+        if view_option == '금일':
+            start_date = end_date = today_kst
+        elif view_option == '특정일 조회':
+            # 6월 24일부터만 선택 가능하도록 최소 날짜 제한 설정
+            earliest_date = datetime(today_kst.year, 6, 24).date()
+            # 만약 오늘이 6월 24일 이전이라면 전년도 6월 24일을 최소값으로 사용
+            if today_kst < earliest_date:
+                earliest_date = datetime(today_kst.year - 1, 6, 24).date()
+            selected_date = st.date_input(
+                '날짜 선택',
+                value=max(today_kst, earliest_date),
+                min_value=earliest_date,
+                max_value=today_kst
+            )
+            start_date = end_date = selected_date
+            title = f"{selected_date.strftime('%Y-%m-%d')} 리포트"
+        elif view_option == '기간별 조회':
+            col1, col2 = st.columns(2)
+            with col1:
+                start_date = st.date_input('시작일', value=today_kst.replace(day=1))
+            with col2:
+                end_date = st.date_input('종료일', value=today_kst)
+            if start_date > end_date:
+                st.error("시작일이 종료일보다 늦을 수 없습니다.")
+                st.stop()
+            title = f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')} 리포트"
+        elif view_option == '분기별 조회':
+            year = today_kst.year
+            quarter = st.selectbox('분기 선택', [f'{q}분기' for q in range(1, 5)], index=(today_kst.month - 1) // 3)
+            q_num = int(quarter[0])
+            start_month = 3 * q_num - 2
+            end_month = 3 * q_num
+            start_date = datetime(year, start_month, 1).date()
+            end_day = (datetime(year, end_month % 12 + 1, 1) - timedelta(days=1)).day if end_month < 12 else 31
+            end_date = datetime(year, end_month, end_day).date()
+            title = f"{year}년 {quarter} 리포트"
+        elif view_option == '월별 조회':
+            year = today_kst.year
+            month = st.selectbox('월 선택', [f'{m}월' for m in range(1, 13)], index=today_kst.month - 1)
+            month_num = int(month[:-1])
+            start_date = datetime(year, month_num, 1).date()
+            end_day = (datetime(year, (month_num % 12) + 1, 1) - timedelta(days=1)).day if month_num < 12 else 31
+            end_date = datetime(year, month_num, end_day).date()
+            title = f"{year}년 {month} 리포트"
+
+        # --- 메인 대시보드 ---
+        st.title(title)
+        st.caption(f"마지막 데이터 업데이트: {update_time_str}")
+        st.markdown("---")
 
     # 월별 요약은 항상 표시
     show_monthly_summary = True
@@ -306,10 +316,7 @@ with st.sidebar:
             f.write(new_memo)
         st.toast("메모가 저장되었습니다!")
 
-# --- 메인 대시보드 ---
-st.title(title)
-st.caption(f"마지막 데이터 업데이트: {update_time_str}")
-st.markdown("---")
+
 
 # --- 계산 함수 (기존과 동일) ---
 def get_corporate_metrics(df3_raw, df4_raw, start, end):
@@ -1543,84 +1550,355 @@ if viewer_option == '지도(테스트)':
 
 # --- 지자체별 정리 ---
 if viewer_option == '분석':
-    st.header("지자체별 현황 정리")
-    if df_master.empty or '지역' not in df_master.columns:
-        st.warning("지자체 데이터가 없습니다.")
+
+    # --- 데이터 로딩 및 전처리 함수 ---
+    @st.cache_data
+    def load_and_process_data_1():
+        """
+        preprocessed_data.pkl에서 테슬라 EV 데이터를 로드합니다.
+        이 함수는 한 번만 실행되어 결과가 캐시됩니다.
+        """
+        try:
+            import pickle
+            
+            with open("preprocessed_data.pkl", "rb") as f:
+                data = pickle.load(f)
+            
+            df = data.get("df_tesla_ev", pd.DataFrame())
+            
+            if df.empty:
+                st.error("❌ preprocessed_data.pkl에서 테슬라 EV 데이터를 찾을 수 없습니다.")
+                st.info("💡 전처리.py를 먼저 실행하여 데이터를 준비해주세요.")
+                return pd.DataFrame()
+            
+            # 날짜 컬럼이 있는 경우 날짜 필터링 적용
+            date_col = next((col for col in df.columns if '신청일자' in col), None)
+            if date_col:
+                df = df.dropna(subset=[date_col])
+            
+            return df
+
+        except FileNotFoundError:
+            st.error("❌ 'preprocessed_data.pkl' 파일을 찾을 수 없습니다.")
+            st.info("💡 전처리.py를 먼저 실행하여 데이터를 준비해주세요.")
+            return pd.DataFrame()
+        except Exception as e:
+            st.error(f"❌ 데이터 로드 중 오류: {str(e)}")
+            st.info("💡 전처리.py를 먼저 실행하여 데이터를 준비해주세요.")
+            return pd.DataFrame()
+
+    # --- 데이터 로드 ---
+    df_original = load_and_process_data_1()
+
+    if not df_original.empty:
+        # --- 메인 레이아웃 설정 ---
+        main_col, filter_col = st.columns([0.75, 0.25])
+
+        # --- 필터 영역 (오른쪽 컬럼) ---
+        with filter_col:
+            with st.container():
+                st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
+                st.header("🔍 데이터 필터")
+                
+                # 1. 기간 필터
+                date_col = next((col for col in df_original.columns if '신청일자' in col), None)
+                min_date = df_original[date_col].min().date()
+                max_date = df_original[date_col].max().date()
+                
+                date_range_value = st.date_input(
+                    "신청일자 범위",
+                    value=(min_date, max_date),
+                    min_value=min_date,
+                    max_value=max_date,
+                    key="date_range_filter_v2"
+                )
+
+                # 단일/범위 입력 모두 안전 처리
+                if isinstance(date_range_value, (list, tuple)) and len(date_range_value) == 2:
+                    start_date, end_date = date_range_value
+                else:
+                    # 단일 날짜가 반환되거나 비정상 입력 시 방어적 기본값 적용
+                    start_date = date_range_value if date_range_value else min_date
+                    end_date = start_date
+
+                # 역순 선택 방지: 시작일이 종료일보다 늦으면 스왑
+                if start_date > end_date:
+                    start_date, end_date = end_date, start_date
+
+                # 2. 차종 필터
+                model_options = df_original['분류된_차종'].unique().tolist()
+                selected_models = st.multiselect(
+                    "차종 선택",
+                    options=model_options,
+                    default=model_options,
+                    key="model_filter"
+                )
+
+                # 3. 신청유형 필터
+                applicant_options = df_original['분류된_신청유형'].unique().tolist()
+                selected_applicants = st.multiselect(
+                    "신청유형 선택",
+                    options=applicant_options,
+                    default=applicant_options,
+                    key="applicant_filter"
+                )
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # --- 필터링된 데이터 생성 ---
+        df_filtered = df_original[
+            (df_original[date_col].dt.date >= start_date) &
+            (df_original[date_col].dt.date <= end_date) &
+            (df_original['분류된_차종'].isin(selected_models)) &
+            (df_original['분류된_신청유형'].isin(selected_applicants))
+        ]
+
+        # --- 메인 대시보드 (왼쪽 컬럼) ---
+        with main_col:
+            st.title("🚗 테슬라 EV 데이터 대시보드")
+            st.markdown(f"**조회 기간:** `{start_date}` ~ `{end_date}`")
+            st.markdown("---")
+
+            # --- 탭 구성 ---
+            tab1, tab2, tab3, tab4 = st.tabs(["📊 종합 현황", "👥 신청자 분석", "👨‍💼 작업자 분석", "🏛️ 지자체별 현황 정리"])
+
+            with tab1:
+                st.subheader("핵심 지표")
+                
+                total_count = len(df_filtered)
+                model_counts = df_filtered['분류된_차종'].value_counts()
+                applicant_counts = df_filtered['분류된_신청유형'].value_counts()
+
+                metric_cols = st.columns(4)
+                metric_cols[0].metric("총 신청 대수", f"{total_count:,} 대")
+                metric_cols[1].metric("Model Y", f"{model_counts.get('Model Y', 0):,} 대")
+                metric_cols[2].metric("Model 3", f"{model_counts.get('Model 3', 0):,} 대")
+                metric_cols[3].metric("개인 신청 비율", f"{(applicant_counts.get('개인', 0) / total_count * 100 if total_count > 0 else 0):.1f} %")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                chart_col1, chart_col2 = st.columns(2)
+                with chart_col1:
+                    st.subheader("차종별 분포")
+                    if not model_counts.empty:
+                        fig_model = px.pie(
+                            values=model_counts.values, 
+                            names=model_counts.index, 
+                            hole=0.4,
+                            color_discrete_sequence=px.colors.sequential.Blues_r
+                        )
+                        fig_model.update_traces(textposition='inside', textinfo='percent+label')
+                        st.plotly_chart(fig_model, use_container_width=True)
+                    else:
+                        st.info("데이터 없음")
+
+                with chart_col2:
+                    st.subheader("차종 × 신청유형 교차 분석")
+                    cross_tab = pd.crosstab(df_filtered['분류된_차종'], df_filtered['분류된_신청유형'])
+                    st.dataframe(cross_tab, use_container_width=True)
+
+            with tab2:
+                st.subheader("신청유형 및 연령대 분석")
+                
+                analysis_cols = st.columns(2)
+                with analysis_cols[0]:
+                    st.markdown("##### 📋 신청유형별 분포")
+                    if not applicant_counts.empty:
+                        fig_applicant = px.pie(
+                            values=applicant_counts.values,
+                            names=applicant_counts.index,
+                            hole=0.4,
+                            color_discrete_sequence=px.colors.sequential.Greens_r
+                        )
+                        fig_applicant.update_traces(textposition='inside', textinfo='percent+label')
+                        st.plotly_chart(fig_applicant, use_container_width=True)
+                    else:
+                        st.info("데이터 없음")
+
+                if '연령대' in df_filtered.columns:
+                    with analysis_cols[1]:
+                        st.markdown("##### 📋 연령대별 분포 (개인/개인사업자)")
+                        personal_df = df_filtered[df_filtered['분류된_신청유형'].isin(['개인', '개인사업자'])]
+                        age_group_counts = personal_df['연령대'].value_counts()
+                        
+                        if not age_group_counts.empty:
+                            fig_age = px.pie(
+                                values=age_group_counts.values,
+                                names=age_group_counts.index,
+                                hole=0.4,
+                                color_discrete_sequence=px.colors.sequential.Oranges_r
+                            )
+                            fig_age.update_traces(textposition='inside', textinfo='percent+label')
+                            st.plotly_chart(fig_age, use_container_width=True)
+                        else:
+                            st.info("데이터 없음")
+
+            with tab3:
+                st.subheader("작성자별 작업 현황")
+                
+                if '작성자' in df_filtered.columns:
+                    # 작성자별 통계
+                    writer_counts = df_filtered['작성자'].value_counts()
+                    
+                    # 상위 10명만 표시 (너무 많으면 차트가 복잡해짐)
+                    top_writers = writer_counts.head(10)
+                    others_count = writer_counts.iloc[10:].sum() if len(writer_counts) > 10 else 0
+                    
+                    if others_count > 0:
+                        # 상위 10명 + 기타로 구성
+                        display_data = pd.concat([
+                            top_writers,
+                            pd.Series({'기타': others_count})
+                        ])
+                    else:
+                        display_data = top_writers
+                    
+                    # 메트릭 표시
+                    metric_cols = st.columns(4)
+                    metric_cols[0].metric("총 작성자 수", f"{len(writer_counts):,} 명")
+                    metric_cols[1].metric("최다 작성자", f"{writer_counts.iloc[0] if not writer_counts.empty else 0:,} 건")
+                    metric_cols[2].metric("평균 작성 건수", f"{writer_counts.mean():.1f} 건")
+                    metric_cols[3].metric("상위 10명 비율", f"{(top_writers.sum() / len(df_filtered) * 100):.1f} %")
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # 파이차트
+                    chart_col1, chart_col2 = st.columns(2)
+                    
+                    with chart_col1:
+                        st.markdown("##### 📊 작성자별 작업 분포")
+                        if not display_data.empty:
+                            fig_writer = px.pie(
+                                values=display_data.values,
+                                names=display_data.index,
+                                hole=0.4,
+                                color_discrete_sequence=px.colors.sequential.Purples_r
+                            )
+                            fig_writer.update_traces(textposition='inside', textinfo='percent+label')
+                            st.plotly_chart(fig_writer, use_container_width=True)
+                        else:
+                            st.info("데이터 없음")
+                    
+                    with chart_col2:
+                        st.markdown("##### 📋 상위 작성자 현황")
+                        writer_stats_df = pd.DataFrame({
+                            '작성자': top_writers.index,
+                            '작성 건수': top_writers.values,
+                            '비율(%)': (top_writers.values / len(df_filtered) * 100).round(1)
+                        })
+                        
+                        st.dataframe(
+                            writer_stats_df,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    
+                    # 작성자별 차종 분석
+                    st.markdown("---")
+                    st.subheader("작성자별 차종 분석")
+                    
+                    if not writer_counts.empty:
+                        # 상위 5명 작성자의 차종별 분석
+                        top_5_writers = writer_counts.head(5).index
+                        writer_model_data = df_filtered[df_filtered['작성자'].isin(top_5_writers)]
+                        
+                        if not writer_model_data.empty:
+                            writer_model_cross = pd.crosstab(
+                                writer_model_data['작성자'], 
+                                writer_model_data['분류된_차종'],
+                                margins=True,
+                                margins_name='합계'
+                            )
+                            
+                            st.dataframe(
+                                writer_model_cross,
+                                use_container_width=True
+                            )
+                        else:
+                            st.info("분석할 데이터가 없습니다.")
+                    else:
+                        st.info("작성자 데이터가 없습니다.")
+                else:
+                    st.warning("⚠️ '작성자' 컬럼을 찾을 수 없습니다.")
+                    st.info("현재 파일의 컬럼명:", list(df_filtered.columns))
+
+            with tab4:
+                st.header("지자체별 현황 정리")
+                if df_master.empty or '지역' not in df_master.columns:
+                    st.warning("지자체 데이터가 없습니다.")
+                else:
+                    region_list = df_master['지역'].dropna().unique().tolist()
+                    selected_region = st.selectbox("지역 선택", region_list, label_visibility="collapsed")
+
+                    # 선택된 지역의 데이터 추출 (한 행)
+                    filtered = df_master[df_master['지역'] == selected_region].iloc[0]
+
+                    # --- 1. 현황 (차량 대수) ---
+                    st.subheader("📊 현황 (차량 대수)")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        general_status = filtered.get('현황_일반', 0)
+                        if pd.isna(general_status):
+                            general_status = 0
+                        st.metric(label="일반 현황", value=f"{int(general_status):,} 대")
+                    with col2:
+                        priority_status = filtered.get('현황_우선', 0)
+                        if pd.isna(priority_status):
+                            priority_status = 0
+                        st.metric(label="우선 현황", value=f"{int(priority_status):,} 대")
+
+                    st.markdown("---")
+
+                    # --- 2. 모델별 보조금 ---
+                    st.subheader("🚗 모델별 보조금 (단위: 만 원)")
+
+                    # 모델명과 컬럼명 매핑
+                    model_cols = {
+                        'Model 3 RWD': 'Model 3 RWD_기본',
+                        'Model 3 RWD (2024)': 'Model 3 RWD(2024)_기본',
+                        'Model 3 LongRange': 'Model 3 LongRange_기본',
+                        'Model 3 Performance': 'Model 3 Performance_기본',
+                        'Model Y New RWD': 'Model Y New RWD_기본',
+                        'Model Y New LongRange': 'Model Y New LongRange_기본'
+                    }
+
+                    model_info_cols = st.columns(3)
+                    col_idx = 0
+                    for model_name, col_name in model_cols.items():
+                        if col_name in filtered.index:
+                            subsidy_value = filtered[col_name]
+                            if pd.notna(subsidy_value) and subsidy_value > 0:
+                                with model_info_cols[col_idx % 3]:
+                                    st.metric(label=model_name, value=f"{int(subsidy_value):,} 만 원")
+                                    col_idx += 1
+
+                    if col_idx == 0:
+                        st.info("해당 지역의 모델별 보조금 정보가 없습니다.")
+
+                    st.markdown("---")
+
+                    # --- 3. 필요 서류 ---
+                    st.subheader("📝 필요 서류")
+                    doc_cols = st.columns(2)
+
+                    with doc_cols[0]:
+                        st.markdown("##### 지원신청서류")
+                        doc_text_apply = str(filtered.get('지원신청서류', '내용 없음')).replace('\n', '<br>')
+                        st.markdown(
+                            f"<div style='background-color:#f0f2f6; border-radius:10px; padding:15px; height: 300px; overflow-y: auto;'>{doc_text_apply}</div>",
+                            unsafe_allow_html=True
+                        )
+
+                    with doc_cols[1]:
+                        st.markdown("##### 지급신청서류")
+                        doc_text_payment = str(filtered.get('지급신청서류', '내용 없음')).replace('\n', '<br>')
+                        st.markdown(
+                            f"<div style='background-color:#f0f2f6; border-radius:10px; padding:15px; height: 300px; overflow-y: auto;'>{doc_text_payment}</div>",
+                            unsafe_allow_html=True
+                        )
+
     else:
-        region_list = df_master['지역'].dropna().unique().tolist()
-        selected_region = st.selectbox("지역 선택", region_list, label_visibility="collapsed")
-        
-        # 선택된 지역의 데이터 추출 (한 행)
-        filtered = df_master[df_master['지역'] == selected_region].iloc[0]
-
-        # --- 1. 현황 (차량 대수) ---
-        st.subheader("📊 현황 (차량 대수)")
-        col1, col2 = st.columns(2)
-        with col1:
-            # NaN 값을 0으로 처리하여 오류 방지
-            general_status = filtered.get('현황_일반', 0)
-            if pd.isna(general_status):
-                general_status = 0
-            st.metric(label="일반 현황", value=f"{int(general_status):,} 대")
-        with col2:
-            # NaN 값을 0으로 처리하여 오류 방지
-            priority_status = filtered.get('현황_우선', 0)
-            if pd.isna(priority_status):
-                priority_status = 0
-            st.metric(label="우선 현황", value=f"{int(priority_status):,} 대")
-
-        st.markdown("---")
-
-        # --- 2. 모델별 보조금 ---
-        st.subheader("🚗 모델별 보조금 (단위: 만 원)")
-        
-        # 모델명과 컬럼명 매핑
-        model_cols = {
-            'Model 3 RWD': 'Model 3 RWD_기본',
-            'Model 3 RWD (2024)': 'Model 3 RWD(2024)_기본',
-            'Model 3 LongRange': 'Model 3 LongRange_기본',
-            'Model 3 Performance': 'Model 3 Performance_기본',
-            'Model Y New RWD': 'Model Y New RWD_기본',
-            'Model Y New LongRange': 'Model Y New LongRange_기본'
-        }
-        
-        # 3열로 모델 정보 표시
-        model_info_cols = st.columns(3)
-        col_idx = 0
-        for model_name, col_name in model_cols.items():
-            if col_name in filtered.index:
-                subsidy_value = filtered[col_name]
-                # NaN 또는 0이 아닌 경우에만 카드 표시
-                if pd.notna(subsidy_value) and subsidy_value > 0:
-                    with model_info_cols[col_idx % 3]:
-                        st.metric(label=model_name, value=f"{int(subsidy_value):,} 만 원")
-                        col_idx += 1
-        
-        # 표시할 모델이 하나도 없는 경우 안내 메시지
-        if col_idx == 0:
-            st.info("해당 지역의 모델별 보조금 정보가 없습니다.")
-
-        st.markdown("---")
-
-        # --- 3. 필요 서류 ---
-        st.subheader("📝 필요 서류")
-        doc_cols = st.columns(2)
-        
-        with doc_cols[0]:
-            st.markdown("##### 지원신청서류")
-            # 긴 텍스트를 보기 좋게 표시 (pre-wrap으로 줄바꿈 유지)
-            doc_text_apply = str(filtered.get('지원신청서류', '내용 없음')).replace('\n', '<br>')
-            st.markdown(
-                f"<div style='background-color:#f0f2f6; border-radius:10px; padding:15px; height: 300px; overflow-y: auto;'>{doc_text_apply}</div>",
-                unsafe_allow_html=True
-            )
-
-        with doc_cols[1]:
-            st.markdown("##### 지급신청서류")
-            doc_text_payment = str(filtered.get('지급신청서류', '내용 없음')).replace('\n', '<br>')
-            st.markdown(
-                f"<div style='background-color:#f0f2f6; border-radius:10px; padding:15px; height: 300px; overflow-y: auto;'>{doc_text_payment}</div>",
-                unsafe_allow_html=True
-            )
+        st.warning("데이터를 불러올 수 없습니다. 파일을 확인해주세요.")
 
 
+
+    
