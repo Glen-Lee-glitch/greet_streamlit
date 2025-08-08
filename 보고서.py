@@ -223,6 +223,9 @@ update_time_str = data["update_time_str"]
 df_master = data.get("df_master", pd.DataFrame())  # 지자체 정리 master.xlsx 데이터
 df_6 = data.get("df_6", pd.DataFrame())  # 지역구분 데이터
 df_tesla_ev = data["df_tesla_ev"]
+df_pole_pipeline = data["df_pole_pipeline"]
+df_pole_apply = data["df_pole_apply"]
+preprocessed_map_geojson = data["preprocessed_map_geojson"]
 
 # --- 시간대 설정 ---
 KST = pytz.timezone('Asia/Seoul')
@@ -315,7 +318,6 @@ with st.sidebar:
         with open("memo.txt", "w", encoding="utf-8") as f:
             f.write(new_memo)
         st.toast("메모가 저장되었습니다!")
-
 
 
 # --- 계산 함수 (기존과 동일) ---
@@ -1269,131 +1271,231 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             )
             st.altair_chart(corp_combo, use_container_width=True)
 
-# --- 폴스타 뷰 전용 표 ---
-if viewer_option == '폴스타':
-    # 데이터프레임 생성
-    pol_data = {
-        '1월': [72, 0, 68, 4],
-        '2월': [52, 27, 25, 0],
-        '3월': [279, 249, 20, 10],
-        '4월': [182, 146, 16, 20],
-        '5월': [332, 246, 63, 23],
-        '6월': [47, 29, 11, 7],
-        '합계': [964, 697, 203, 64],
-        '7월': [140, 83, 48, 9],
-        '8월': [np.nan, np.nan, np.nan, np.nan],
-        '9월': [np.nan, np.nan, np.nan, np.nan],
-        '10월': [np.nan, np.nan, np.nan, np.nan],
-        '11월': [np.nan, np.nan, np.nan, np.nan],
-        '12월': [np.nan, np.nan, np.nan, np.nan],
-        '합계': [140, 83, 48, 9],
-        '2025 총합': [1104, 780, 251, 73]
-    }
-    row_idx = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
-    pol_df = pd.DataFrame(pol_data, index=row_idx)
-
-    st.title("폴스타 2025")
-    # NaN 값을 '-'로 치환
-    html_pol = pol_df.fillna('-').to_html(classes='custom_table', border=0, escape=False)
-
-    import re
-
-    # <thead> 바로 뒤에 <tr><th>청구<br>세금계산서</th> ... 삽입
-    html_pol = re.sub(
-        r'(<thead>\s*<tr>)',
-        r'\1<th rowspan="2">청구<br>세금계산서</th>',
-        html_pol,
-        count=1
+# --- 폴스타(테스트) 뷰: df_pole_pipeline/df_pole_apply 기반 간략 대시보드 ---
+if viewer_option == '폴스타(테스트)':
+    # 메트릭 스타일 (국소 적용)
+    st.markdown(
+        """
+        <style>
+            div[data-testid="metric-container"] {
+                background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
+                padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+            }
+            div[data-testid="metric-container"] > div:nth-child(2) {
+                font-size: 2.0rem; font-weight: 600; color: #0d3b66;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    # ['합계'] 행(7번째 컬럼) 연주황색(#ffe0b2) 배경, ['2025 총합'] 열 연파랑색(#e3f2fd) 배경
-    # <tr>에서 <th>합계</th>가 포함된 행 전체의 <td>에 스타일 적용
-    html_pol = re.sub(
-        r'(<tr>\s*<th>합계</th>)(.*?)(</tr>)',
-        lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
-        html_pol,
-        flags=re.DOTALL
-    )
-    # <th>합계</th>에도 배경색 적용
-    html_pol = html_pol.replace('<th>합계</th>', '<th style="background-color:#ffe0b2;">합계</th>')
+    @st.cache_data
+    def build_polestar_dataframe(_pipeline: pd.DataFrame, _apply: pd.DataFrame) -> pd.DataFrame:
+        def find_date_col(df: pd.DataFrame) -> str | None:
+            if df is None or df.empty:
+                return None
+            lowered = {c.lower().replace(' ', ''): c for c in df.columns}
+            # 우선순위: '날짜' → 'date'
+            for key in ['날짜', 'date']:
+                if key in lowered:
+                    return lowered[key]
+            # 부분 매칭
+            for k, orig in lowered.items():
+                if '날짜' in k or 'date' in k:
+                    return orig
+            return None
 
-    # ['2025 총합'] 열(마지막 컬럼) 연파랑색(#e3f2fd) 배경
-    # <thead>의 마지막 <th>에 스타일 적용
-    html_pol = re.sub(
-        r'(<th[^>]*>2025 총합</th>)',
-        r'<th style="background-color:#e3f2fd;">2025 총합</th>',
-        html_pol
-    )
+        def to_datetime_col(df: pd.DataFrame, col: str) -> pd.DataFrame:
+            if col and col in df.columns:
+                df = df.copy()
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+            return df
 
-    # <tbody>의 각 행에서 마지막 <td>에 스타일 적용 (2025 총합 데이터 셀)
-    html_pol = re.sub(
-        r'(<tr>.*?)(<td[^>]*>[^<]*</td>)(\s*</tr>)',
-        lambda m: re.sub(
-            r'(<td[^>]*>)([^<]*)(</td>)$',
-            r'<td style="background-color:#e3f2fd;">\2</td>',
-            m.group(0)
-        ),
-        html_pol,
-        flags=re.DOTALL
-    )
+        # 방어: 빈 DF 처리
+        pipeline_df = _pipeline.copy() if isinstance(_pipeline, pd.DataFrame) else pd.DataFrame()
+        apply_df = _apply.copy() if isinstance(_apply, pd.DataFrame) else pd.DataFrame()
 
-    # <tbody>의 각 행에서 '2025 총합'에 해당하는 <td>에도 배경색 적용 (헤더뿐 아니라 데이터까지)
-    # 위에서 이미 마지막 <td>에 칠했으나, 혹시 순서가 바뀌거나 컬럼 추가시 대비해 '2025 총합' 텍스트가 들어간 <td>도 칠함
-    html_pol = re.sub(
-        r'(<td[^>]*>)([^<]*2025 총합[^<]*)(</td>)',
-        r'<td style="background-color:#e3f2fd;">\2</td>',
-        html_pol
-    )
+        date_col_p = find_date_col(pipeline_df)
+        date_col_a = find_date_col(apply_df)
 
-    # <tbody>의 각 행에서 '합계' 컬럼(즉, 7번째 컬럼)에 해당하는 <td>에도 배경색 적용
-    # '합계'는 헤더에만 칠하는 것이 아니라, 데이터 셀에도 칠해야 하므로, 7번째 <td>에 칠함
-    def color_sum_column(match):
-        row = match.group(0)
-        # 7번째 <td>를 찾아서 색칠
-        tds = re.findall(r'(<td[^>]*>[^<]*</td>)', row)
-        if len(tds) >= 7:
-            tds[6] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[6])
-            # 다시 조립
-            row_new = row
-            for i, td in enumerate(tds):
-                # 첫 번째 등장하는 <td>만 순서대로 교체
-                row_new = re.sub(r'(<td[^>]*>[^<]*</td>)', lambda m: td if m.start() == 0 else m.group(0), row_new, count=1)
-            return row_new
+        pipeline_df = to_datetime_col(pipeline_df, date_col_p)
+        apply_df = to_datetime_col(apply_df, date_col_a)
+
+        # 파이프라인 집계 컬럼 탐색
+        pipeline_value_col = None
+        for cand in ['파이프라인', '개수', '건수']:
+            if cand in (pipeline_df.columns if not pipeline_df.empty else []):
+                pipeline_value_col = cand
+                break
+
+        # 파이프라인 일자별 집계
+        if not pipeline_df.empty and date_col_p:
+            if pipeline_value_col:
+                g_p = pipeline_df.groupby(pipeline_df[date_col_p].dt.date)[pipeline_value_col].sum().rename('파이프라인')
+            else:
+                # 값 컬럼이 없으면 행 수 기준 집계
+                g_p = pipeline_df.groupby(pipeline_df[date_col_p].dt.date).size().rename('파이프라인')
+            g_p = g_p.reset_index().rename(columns={date_col_p: '날짜'})
         else:
-            return row
-    html_pol = re.sub(r'<tr>(.*?)</tr>', color_sum_column, html_pol, flags=re.DOTALL)
+            g_p = pd.DataFrame(columns=['날짜', '파이프라인'])
 
-    st.markdown(html_pol, unsafe_allow_html=True)
+        # 지원신청/내부지원/취소 집계 컬럼 후보
+        apply_cols_map = {
+            '지원신청': None,
+            'PAK 내부지원': None,
+            '접수 후 취소': None,
+        }
+        if not apply_df.empty:
+            for key in list(apply_cols_map.keys()):
+                if key in apply_df.columns:
+                    apply_cols_map[key] = key
+                else:
+                    # 유사 컬럼 탐색 (공백 제거, 소문자 비교)
+                    norm = {c.lower().replace(' ', ''): c for c in apply_df.columns}
+                    if key == '지원신청':
+                        for alias in ['지원신청', '신청', 'apply']:
+                            akey = alias.lower().replace(' ', '')
+                            if akey in norm:
+                                apply_cols_map[key] = norm[akey]
+                                break
+                    elif key == 'PAK 내부지원':
+                        for alias in ['pak내부지원', '내부지원', 'pak']:
+                            akey = alias.lower().replace(' ', '')
+                            if akey in norm:
+                                apply_cols_map[key] = norm[akey]
+                                break
+                    elif key == '접수 후 취소':
+                        for alias in ['접수후취소', '취소', 'cancel']:
+                            akey = alias.lower().replace(' ', '')
+                            if akey in norm:
+                                apply_cols_map[key] = norm[akey]
+                                break
 
-    # --- 두 번째 표: 7월 현황 (반쪽 영역) ---
-    second_data = {
-        '전월 이월수량': [86,54,32,0],
-        '당일': [0,0,0,0],
-        '당월_누계': [0,0,0,0]
-    }
-    second_df = pd.DataFrame(second_data, index=row_idx)
-    second_html = second_df.to_html(classes='custom_table', border=0, escape=False)
+        # 지원신청 일자별 집계
+        if not apply_df.empty and date_col_a:
+            df_tmp = apply_df.copy()
+            df_tmp['날짜'] = pd.to_datetime(df_tmp[date_col_a], errors='coerce').dt.date
+            agg_dict = {}
+            for out_col, src_col in apply_cols_map.items():
+                if src_col and src_col in df_tmp.columns:
+                    agg_dict[out_col] = (src_col, 'sum')
+                else:
+                    # 없는 컬럼은 0으로 채울 예정이므로 생성
+                    df_tmp[out_col] = 0
+                    agg_dict[out_col] = (out_col, 'sum')
+            g_a = df_tmp.groupby('날짜').agg(**agg_dict).reset_index()
+        else:
+            g_a = pd.DataFrame(columns=['날짜'] + list(apply_cols_map.keys()))
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("7월 현황")
-        st.markdown(second_html, unsafe_allow_html=True)
+        # 병합 및 후처리
+        merged = pd.merge(g_p, g_a, on='날짜', how='outer') if not g_p.empty or not g_a.empty else pd.DataFrame()
+        if merged.empty:
+            return merged
 
-    with col2:
-        st.subheader("미접수/보완/취소 현황")
-        third_cols = pd.MultiIndex.from_tuples([
-            ('미접수량','서류미비'), ('미접수량','대기요청'),
-            ('보완 잔여 수량','서류미비'), ('보완 잔여 수량','미처리'),
-            ('취소','단순취소'), ('취소','내부지원전환')
-        ])
-        third_df = pd.DataFrame([
-            [2,2,4,0,6,3],
-            [4,4,4,4,9,9]
-        ], index=['당일','누계'], columns=third_cols)
-        third_html = third_df.to_html(classes='custom_table', border=0, escape=False)
-        st.markdown(third_html, unsafe_allow_html=True)
+        merged['날짜'] = pd.to_datetime(merged['날짜'], errors='coerce')
+        merged = merged.sort_values('날짜', ascending=False)
 
-    st.stop()
+        for col in ['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']:
+            if col not in merged.columns:
+                merged[col] = 0
+        merged[['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']] = (
+            merged[['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']]
+            .fillna(0)
+            .apply(pd.to_numeric, errors='coerce')
+            .fillna(0)
+            .astype(int)
+        )
+        merged['월'] = merged['날짜'].dt.month
+        return merged
+
+    df_polestar = build_polestar_dataframe(df_pole_pipeline, df_pole_apply)
+
+    if df_polestar is None or df_polestar.empty:
+        st.warning("폴스타 데이터를 불러올 수 없습니다. 'polestar.xlsx'가 전처리되어 있는지 확인해주세요.")
+    else:
+        # 헤더 및 월 선택
+        header_col, select_col = st.columns([3, 1])
+        with header_col:
+            st.title("✨ 폴스타 현황 대시보드")
+        with select_col:
+            month_options = sorted(df_polestar['월'].dropna().unique().tolist(), reverse=True)
+            selected_month = st.selectbox(
+                "조회 월",
+                options=[f"{m}월" for m in month_options],
+                index=0,
+                label_visibility="collapsed",
+                key="polestar_month_select"
+            )
+
+        selected_month_num = int(selected_month.replace('월', ''))
+        df_month = df_polestar[df_polestar['월'] == selected_month_num].copy()
+
+        st.markdown("---")
+
+        # 메트릭 계산
+        today_row = df_month.sort_values('날짜', ascending=False).head(1)
+        month_sum = df_month[['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']].sum()
+
+        st.subheader(f"🗓️ {selected_month} 주요 현황")
+        metric_cols = st.columns(4)
+        with metric_cols[0]:
+            st.metric(
+                label="파이프라인 (이달 누적)",
+                value=f"{int(month_sum['파이프라인']):,} 건",
+                delta=(f"{int(today_row['파이프라인'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None)
+            )
+        with metric_cols[1]:
+            st.metric(
+                label="지원신청 (이달 누적)",
+                value=f"{int(month_sum['지원신청']):,} 건",
+                delta=(f"{int(today_row['지원신청'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None)
+            )
+        with metric_cols[2]:
+            st.metric(
+                label="내부지원 (이달 누적)",
+                value=f"{int(month_sum['PAK 내부지원']):,} 건",
+                delta=(f"{int(today_row['PAK 내부지원'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None)
+            )
+        with metric_cols[3]:
+            st.metric(
+                label="접수 후 취소 (이달 누적)",
+                value=f"{int(month_sum['접수 후 취소']):,} 건",
+                delta=(f"{int(today_row['접수 후 취소'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None),
+                delta_color="inverse",
+            )
+
+        st.markdown("---")
+
+        # 시각화 + 테이블
+        viz_col, table_col = st.columns([6, 4])
+        with viz_col:
+            st.subheader(f"📈 {selected_month} 일별 추이")
+            if df_month.empty:
+                st.info("선택된 월의 데이터가 없습니다.")
+            else:
+                chart_df = df_month[['날짜', '파이프라인', '지원신청']].melt(
+                    id_vars='날짜', value_vars=['파이프라인', '지원신청'], var_name='구분', value_name='건수'
+                )
+                chart = alt.Chart(chart_df).mark_line(point=True).encode(
+                    x=alt.X('날짜:T', title='날짜'),
+                    y=alt.Y('건수:Q', title='건수'),
+                    color=alt.Color('구분:N', title='구분', scale=alt.Scale(
+                        domain=['파이프라인', '지원신청'], range=['#0d3b66', '#73c2fb']
+                    )),
+                    tooltip=['날짜:T', '구분:N', '건수:Q']
+                ).interactive()
+                st.altair_chart(chart, use_container_width=True)
+
+        with table_col:
+            st.subheader(f"📋 {selected_month} 상세 데이터")
+            cols = ['날짜', '파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']
+            missing = [c for c in cols if c not in df_month.columns]
+            for m in missing:
+                df_month[m] = 0
+            st.dataframe(
+                df_month[cols].set_index('날짜'),
+                use_container_width=True
+            )
 
 # --- 지도 뷰어 ---
 if viewer_option == '지도(테스트)':

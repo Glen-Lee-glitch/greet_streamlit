@@ -46,15 +46,15 @@ def preprocess_and_save_data():
 
         print("Q3.xlsx, Q2.xlsx, Q1.xlsx의 시트를 성공적으로 로드했습니다.")
 
-        # # polestar_file 로드
-        # polestar_file = "polestar.xlsx"
-        # try:
-        #     df_pole_pipeline = pd.read_excel(polestar_file, sheet_name="Sheet1")
-        #     df_pole_apply = pd.read_excel(polestar_file, sheet_name="Sheet2")
-        # except FileNotFoundError:
-        #     print("'polestar.xlsx' 파일을 찾을 수 없습니다. 판매현황 데이터는 빈 DataFrame으로 저장됩니다.")
-        #     df_pole_pipeline = pd.DataFrame()
-        #     df_pole_apply = pd.DataFrame()
+        # polestar_file 로드
+        polestar_file = "polestar.xlsx"
+        try:
+            df_pole_pipeline = pd.read_excel(polestar_file, sheet_name="파이프라인")
+            df_pole_apply = pd.read_excel(polestar_file, sheet_name="지원신청")
+        except FileNotFoundError:
+            print("'polestar.xlsx' 파일을 찾을 수 없습니다. 판매현황 데이터는 빈 DataFrame으로 저장됩니다.")
+            df_pole_pipeline = pd.DataFrame()
+            df_pole_apply = pd.DataFrame()
 
         # ---------- 추가: 테슬라 판매현황 로드 ----------
         tesla_sales_file = "테슬라_판매현황.xlsx"
@@ -231,7 +231,9 @@ def preprocess_and_save_data():
             "df_master": df_master,
             "df_6": df_6,
             "preprocessed_map_geojson": preprocessed_map_geojson,
-            "df_tesla_ev": df_tesla_ev  # test1.py용 테슬라 EV 데이터
+            "df_tesla_ev": df_tesla_ev,  # test1.py용 테슬라 EV 데이터
+            "df_pole_pipeline": df_pole_pipeline,
+            "df_pole_apply": df_pole_apply
         }
 
         with open("preprocessed_data.pkl", "wb") as f:
