@@ -223,8 +223,6 @@ update_time_str = data["update_time_str"]
 df_master = data.get("df_master", pd.DataFrame())  # 지자체 정리 master.xlsx 데이터
 df_6 = data.get("df_6", pd.DataFrame())  # 지역구분 데이터
 df_tesla_ev = data["df_tesla_ev"]
-df_pole_pipeline = data["df_pole_pipeline"]
-df_pole_apply = data["df_pole_apply"]
 preprocessed_map_geojson = data["preprocessed_map_geojson"]
 
 # --- 시간대 설정 ---
@@ -299,12 +297,7 @@ with st.sidebar:
             end_date = datetime(year, month_num, end_day).date()
             title = f"{year}년 {month} 리포트"
 
-        # --- 메인 대시보드 ---
-        st.title(title)
-        st.caption(f"마지막 데이터 업데이트: {update_time_str}")
-        st.markdown("---")
-
-    # 월별 요약은 항상 표시
+        # 월별 요약은 항상 표시
     show_monthly_summary = True
 
     st.markdown("---")
@@ -318,6 +311,15 @@ with st.sidebar:
         with open("memo.txt", "w", encoding="utf-8") as f:
             f.write(new_memo)
         st.toast("메모가 저장되었습니다!")
+
+# --- 메인 대시보드 ---
+
+if viewer_option in lst_1:
+    st.title(title)
+    st.caption(f"마지막 데이터 업데이트: {update_time_str}")
+    st.markdown("---")
+else:
+    pass
 
 
 # --- 계산 함수 (기존과 동일) ---
@@ -1271,231 +1273,243 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             )
             st.altair_chart(corp_combo, use_container_width=True)
 
-# --- 폴스타(테스트) 뷰: df_pole_pipeline/df_pole_apply 기반 간략 대시보드 ---
-if viewer_option == '폴스타(테스트)':
-    # 메트릭 스타일 (국소 적용)
-    st.markdown(
-        """
-        <style>
-            div[data-testid="metric-container"] {
-                background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
-                padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.04);
-            }
-            div[data-testid="metric-container"] > div:nth-child(2) {
-                font-size: 2.0rem; font-weight: 600; color: #0d3b66;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+# --- 폴스타 뷰 (test.py 기반 구성) ---
+if viewer_option == '폴스타(테스트)s':
+    # 제목 영역
+    st.title(f"📊 폴스타 2025 보고서 - {today_kst.strftime('%Y년 %m월 %d일')}")
 
-    @st.cache_data
-    def build_polestar_dataframe(_pipeline: pd.DataFrame, _apply: pd.DataFrame) -> pd.DataFrame:
-        def find_date_col(df: pd.DataFrame) -> str | None:
-            if df is None or df.empty:
-                return None
-            lowered = {c.lower().replace(' ', ''): c for c in df.columns}
-            # 우선순위: '날짜' → 'date'
-            for key in ['날짜', 'date']:
-                if key in lowered:
-                    return lowered[key]
-            # 부분 매칭
-            for k, orig in lowered.items():
-                if '날짜' in k or 'date' in k:
-                    return orig
-            return None
-
-        def to_datetime_col(df: pd.DataFrame, col: str) -> pd.DataFrame:
-            if col and col in df.columns:
-                df = df.copy()
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-            return df
-
-        # 방어: 빈 DF 처리
-        pipeline_df = _pipeline.copy() if isinstance(_pipeline, pd.DataFrame) else pd.DataFrame()
-        apply_df = _apply.copy() if isinstance(_apply, pd.DataFrame) else pd.DataFrame()
-
-        date_col_p = find_date_col(pipeline_df)
-        date_col_a = find_date_col(apply_df)
-
-        pipeline_df = to_datetime_col(pipeline_df, date_col_p)
-        apply_df = to_datetime_col(apply_df, date_col_a)
-
-        # 파이프라인 집계 컬럼 탐색
-        pipeline_value_col = None
-        for cand in ['파이프라인', '개수', '건수']:
-            if cand in (pipeline_df.columns if not pipeline_df.empty else []):
-                pipeline_value_col = cand
-                break
-
-        # 파이프라인 일자별 집계
-        if not pipeline_df.empty and date_col_p:
-            if pipeline_value_col:
-                g_p = pipeline_df.groupby(pipeline_df[date_col_p].dt.date)[pipeline_value_col].sum().rename('파이프라인')
-            else:
-                # 값 컬럼이 없으면 행 수 기준 집계
-                g_p = pipeline_df.groupby(pipeline_df[date_col_p].dt.date).size().rename('파이프라인')
-            g_p = g_p.reset_index().rename(columns={date_col_p: '날짜'})
-        else:
-            g_p = pd.DataFrame(columns=['날짜', '파이프라인'])
-
-        # 지원신청/내부지원/취소 집계 컬럼 후보
-        apply_cols_map = {
-            '지원신청': None,
-            'PAK 내부지원': None,
-            '접수 후 취소': None,
-        }
-        if not apply_df.empty:
-            for key in list(apply_cols_map.keys()):
-                if key in apply_df.columns:
-                    apply_cols_map[key] = key
-                else:
-                    # 유사 컬럼 탐색 (공백 제거, 소문자 비교)
-                    norm = {c.lower().replace(' ', ''): c for c in apply_df.columns}
-                    if key == '지원신청':
-                        for alias in ['지원신청', '신청', 'apply']:
-                            akey = alias.lower().replace(' ', '')
-                            if akey in norm:
-                                apply_cols_map[key] = norm[akey]
-                                break
-                    elif key == 'PAK 내부지원':
-                        for alias in ['pak내부지원', '내부지원', 'pak']:
-                            akey = alias.lower().replace(' ', '')
-                            if akey in norm:
-                                apply_cols_map[key] = norm[akey]
-                                break
-                    elif key == '접수 후 취소':
-                        for alias in ['접수후취소', '취소', 'cancel']:
-                            akey = alias.lower().replace(' ', '')
-                            if akey in norm:
-                                apply_cols_map[key] = norm[akey]
-                                break
-
-        # 지원신청 일자별 집계
-        if not apply_df.empty and date_col_a:
-            df_tmp = apply_df.copy()
-            df_tmp['날짜'] = pd.to_datetime(df_tmp[date_col_a], errors='coerce').dt.date
-            agg_dict = {}
-            for out_col, src_col in apply_cols_map.items():
-                if src_col and src_col in df_tmp.columns:
-                    agg_dict[out_col] = (src_col, 'sum')
-                else:
-                    # 없는 컬럼은 0으로 채울 예정이므로 생성
-                    df_tmp[out_col] = 0
-                    agg_dict[out_col] = (out_col, 'sum')
-            g_a = df_tmp.groupby('날짜').agg(**agg_dict).reset_index()
-        else:
-            g_a = pd.DataFrame(columns=['날짜'] + list(apply_cols_map.keys()))
-
-        # 병합 및 후처리
-        merged = pd.merge(g_p, g_a, on='날짜', how='outer') if not g_p.empty or not g_a.empty else pd.DataFrame()
-        if merged.empty:
-            return merged
-
-        merged['날짜'] = pd.to_datetime(merged['날짜'], errors='coerce')
-        merged = merged.sort_values('날짜', ascending=False)
-
-        for col in ['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']:
-            if col not in merged.columns:
-                merged[col] = 0
-        merged[['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']] = (
-            merged[['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']]
-            .fillna(0)
-            .apply(pd.to_numeric, errors='coerce')
-            .fillna(0)
-            .astype(int)
+    # 현황 요약 (월 선택)
+    header_col, select_col = st.columns([3, 1])
+    with header_col:
+        st.subheader("📈 현황 요약")
+    with select_col:
+        month_options = ["8월", "7월", "6월", "5월", "4월", "3월", "2월", "1월"]
+        selected_month_label = st.selectbox(
+            "조회 월",
+            month_options,
+            index=0,
+            label_visibility="collapsed",
+            key="polestar_month_select"
         )
-        merged['월'] = merged['날짜'].dt.month
-        return merged
 
-    df_polestar = build_polestar_dataframe(df_pole_pipeline, df_pole_apply)
+    current_month_label = f"{today_kst.month}월"
+    is_current_month_selected = (selected_month_label == current_month_label)
 
-    if df_polestar is None or df_polestar.empty:
-        st.warning("폴스타 데이터를 불러올 수 없습니다. 'polestar.xlsx'가 전처리되어 있는지 확인해주세요.")
+    # 월별 지표 데이터 (예시 데이터)
+    monthly_indicator_by_month = {
+        "8월": {
+            "pipeline_today": 5, "pipeline_month_total": 125,
+            "apply_today": 3, "apply_month_total": 88,
+            "unreceived_today": 4, "unreceived_total": 75,
+            "supplement_today": 4, "supplement_total": 43,
+            "cancel_today": 9, "cancel_total": 80
+        },
+        "7월": {
+            "pipeline_today": 0, "pipeline_month_total": 140,
+            "apply_today": 0, "apply_month_total": 83,
+            "unreceived_today": 0, "unreceived_total": 48,
+            "supplement_today": 0, "supplement_total": 9,
+            "cancel_today": 0, "cancel_total": 0
+        },
+        "6월": {
+            "pipeline_today": 0, "pipeline_month_total": 47,
+            "apply_today": 0, "apply_month_total": 29,
+            "unreceived_today": 0, "unreceived_total": 11,
+            "supplement_today": 0, "supplement_total": 7,
+            "cancel_today": 0, "cancel_total": 0
+        },
+        "5월": {
+            "pipeline_today": 0, "pipeline_month_total": 332,
+            "apply_today": 0, "apply_month_total": 246,
+            "unreceived_today": 0, "unreceived_total": 63,
+            "supplement_today": 0, "supplement_total": 23,
+            "cancel_today": 0, "cancel_total": 0
+        },
+        "4월": {
+            "pipeline_today": 0, "pipeline_month_total": 182,
+            "apply_today": 0, "apply_month_total": 146,
+            "unreceived_today": 0, "unreceived_total": 16,
+            "supplement_today": 0, "supplement_total": 20,
+            "cancel_today": 0, "cancel_total": 0
+        },
+        "3월": {
+            "pipeline_today": 0, "pipeline_month_total": 279,
+            "apply_today": 0, "apply_month_total": 249,
+            "unreceived_today": 0, "unreceived_total": 20,
+            "supplement_today": 0, "supplement_total": 10,
+            "cancel_today": 0, "cancel_total": 0
+        },
+        "2월": {
+            "pipeline_today": 0, "pipeline_month_total": 52,
+            "apply_today": 0, "apply_month_total": 27,
+            "unreceived_today": 0, "unreceived_total": 25,
+            "supplement_today": 0, "supplement_total": 0,
+            "cancel_today": 0, "cancel_total": 0
+        },
+        "1월": {
+            "pipeline_today": 0, "pipeline_month_total": 72,
+            "apply_today": 0, "apply_month_total": 0,
+            "unreceived_today": 0, "unreceived_total": 68,
+            "supplement_today": 0, "supplement_total": 4,
+            "cancel_today": 0, "cancel_total": 0
+        }
+    }
+
+    current_month_data = monthly_indicator_by_month.get(selected_month_label, monthly_indicator_by_month["8월"])
+
+    # 상단 요약 카드
+    if is_current_month_selected:
+        metric_columns = st.columns(5)
+        with metric_columns[0]:
+            st.metric(label="파이프라인", value=f"{current_month_data['pipeline_month_total']} 건", delta=f"{current_month_data['pipeline_today']} 건 (당일)")
+        with metric_columns[1]:
+            st.metric(label="지원신청", value=f"{current_month_data['apply_month_total']} 건", delta=f"{current_month_data['apply_today']} 건 (당일)")
+        with metric_columns[2]:
+            st.metric(label="미접수", value=f"{current_month_data['unreceived_total']} 건", delta=f"{current_month_data['unreceived_today']} 건 (당일)", delta_color="inverse")
+        with metric_columns[3]:
+            st.metric(label="보완필요", value=f"{current_month_data['supplement_total']} 건", delta=f"{current_month_data['supplement_today']} 건 (당일)", delta_color="inverse")
+        with metric_columns[4]:
+            st.metric(label="취소", value=f"{current_month_data['cancel_total']} 건", delta=f"{current_month_data['cancel_today']} 건 (당일)", delta_color="inverse")
     else:
-        # 헤더 및 월 선택
-        header_col, select_col = st.columns([3, 1])
-        with header_col:
-            st.title("✨ 폴스타 현황 대시보드")
-        with select_col:
-            month_options = sorted(df_polestar['월'].dropna().unique().tolist(), reverse=True)
-            selected_month = st.selectbox(
-                "조회 월",
-                options=[f"{m}월" for m in month_options],
-                index=0,
-                label_visibility="collapsed",
-                key="polestar_month_select"
+        metric_columns = st.columns(2)
+        with metric_columns[0]:
+            st.metric(label="파이프라인", value=f"{current_month_data['pipeline_month_total']} 건")
+        with metric_columns[1]:
+            st.metric(label="지원신청", value=f"{current_month_data['apply_month_total']} 건")
+
+    # 상세 내역 (Expander)
+    with st.expander("상세 내역 보기"):
+        detail_row_index = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+        if selected_month_label == "8월":
+            detailed_second_data = {
+                '전월 이월수량': [86, 54, 32, 0],
+                '당일': [current_month_data['pipeline_today'], current_month_data['apply_today'], 1, 0],
+                '당월_누계': [current_month_data['pipeline_month_total'], current_month_data['apply_month_total'], 45, 2]
+            }
+            detailed_third_data = [
+                [2, 2, 4, 0, 6, 3],  # 당일
+                [45, 30, 28, 15, 55, 25]  # 누계
+            ]
+        else:
+            detailed_second_data = {
+                '전월 이월수량': [0, 0, 0, 0],
+                '당일': [0, 0, 0, 0],
+                '당월_누계': [current_month_data['pipeline_month_total'], current_month_data['apply_month_total'], 0, 0]
+            }
+            detailed_third_data = [
+                [0, 0, 0, 0, 0, 0],  # 당일
+                [current_month_data['unreceived_total'], 0, current_month_data['supplement_total'], 0, current_month_data['cancel_total'], 0]  # 누계
+            ]
+
+        second_detail_df = pd.DataFrame(detailed_second_data, index=detail_row_index)
+        second_detail_html = second_detail_df.to_html(classes='custom_table', border=0, escape=False)
+
+        expander_col1, expander_col2 = st.columns(2)
+        with expander_col1:
+            st.subheader(f"{selected_month_label} 현황 (상세)")
+            st.markdown(second_detail_html, unsafe_allow_html=True)
+        with expander_col2:
+            st.subheader("미접수/보완/취소 현황 (상세)")
+
+            unreceived_df = pd.DataFrame(
+                [detailed_third_data[0][0:2], detailed_third_data[1][0:2]],
+                columns=['서류미비', '대기요청'],
+                index=['당일', '누계']
+            )
+            supplement_df = pd.DataFrame(
+                [detailed_third_data[0][2:4], detailed_third_data[1][2:4]],
+                columns=['서류미비', '미처리'],
+                index=['당일', '누계']
+            )
+            cancel_df = pd.DataFrame(
+                [detailed_third_data[0][4:6], detailed_third_data[1][4:6]],
+                columns=['단순취소', '내부지원전환'],
+                index=['당일', '누계']
             )
 
-        selected_month_num = int(selected_month.replace('월', ''))
-        df_month = df_polestar[df_polestar['월'] == selected_month_num].copy()
+            st.markdown("<p class='detail-subheader'>미접수량</p>", unsafe_allow_html=True)
+            st.markdown(unreceived_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
 
-        st.markdown("---")
+            st.markdown("<p class='detail-subheader'>보완 잔여 수량</p>", unsafe_allow_html=True)
+            st.markdown(supplement_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
 
-        # 메트릭 계산
-        today_row = df_month.sort_values('날짜', ascending=False).head(1)
-        month_sum = df_month[['파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']].sum()
+            st.markdown("<p class='detail-subheader'>취소</p>", unsafe_allow_html=True)
+            st.markdown(cancel_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
 
-        st.subheader(f"🗓️ {selected_month} 주요 현황")
-        metric_cols = st.columns(4)
-        with metric_cols[0]:
-            st.metric(
-                label="파이프라인 (이달 누적)",
-                value=f"{int(month_sum['파이프라인']):,} 건",
-                delta=(f"{int(today_row['파이프라인'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None)
-            )
-        with metric_cols[1]:
-            st.metric(
-                label="지원신청 (이달 누적)",
-                value=f"{int(month_sum['지원신청']):,} 건",
-                delta=(f"{int(today_row['지원신청'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None)
-            )
-        with metric_cols[2]:
-            st.metric(
-                label="내부지원 (이달 누적)",
-                value=f"{int(month_sum['PAK 내부지원']):,} 건",
-                delta=(f"{int(today_row['PAK 내부지원'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None)
-            )
-        with metric_cols[3]:
-            st.metric(
-                label="접수 후 취소 (이달 누적)",
-                value=f"{int(month_sum['접수 후 취소']):,} 건",
-                delta=(f"{int(today_row['접수 후 취소'].iloc[0]):,} 건 (오늘)" if not today_row.empty else None),
-                delta_color="inverse",
-            )
+    st.markdown("---")
 
-        st.markdown("---")
+    # 폴스타 월별 요약 (표 + 스타일)
+    st.subheader("폴스타 월별 요약")
 
-        # 시각화 + 테이블
-        viz_col, table_col = st.columns([6, 4])
-        with viz_col:
-            st.subheader(f"📈 {selected_month} 일별 추이")
-            if df_month.empty:
-                st.info("선택된 월의 데이터가 없습니다.")
-            else:
-                chart_df = df_month[['날짜', '파이프라인', '지원신청']].melt(
-                    id_vars='날짜', value_vars=['파이프라인', '지원신청'], var_name='구분', value_name='건수'
-                )
-                chart = alt.Chart(chart_df).mark_line(point=True).encode(
-                    x=alt.X('날짜:T', title='날짜'),
-                    y=alt.Y('건수:Q', title='건수'),
-                    color=alt.Color('구분:N', title='구분', scale=alt.Scale(
-                        domain=['파이프라인', '지원신청'], range=['#0d3b66', '#73c2fb']
-                    )),
-                    tooltip=['날짜:T', '구분:N', '건수:Q']
-                ).interactive()
-                st.altair_chart(chart, use_container_width=True)
+    summary_row_index = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+    monthly_summary_data = {
+        '1월': [72, 0, 68, 4],
+        '2월': [52, 27, 25, 0],
+        '3월': [279, 249, 20, 10],
+        '4월': [182, 146, 16, 20],
+        '5월': [332, 246, 63, 23],
+        '6월': [47, 29, 11, 7],
+        '1~6월 합계': [964, 697, 203, 64],
+        '7월': [140, 83, 48, 9],
+        '8월': [np.nan, np.nan, np.nan, np.nan],
+        '9월': [np.nan, np.nan, np.nan, np.nan],
+        '10월': [np.nan, np.nan, np.nan, np.nan],
+        '11월': [np.nan, np.nan, np.nan, np.nan],
+        '12월': [np.nan, np.nan, np.nan, np.nan],
+        '7~12월 합계': [140, 83, 48, 9],
+        '2025 총합': [1104, 780, 251, 73]
+    }
+    summary_df = pd.DataFrame(monthly_summary_data, index=summary_row_index)
 
-        with table_col:
-            st.subheader(f"📋 {selected_month} 상세 데이터")
-            cols = ['날짜', '파이프라인', '지원신청', 'PAK 내부지원', '접수 후 취소']
-            missing = [c for c in cols if c not in df_month.columns]
-            for m in missing:
-                df_month[m] = 0
-            st.dataframe(
-                df_month[cols].set_index('날짜'),
-                use_container_width=True
-            )
+    html_summary = summary_df.fillna('-').to_html(classes='custom_table', border=0, escape=False)
+    html_summary = re.sub(
+        r'(<thead>\s*<tr>)',
+        r'\1<th rowspan="2">청구<br>세금계산서</th>',
+        html_summary,
+        count=1
+    )
+    html_summary = re.sub(
+        r'(<tr>\s*<th>1~6월 합계</th>)(.*?)(</tr>)',
+        lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
+        html_summary,
+        flags=re.DOTALL
+    )
+    html_summary = html_summary.replace('<th>1~6월 합계</th>', '<th style="background-color:#ffe0b2;">1~6월 합계</th>')
+    html_summary = re.sub(
+        r'(<tr>\s*<th>7~12월 합계</th>)(.*?)(</tr>)',
+        lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
+        html_summary,
+        flags=re.DOTALL
+    )
+    html_summary = html_summary.replace('<th>7~12월 합계</th>', '<th style="background-color:#ffe0b2;">7~12월 합계</th>')
+    html_summary = re.sub(
+        r'(<th[^>]*>2025 총합</th>)',
+        r'<th style="background-color:#e3f2fd;">2025 총합</th>',
+        html_summary
+    )
+    html_summary = re.sub(
+        r'(<tr>.*?)(<td[^>]*>[^<]*</td>)(\s*</tr>)',
+        lambda m: re.sub(
+            r'(<td[^>]*>)([^<]*)(</td>)$',
+            r'<td style="background-color:#e3f2fd;">\2</td>',
+            m.group(0)
+        ),
+        html_summary,
+        flags=re.DOTALL
+    )
+    def color_sum_cols(match):
+        row = match.group(0)
+        tds = re.findall(r'(<td[^>]*>[^<]*</td>)', row)
+        if len(tds) >= 14:
+            tds[6] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[6])
+            tds[13] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[13])
+            row_new = row
+            for i, td in enumerate(tds):
+                row_new = re.sub(r'(<td[^>]*>[^<]*</td>)', lambda m: td if m.start() == 0 else m.group(0), row_new, count=1)
+            return row_new
+        return row
+    html_summary = re.sub(r'<tr>(.*?)</tr>', color_sum_cols, html_summary, flags=re.DOTALL)
+    st.markdown(html_summary, unsafe_allow_html=True)
 
 # --- 지도 뷰어 ---
 if viewer_option == '지도(테스트)':
