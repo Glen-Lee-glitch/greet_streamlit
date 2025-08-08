@@ -46,6 +46,16 @@ def preprocess_and_save_data():
 
         print("Q3.xlsx, Q2.xlsx, Q1.xlsx의 시트를 성공적으로 로드했습니다.")
 
+        # # polestar_file 로드
+        # polestar_file = "polestar.xlsx"
+        # try:
+        #     df_pole_pipeline = pd.read_excel(polestar_file, sheet_name="Sheet1")
+        #     df_pole_apply = pd.read_excel(polestar_file, sheet_name="Sheet2")
+        # except FileNotFoundError:
+        #     print("'polestar.xlsx' 파일을 찾을 수 없습니다. 판매현황 데이터는 빈 DataFrame으로 저장됩니다.")
+        #     df_pole_pipeline = pd.DataFrame()
+        #     df_pole_apply = pd.DataFrame()
+
         # ---------- 추가: 테슬라 판매현황 로드 ----------
         tesla_sales_file = "테슬라_판매현황.xlsx"
         try:
@@ -114,6 +124,82 @@ def preprocess_and_save_data():
         except FileNotFoundError:
             df_6 = pd.DataFrame()
 
+        # ---------- 추가: test1.py용 테슬라 EV 데이터 전처리 ----------
+        try:
+            df_tesla_ev = pd.read_excel("2025년 테슬라 EV추출파일.xlsx")
+            
+            # 분류 함수들
+            def classify_tesla_model(car_type):
+                if pd.isna(car_type): return "기타"
+                car_type_str = str(car_type).strip()
+                if 'Model Y' in car_type_str: return 'Model Y'
+                if 'Model 3' in car_type_str: return 'Model 3'
+                return "기타"
+
+            def classify_applicant_type(applicant_type):
+                if pd.isna(applicant_type): return "기타"
+                applicant_str = str(applicant_type).strip()
+                if '개인사업자' in applicant_str: return '개인사업자'
+                if '단체' in applicant_str or '법인' in applicant_str: return '법인'
+                if '개인' in applicant_str: return '개인'
+                return "기타"
+
+            def calculate_age(birth_date_str):
+                if pd.isna(birth_date_str): return None
+                try:
+                    birth_date_str = str(birth_date_str).strip()
+                    if len(birth_date_str) == 10 and birth_date_str.isdigit(): return None # 법인번호
+                    
+                    # 다양한 날짜 형식 처리
+                    if len(birth_date_str) == 8 and birth_date_str.isdigit():
+                        birth_date = datetime.strptime(birth_date_str, '%Y%m%d').date()
+                    elif '-' in birth_date_str:
+                        birth_date = datetime.strptime(birth_date_str.split(' ')[0], '%Y-%m-%d').date()
+                    else:
+                        return None
+                    
+                    today = datetime.now().date()
+                    age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+                    return age if 0 <= age <= 120 else None
+                except:
+                    return None
+
+            def classify_age_group(age):
+                if age is None: return "미상"
+                if age < 20: return "10대"
+                if age < 30: return "20대"
+                if age < 40: return "30대"
+                if age < 50: return "40대"
+                if age < 60: return "50대"
+                if age < 70: return "60대"
+                return "70대 이상"
+
+            # 전처리 실행
+            df_tesla_ev['분류된_차종'] = df_tesla_ev['차종'].apply(classify_tesla_model)
+            df_tesla_ev['분류된_신청유형'] = df_tesla_ev['신청유형'].apply(classify_applicant_type)
+            
+            # 작성자 이름 변환
+            if '작성자' in df_tesla_ev.columns:
+                df_tesla_ev['작성자'] = df_tesla_ev['작성자'].replace('WU CHANGSHI', '오창실')
+            
+            # 날짜/시간 컬럼 처리
+            date_col = next((col for col in df_tesla_ev.columns if '신청일자' in col), None)
+            if date_col:
+                df_tesla_ev[date_col] = pd.to_datetime(df_tesla_ev[date_col], errors='coerce')
+            
+            birth_date_col = next((col for col in df_tesla_ev.columns if '생년월일' in col or '법인' in col), None)
+            if birth_date_col:
+                df_tesla_ev['나이'] = df_tesla_ev[birth_date_col].apply(calculate_age)
+                df_tesla_ev['연령대'] = df_tesla_ev['나이'].apply(classify_age_group)
+
+            print("테슬라 EV 데이터 전처리 완료")
+        except FileNotFoundError:
+            print("'2025년 테슬라 EV추출파일.xlsx' 파일을 찾을 수 없습니다. 테슬라 EV 데이터는 빈 DataFrame으로 저장됩니다.")
+            df_tesla_ev = pd.DataFrame()
+        except Exception as e:
+            print(f"테슬라 EV 데이터 전처리 중 오류: {e}")
+            df_tesla_ev = pd.DataFrame()
+
         try:
             with open("preprocessed_map.geojson", "r", encoding="utf-8") as f:
                 preprocessed_map_geojson = json.load(f)
@@ -136,7 +222,8 @@ def preprocess_and_save_data():
             "update_time_str": update_time_str,
             "df_master": df_master,
             "df_6": df_6,
-            "preprocessed_map_geojson": preprocessed_map_geojson
+            "preprocessed_map_geojson": preprocessed_map_geojson,
+            "df_tesla_ev": df_tesla_ev  # test1.py용 테슬라 EV 데이터
         }
 
         with open("preprocessed_data.pkl", "wb") as f:

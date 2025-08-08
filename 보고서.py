@@ -1542,7 +1542,7 @@ if viewer_option == '지도(테스트)':
         st.error("전처리된 지도(preprocessed_map.geojson) 또는 df_6 데이터를 찾을 수 없습니다.")
 
 # --- 지자체별 정리 ---
-if viewer_option == '지자체별 정리':
+if viewer_option == '분석':
     st.header("지자체별 현황 정리")
     if df_master.empty or '지역' not in df_master.columns:
         st.warning("지자체 데이터가 없습니다.")
@@ -1622,6 +1622,5 @@ if viewer_option == '지자체별 정리':
                 f"<div style='background-color:#f0f2f6; border-radius:10px; padding:15px; height: 300px; overflow-y: auto;'>{doc_text_payment}</div>",
                 unsafe_allow_html=True
             )
-
 
 
