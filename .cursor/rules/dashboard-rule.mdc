@@ -17,3 +17,5 @@ alwaysApply: false
 4.  **상호작용(Interactivity):** 사용자의 입력이 필요할 때는 `st.sidebar`를 활용하여 위젯(예: `st.selectbox`, `st.slider`)을 배치하고, 상태 유지가 필요하면 `st.session_state`를 사용해.
 
 5.  **데이터 시각화:** Pandas DataFrame을 보여줄 때는 `st.dataframe()`을 사용하고, 차트는 Plotly나 Altair 같은 라이브러리를 사용해서 세련되고 인터랙티브하게 표현해 줘.
+
+6. 실행 코드는 제시해주지마

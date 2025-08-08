@@ -1412,22 +1412,39 @@ if viewer_option == '지도(테스트)':
             st.error(f"지도 데이터 로드 중 오류: {e}")
             return None
 
-    def apply_counts_to_map(preprocessed_map, region_counts):
+    @st.cache_data
+    def get_filtered_data(_df_6, selected_quarter):
+        """
+        분기별로 필터링된 데이터를 반환합니다.
+        """
+        if selected_quarter == '전체':
+            return _df_6['지역구분'].value_counts().to_dict()
+        
+        filtered_df = _df_6.copy()
+        filtered_df['신청일자'] = pd.to_datetime(filtered_df['신청일자'], errors='coerce')
+        q_map = {'1Q': [1,2,3], '2Q': [4,5,6], '3Q': [7,8,9], '4Q': [10,11,12]}
+        if selected_quarter in q_map:
+            filtered_df = filtered_df[filtered_df['신청일자'].dt.month.isin(q_map[selected_quarter])]
+        
+        return filtered_df['지역구분'].value_counts().to_dict()
+
+    @st.cache_data
+    def apply_counts_to_map(_preprocessed_map, _region_counts):
         """
         미리 병합된 GeoJSON에 count 데이터를 빠르게 매핑합니다.
         """
-        if not preprocessed_map:
+        if not _preprocessed_map:
             return None, pd.DataFrame()
 
         # 원본 GeoJSON을 복사하여 사용
-        final_geojson = preprocessed_map.copy()
+        final_geojson = _preprocessed_map.copy()
         
         # 지도에 있는 모든 지역의 count를 0으로 초기화
         final_counts = {feat['properties']['sggnm']: 0 for feat in final_geojson['features']}
-        unmatched_regions = set(region_counts.keys())
+        unmatched_regions = set(_region_counts.keys())
 
         # df_6의 데이터를 지도에 매핑
-        for region, count in region_counts.items():
+        for region, count in _region_counts.items():
             region_str = str(region).strip()
             matched = False
             
@@ -1453,15 +1470,18 @@ if viewer_option == '지도(테스트)':
             
         unmatched_df = pd.DataFrame({
             '지역구분': list(unmatched_regions),
-            '카운트': [region_counts.get(r, 0) for r in unmatched_regions]
+            '카운트': [_region_counts.get(r, 0) for r in unmatched_regions]
         })
 
         return final_geojson, unmatched_df
 
-    def create_korea_map(merged_geojson, map_style, color_scale_name):
-        """Plotly 지도를 생성합니다. (기존과 동일)"""
-        if not merged_geojson or not merged_geojson['features']: return None
-        plot_df = pd.DataFrame([f['properties'] for f in merged_geojson['features']])
+    @st.cache_data
+    def create_korea_map(_merged_geojson, map_style, color_scale_name):
+        """Plotly 지도를 생성합니다. (캐시 적용)"""
+        if not _merged_geojson or not _merged_geojson['features']: 
+            return None, pd.DataFrame()
+        
+        plot_df = pd.DataFrame([f['properties'] for f in _merged_geojson['features']])
         if not plot_df.empty and plot_df['value'].max() > 0:
             bins = [-1, 0, 15, 60, 100, 200, 500, 1000, 3000, float('inf')]
             labels = ["0", "1-15", "16-60", "61-100", "101-200", "201-500", "501-1000", "1001-3000", "3001+"]
@@ -1472,7 +1492,7 @@ if viewer_option == '지도(테스트)':
         colors = px.colors.sequential.__getattribute__(color_scale_name)
         color_map = {label: colors[i % len(colors)] for i, label in enumerate(labels)}
         fig = px.choropleth_mapbox(
-            plot_df, geojson=merged_geojson, locations='sggnm', featureidkey='properties.sggnm',
+            plot_df, geojson=_merged_geojson, locations='sggnm', featureidkey='properties.sggnm',
             color='category', color_discrete_map=color_map, category_orders={'category': labels},
             mapbox_style=map_style, zoom=6, center={'lat': 36.5, 'lon': 127.5}, opacity=0.7,
             labels={'category': '신청 건수', 'sggnm': '지역'}, hover_name='sggnm', hover_data={'value': True}
@@ -1485,48 +1505,41 @@ if viewer_option == '지도(테스트)':
     quarter_options = ['전체', '1Q', '2Q', '3Q']
     selected_quarter = st.selectbox("분기 선택", quarter_options)
     
-    with st.spinner("지도 데이터를 로드하고 있습니다..."):
-        # 미리 처리된 가벼운 지도 파일을 로드
-        preprocessed_map = load_preprocessed_map('preprocessed_map.geojson')
+    # 미리 처리된 가벼운 지도 파일을 로드 (캐시됨)
+    preprocessed_map = load_preprocessed_map('preprocessed_map.geojson')
+    
+    if preprocessed_map and not df_6.empty:
+        # 분기별 필터링된 데이터 가져오기 (캐시됨)
+        region_counts = get_filtered_data(df_6, selected_quarter)
         
-        if preprocessed_map and not df_6.empty:
-            # 분기별 필터링
-            filtered_df = df_6.copy()
-            if selected_quarter != '전체':
-                filtered_df['신청일자'] = pd.to_datetime(filtered_df['신청일자'], errors='coerce')
-                q_map = {'1Q': [1,2,3], '2Q': [4,5,6], '3Q': [7,8,9], '4Q': [10,11,12]}
-                if selected_quarter in q_map:
-                    filtered_df = filtered_df[filtered_df['신청일자'].dt.month.isin(q_map[selected_quarter])]
-            
-            region_counts = filtered_df['지역구분'].value_counts().to_dict()
-            
-            # 필터링된 데이터를 지도에 적용 (빠른 연산)
-            final_geojson, unmatched_df = apply_counts_to_map(preprocessed_map, region_counts)
-            
-            st.sidebar.header("⚙️ 지도 설정")
-            map_styles = {"기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter"}
-            color_scales = ["Reds","Blues", "Greens", "Viridis"]
-            selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
-            selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
-            
-            result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
-            if result:
-                fig, df = result
-                st.plotly_chart(fig, use_container_width=True)
-                st.sidebar.metric("총 지역 수", len(df))
-                st.sidebar.metric("데이터가 있는 지역", len(df[df['value'] > 0]))
-                st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
-                st.subheader("데이터 테이블")
-                st.dataframe(df[['sggnm', 'value']].sort_values('value', ascending=False), use_container_width=True)
-                if not unmatched_df.empty:
-                    st.subheader("⚠️ 매칭되지 않은 지역 목록")
-                    st.dataframe(unmatched_df, use_container_width=True)
-                else:
-                    st.success("✅ 모든 지역이 성공적으로 매칭되었습니다.")
+        # 필터링된 데이터를 지도에 적용 (캐시됨)
+        final_geojson, unmatched_df = apply_counts_to_map(preprocessed_map, region_counts)
+        
+        st.sidebar.header("⚙️ 지도 설정")
+        map_styles = {"기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter"}
+        color_scales = ["Reds","Blues", "Greens", "Viridis"]
+        selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
+        selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
+        
+        # 지도 생성 (캐시됨)
+        result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
+        if result:
+            fig, df = result
+            st.plotly_chart(fig, use_container_width=True)
+            st.sidebar.metric("총 지역 수", len(df))
+            st.sidebar.metric("데이터가 있는 지역", len(df[df['value'] > 0]))
+            st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
+            st.subheader("데이터 테이블")
+            st.dataframe(df[['sggnm', 'value']].sort_values('value', ascending=False), use_container_width=True)
+            if not unmatched_df.empty:
+                st.subheader("⚠️ 매칭되지 않은 지역 목록")
+                st.dataframe(unmatched_df, use_container_width=True)
             else:
-                st.error("지도 생성 실패.")
+                st.success("✅ 모든 지역이 성공적으로 매칭되었습니다.")
         else:
-            st.error("전처리된 지도(preprocessed_map.geojson) 또는 df_6 데이터를 찾을 수 없습니다.")
+            st.error("지도 생성 실패.")
+    else:
+        st.error("전처리된 지도(preprocessed_map.geojson) 또는 df_6 데이터를 찾을 수 없습니다.")
 
 # --- 지자체별 정리 ---
 if viewer_option == '지자체별 정리':
@@ -1535,17 +1548,80 @@ if viewer_option == '지자체별 정리':
         st.warning("지자체 데이터가 없습니다.")
     else:
         region_list = df_master['지역'].dropna().unique().tolist()
-        selected_region = st.selectbox("지역 선택", region_list)
-        columns_to_show = [
-            '현황_일반', '현황_우선',
-            'Model 3 RWD_기본', 'Model 3 RWD(2024)_기본',
-            'Model 3 LongRange_기본', 'Model 3 Performance_기본',
-            'Model Y New RWD_기본', 'Model Y New LongRange_기본'
-        ]
-        filtered = df_master[df_master['지역'] == selected_region]
-        display_columns = [col.replace('_기본', '') for col in columns_to_show]
-        display_df = filtered[columns_to_show].copy()
-        display_df.columns = display_columns
-        st.dataframe(display_df, use_container_width=True)
+        selected_region = st.selectbox("지역 선택", region_list, label_visibility="collapsed")
+        
+        # 선택된 지역의 데이터 추출 (한 행)
+        filtered = df_master[df_master['지역'] == selected_region].iloc[0]
+
+        # --- 1. 현황 (차량 대수) ---
+        st.subheader("📊 현황 (차량 대수)")
+        col1, col2 = st.columns(2)
+        with col1:
+            # NaN 값을 0으로 처리하여 오류 방지
+            general_status = filtered.get('현황_일반', 0)
+            if pd.isna(general_status):
+                general_status = 0
+            st.metric(label="일반 현황", value=f"{int(general_status):,} 대")
+        with col2:
+            # NaN 값을 0으로 처리하여 오류 방지
+            priority_status = filtered.get('현황_우선', 0)
+            if pd.isna(priority_status):
+                priority_status = 0
+            st.metric(label="우선 현황", value=f"{int(priority_status):,} 대")
+
+        st.markdown("---")
+
+        # --- 2. 모델별 보조금 ---
+        st.subheader("🚗 모델별 보조금 (단위: 만 원)")
+        
+        # 모델명과 컬럼명 매핑
+        model_cols = {
+            'Model 3 RWD': 'Model 3 RWD_기본',
+            'Model 3 RWD (2024)': 'Model 3 RWD(2024)_기본',
+            'Model 3 LongRange': 'Model 3 LongRange_기본',
+            'Model 3 Performance': 'Model 3 Performance_기본',
+            'Model Y New RWD': 'Model Y New RWD_기본',
+            'Model Y New LongRange': 'Model Y New LongRange_기본'
+        }
+        
+        # 3열로 모델 정보 표시
+        model_info_cols = st.columns(3)
+        col_idx = 0
+        for model_name, col_name in model_cols.items():
+            if col_name in filtered.index:
+                subsidy_value = filtered[col_name]
+                # NaN 또는 0이 아닌 경우에만 카드 표시
+                if pd.notna(subsidy_value) and subsidy_value > 0:
+                    with model_info_cols[col_idx % 3]:
+                        st.metric(label=model_name, value=f"{int(subsidy_value):,} 만 원")
+                        col_idx += 1
+        
+        # 표시할 모델이 하나도 없는 경우 안내 메시지
+        if col_idx == 0:
+            st.info("해당 지역의 모델별 보조금 정보가 없습니다.")
+
+        st.markdown("---")
+
+        # --- 3. 필요 서류 ---
+        st.subheader("📝 필요 서류")
+        doc_cols = st.columns(2)
+        
+        with doc_cols[0]:
+            st.markdown("##### 지원신청서류")
+            # 긴 텍스트를 보기 좋게 표시 (pre-wrap으로 줄바꿈 유지)
+            doc_text_apply = str(filtered.get('지원신청서류', '내용 없음')).replace('\n', '<br>')
+            st.markdown(
+                f"<div style='background-color:#f0f2f6; border-radius:10px; padding:15px; height: 300px; overflow-y: auto;'>{doc_text_apply}</div>",
+                unsafe_allow_html=True
+            )
+
+        with doc_cols[1]:
+            st.markdown("##### 지급신청서류")
+            doc_text_payment = str(filtered.get('지급신청서류', '내용 없음')).replace('\n', '<br>')
+            st.markdown(
+                f"<div style='background-color:#f0f2f6; border-radius:10px; padding:15px; height: 300px; overflow-y: auto;'>{doc_text_payment}</div>",
+                unsafe_allow_html=True
+            )
+
 
 
