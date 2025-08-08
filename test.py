@@ -1,290 +1,347 @@
 import streamlit as st
-import plotly.express as px
-import json
 import pandas as pd
-from shapely.geometry import shape
-from shapely.ops import unary_union
+import numpy as np
 import re
+from datetime import datetime
+import pytz
 
 # 페이지 설정
 st.set_page_config(
-    page_title="대한민국 시군구별 지도 대시보드",
-    page_icon="🗺️",
+    page_title="폴스타 2025 데이터",
+    page_icon="📊",
     layout="wide"
 )
 
+# CSS 스타일 추가
+st.markdown("""
+<style>
+    /* 기본 테이블 스타일 */
+    .custom_table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+    .custom_table th, .custom_table td {
+        border: 1px solid #e0e0e0;
+        padding: 8px;
+        text-align: center;
+    }
+    .custom_table th {
+        background-color: #f7f7f9;
+        font-weight: bold;
+    }
+    .custom_table tr:nth-child(even) {
+        background-color: #fafafa;
+    }
+    /* st.metric 스타일 커스텀 */
+    div[data-testid="metric-container"] {
+        background-color: #FFFFFF;
+        border: 1px solid #E0E0E0;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+    }
+    div[data-testid="metric-container"] > div:nth-child(2) { /* 값(value) 스타일 */
+        font-size: 2rem;
+        font-weight: 600;
+        color: #1E3A8A; /* 진한 파란색 */
+    }
+    div[data-testid="metric-container"] > div:nth-child(3) > div { /* 증감(delta) 스타일 */
+        font-size: 1rem;
+        font-weight: 500;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# 한국 시간대 설정
+kst = pytz.timezone('Asia/Seoul')
+today_kst = datetime.now(kst)
+
 # 제목
-st.title("🗺️ 대한민국 시군구별 데이터 분포 지도")
-st.markdown("`sample.xlsx`의 주소 데이터를 집계하여 지도에 시각화합니다.")
+st.title(f"📊 폴스타 2025 보고서 - {today_kst.strftime('%Y년 %m월 %d일')}")
+
+# --- 8월 현황 요약 (개선된 UI) ---
+col_title, col_select = st.columns([3, 1])
+with col_title:
+    st.subheader("📈 현황 요약")
+with col_select:
+    selected_month = st.selectbox(
+        "조회 월",
+        ["8월", "7월", "6월", "5월", "4월", "3월", "2월", "1월"],
+        index=0,
+        label_visibility="collapsed"
+    )
+
+# 현재 월인지 확인 (8월이 현재 월이라고 가정)
+is_current_month = selected_month == "8월"
+
+# 폴스타 월별 요약 테이블의 데이터를 참고하여 월별 데이터 준비
+month_data = {
+    "8월": {
+        "pipeline_today": 5, "pipeline_month_total": 125,  # 8월은 예시 데이터 (실제로는 DB에서 가져와야 함)
+        "apply_today": 3, "apply_month_total": 88,
+        "unreceived_today": 4, "unreceived_total": 75,
+        "supplement_today": 4, "supplement_total": 43,
+        "cancel_today": 9, "cancel_total": 80
+    },
+    "7월": {
+        "pipeline_today": 0, "pipeline_month_total": 140,  # 폴스타 월별 요약의 7월 데이터
+        "apply_today": 0, "apply_month_total": 83,
+        "unreceived_today": 0, "unreceived_total": 48,
+        "supplement_today": 0, "supplement_total": 9,
+        "cancel_today": 0, "cancel_total": 0
+    },
+    "6월": {
+        "pipeline_today": 0, "pipeline_month_total": 47,  # 폴스타 월별 요약의 6월 데이터
+        "apply_today": 0, "apply_month_total": 29,
+        "unreceived_today": 0, "unreceived_total": 11,
+        "supplement_today": 0, "supplement_total": 7,
+        "cancel_today": 0, "cancel_total": 0
+    },
+    "5월": {
+        "pipeline_today": 0, "pipeline_month_total": 332,  # 폴스타 월별 요약의 5월 데이터
+        "apply_today": 0, "apply_month_total": 246,
+        "unreceived_today": 0, "unreceived_total": 63,
+        "supplement_today": 0, "supplement_total": 23,
+        "cancel_today": 0, "cancel_total": 0
+    },
+    "4월": {
+        "pipeline_today": 0, "pipeline_month_total": 182,  # 폴스타 월별 요약의 4월 데이터
+        "apply_today": 0, "apply_month_total": 146,
+        "unreceived_today": 0, "unreceived_total": 16,
+        "supplement_today": 0, "supplement_total": 20,
+        "cancel_today": 0, "cancel_total": 0
+    },
+    "3월": {
+        "pipeline_today": 0, "pipeline_month_total": 279,  # 폴스타 월별 요약의 3월 데이터
+        "apply_today": 0, "apply_month_total": 249,
+        "unreceived_today": 0, "unreceived_total": 20,
+        "supplement_today": 0, "supplement_total": 10,
+        "cancel_today": 0, "cancel_total": 0
+    },
+    "2월": {
+        "pipeline_today": 0, "pipeline_month_total": 52,  # 폴스타 월별 요약의 2월 데이터
+        "apply_today": 0, "apply_month_total": 27,
+        "unreceived_today": 0, "unreceived_total": 25,
+        "supplement_today": 0, "supplement_total": 0,
+        "cancel_today": 0, "cancel_total": 0
+    },
+    "1월": {
+        "pipeline_today": 0, "pipeline_month_total": 72,  # 폴스타 월별 요약의 1월 데이터
+        "apply_today": 0, "apply_month_total": 0,
+        "unreceived_today": 0, "unreceived_total": 68,
+        "supplement_today": 0, "supplement_total": 4,
+        "cancel_today": 0, "cancel_total": 0
+    }
+}
+
+# 선택된 월의 데이터 가져오기
+current_data = month_data[selected_month]
+
+# st.metric을 사용하여 카드 형태로 표시
+if is_current_month:
+    # 현재 월(8월)일 때는 모든 카드 표시
+    summary_cols = st.columns(5)
+    with summary_cols[0]:
+        st.metric(label="파이프라인", value=f"{current_data['pipeline_month_total']} 건", delta=f"{current_data['pipeline_today']} 건 (당일)")
+    with summary_cols[1]:
+        st.metric(label="지원신청", value=f"{current_data['apply_month_total']} 건", delta=f"{current_data['apply_today']} 건 (당일)")
+    with summary_cols[2]:
+        # 미접수, 보완, 취소는 증가가 부정적인 의미이므로 delta_color="inverse" 사용 (빨간색으로 표시)
+        st.metric(label="미접수", value=f"{current_data['unreceived_total']} 건", delta=f"{current_data['unreceived_today']} 건 (당일)", delta_color="inverse")
+    with summary_cols[3]:
+        st.metric(label="보완필요", value=f"{current_data['supplement_total']} 건", delta=f"{current_data['supplement_today']} 건 (당일)", delta_color="inverse")
+    with summary_cols[4]:
+        st.metric(label="취소", value=f"{current_data['cancel_total']} 건", delta=f"{current_data['cancel_today']} 건 (당일)", delta_color="inverse")
+else:
+    # 이전 월일 때는 파이프라인과 지원신청만 표시
+    summary_cols = st.columns(2)
+    with summary_cols[0]:
+        st.metric(label="파이프라인", value=f"{current_data['pipeline_month_total']} 건")
+    with summary_cols[1]:
+        st.metric(label="지원신청", value=f"{current_data['apply_month_total']} 건")
+
+# 상세 내역을 보여주기 위한 Expander (기존 테이블 유지)
+with st.expander("상세 내역 보기"):
+    row_idx = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+    
+    # 선택된 월의 상세 데이터 (실제로는 DB에서 가져와야 함)
+    if selected_month == "8월":
+        # 8월 상세 데이터
+        second_data = {
+            '전월 이월수량': [86, 54, 32, 0],
+            '당일': [current_data['pipeline_today'], current_data['apply_today'], 1, 0],
+            '당월_누계': [current_data['pipeline_month_total'], current_data['apply_month_total'], 45, 2]
+        }
+        third_data = [
+            [2, 2, 4, 0, 6, 3], # 당일
+            [45, 30, 28, 15, 55, 25] # 누계
+        ]
+    else:
+        # 이전 월들은 당일 데이터가 0
+        second_data = {
+            '전월 이월수량': [0, 0, 0, 0],
+            '당일': [0, 0, 0, 0],
+            '당월_누계': [current_data['pipeline_month_total'], current_data['apply_month_total'], 0, 0]
+        }
+        third_data = [
+            [0, 0, 0, 0, 0, 0], # 당일
+            [current_data['unreceived_total'], 0, current_data['supplement_total'], 0, current_data['cancel_total'], 0] # 누계
+        ]
+    
+    second_df = pd.DataFrame(second_data, index=row_idx)
+    second_html = second_df.to_html(classes='custom_table', border=0, escape=False)
+
+    exp_col1, exp_col2 = st.columns(2)
+    with exp_col1:
+        st.subheader(f"{selected_month} 현황 (상세)")
+        st.markdown(second_html, unsafe_allow_html=True)
+    with exp_col2:
+        st.subheader("미접수/보완/취소 현황 (상세)")
+        
+        # 데이터를 세 개의 작은 DataFrame으로 분리
+        unreceived_df = pd.DataFrame(
+            [third_data[0][0:2], third_data[1][0:2]],
+            columns=['서류미비', '대기요청'],
+            index=['당일', '누계']
+        )
+        supplement_df = pd.DataFrame(
+            [third_data[0][2:4], third_data[1][2:4]],
+            columns=['서류미비', '미처리'],
+            index=['당일', '누계']
+        )
+        cancel_df = pd.DataFrame(
+            [third_data[0][4:6], third_data[1][4:6]],
+            columns=['단순취소', '내부지원전환'],
+            index=['당일', '누계']
+        )
+
+        # 각 카테고리별로 테이블 표시
+        st.markdown("<p class='detail-subheader'>미접수량</p>", unsafe_allow_html=True)
+        st.markdown(unreceived_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
+        
+        st.markdown("<p class='detail-subheader'>보완 잔여 수량</p>", unsafe_allow_html=True)
+        st.markdown(supplement_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
+
+        st.markdown("<p class='detail-subheader'>취소</p>", unsafe_allow_html=True)
+        st.markdown(cancel_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
+
+
 st.markdown("---")
 
-@st.cache_data
-def parse_address(address):
-    """
-    주소 문자열에서 '시도'와 '시군구'를 추출합니다.
-    (예: "경기도 안산시 상록구 ..." -> "경기도", "안산시 상록구")
-    (예: "경기도 수원시 장안구 ..." -> "경기도", "수원시 장안구")
-    (예: "세종특별자치시 ..." -> "세종특별자치시", "세종시")
-    """
-    if pd.isna(address):
-        return None, None
-    address = str(address).strip()
-    
-    # 시도명 목록 (표준 명칭)
-    sido_list = ['서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', 
-                 '울산광역시', '세종특별자치시', '경기도', '강원특별자치도', '강원도', '충청북도', '충청남도', 
-                 '전라북도', '전북특별자치도', '전라남도', '경상북도', '경상남도', '제주특별자치도']
-    
-    sido = next((s for s in sido_list if address.startswith(s)), None)
-    if not sido:
-        return None, None
-        
-    # 시도명 이후의 주소 부분
-    remaining = address[len(sido):].strip()
-    
-    # 세종특별자치시의 경우 특별 처리 (GeoJSON에서 '세종시'로 되어 있음)
-    if sido == '세종특별자치시':
-        return sido, "세종시"
-    
-    # 시군구가 있는 경우 처리
-    if remaining:
-        parts = remaining.split()
-        if parts:
-            # 복합 시군구 처리 (시+구, 시+군, 군+구 등)
-            sgg_parts = []
-            i = 0
-            while i < len(parts):
-                current_part = parts[i]
-                
-                # 현재 부분이 시/군/구로 끝나는지 확인
-                if current_part.endswith(('시', '군', '구')):
-                    sgg_parts.append(current_part)
-                    i += 1
-                else:
-                    # 시/군/구가 아닌 부분이 나오면 중단
-                    break
-            
-            if sgg_parts:
-                sgg = " ".join(sgg_parts)
-                return sido, sgg
-    
-    return sido, ""
+# --- 폴스타 월별 요약 (개선된 UI) ---
+st.subheader("폴스타 월별 요약")
 
-def normalize_sggnm(sggnm):
-    """
-    시군구명을 정규화합니다.
-    (예: "수원시 장안구" -> "수원시장안구")
-    """
-    if not sggnm:
-        return sggnm
-    
-    # 공백 제거
-    normalized = sggnm.replace(" ", "")
-    return normalized
+# 데이터프레임 생성
+row_idx = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+pol_data = {
+    '1월': [72, 0, 68, 4],
+    '2월': [52, 27, 25, 0],
+    '3월': [279, 249, 20, 10],
+    '4월': [182, 146, 16, 20],
+    '5월': [332, 246, 63, 23],
+    '6월': [47, 29, 11, 7],
+    '1~6월 합계': [964, 697, 203, 64],
+    '7월': [140, 83, 48, 9],
+    '8월': [np.nan, np.nan, np.nan, np.nan],
+    '9월': [np.nan, np.nan, np.nan, np.nan],
+    '10월': [np.nan, np.nan, np.nan, np.nan],
+    '11월': [np.nan, np.nan, np.nan, np.nan],
+    '12월': [np.nan, np.nan, np.nan, np.nan],
+    '7~12월 합계': [140, 83, 48, 9],
+    '2025 총합': [1104, 780, 251, 73]
+}
+pol_df = pd.DataFrame(pol_data, index=row_idx)
 
-@st.cache_data
-def load_and_process_data(excel_path, geojson_path):
-    """
-    Excel과 GeoJSON 파일을 로드하고, 주소 데이터를 시군구별로 집계하여
-    지도 시각화에 사용할 최종 GeoJSON과 매칭되지 않은 주소 목록을 반환합니다.
-    """
-    try:
-        # 1. Excel 파일 로드 및 주소 파싱
-        df = pd.read_excel(excel_path)
-        df[['sido', 'sgg']] = df['주소\n(등록주소지)'].apply(lambda x: pd.Series(parse_address(x)))
-        
-        df_valid = df.dropna(subset=['sido'])
-        
-        # 시군구명 생성 (시도명만 있는 경우와 시군구가 있는 경우 구분)
-        def create_sggnm(row):
-            if row['sgg']:  # 시군구가 있는 경우
-                return f"{row['sido']} {row['sgg']}"
-            else:  # 시도명만 있는 경우 (세종특별자치시 등)
-                return row['sido']
-        
-        df_valid['sggnm'] = df_valid.apply(create_sggnm, axis=1)
-        
-        # 정규화된 시군구명도 생성 (매칭을 위해)
-        df_valid['sggnm_normalized'] = df_valid['sggnm'].apply(normalize_sggnm)
-        
-        # 원본과 정규화된 버전 모두로 카운트
-        sgg_counts = {}
-        for _, row in df_valid.iterrows():
-            sggnm = row['sggnm']
-            sggnm_norm = row['sggnm_normalized']
-            
-            # 원본 버전으로 카운트
-            if sggnm not in sgg_counts:
-                sgg_counts[sggnm] = 0
-            sgg_counts[sggnm] += 1
-            
-            # 정규화된 버전으로도 카운트 (중복 제거)
-            if sggnm_norm != sggnm:
-                if sggnm_norm not in sgg_counts:
-                    sgg_counts[sggnm_norm] = 0
-                sgg_counts[sggnm_norm] += 1
-        
-        # 2. GeoJSON 파일 로드 및 구조 확인
-        with open(geojson_path, 'r', encoding='utf-8') as f:
-            geojson_data = json.load(f)
-        
-        # 3. 시군구별 그룹화 (정규화된 버전도 고려)
-        sggnm_groups = {}
-        for feature in geojson_data['features']:
-            properties = feature['properties']
-            
-            # 시도명과 시군구명을 조합하여 키 생성
-            sido = properties.get('sidonm', '')
-            sgg = properties.get('sggnm', '')
-            
-            if sido and sgg:  # 시도명과 시군구명이 모두 있는 경우
-                sggnm_key = f"{sido} {sgg}".strip()
-                sggnm_key_norm = normalize_sggnm(sggnm_key)
-            elif sido:  # 시도명만 있는 경우 (세종특별자치시 등)
-                sggnm_key = sido
-                sggnm_key_norm = normalize_sggnm(sggnm_key)
-            else:
-                continue
-                
-            # 원본과 정규화된 버전 모두 저장
-            for key in [sggnm_key, sggnm_key_norm]:
-                if key not in sggnm_groups:
-                    sggnm_groups[key] = []
-                sggnm_groups[key].append(feature)
+# NaN 값을 '-'로 치환
+html_pol = pol_df.fillna('-').to_html(classes='custom_table', border=0, escape=False)
 
-        # 4. 매칭 결과 확인
-        st.subheader("🔍 매칭 결과 분석")
-        
-        # Excel에서 파싱된 시군구명들
-        excel_sgg_keys = set(sgg_counts.keys())
+# <thead> 바로 뒤에 <tr><th>청구<br>세금계산서</th> ... 삽입
+html_pol = re.sub(
+    r'(<thead>\s*<tr>)',
+    r'\1<th rowspan="2">청구<br>세금계산서</th>',
+    html_pol,
+    count=1
+)
 
-        # GeoJSON에서 생성된 시군구명들
-        geojson_sgg_keys = set(sggnm_groups.keys())
+# ['1~6월 합계'] 행(7번째 컬럼) 연주황색(#ffe0b2) 배경, ['7~12월 합계'] 행(14번째 컬럼) 연주황색(#ffe0b2) 배경, ['2025 총합'] 열 연파랑색(#e3f2fd) 배경
+# <tr>에서 <th>1~6월 합계</th>가 포함된 행 전체의 <td>에 스타일 적용
+html_pol = re.sub(
+    r'(<tr>\s*<th>1~6월 합계</th>)(.*?)(</tr>)',
+    lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
+    html_pol,
+    flags=re.DOTALL
+)
+# <th>1~6월 합계</th>에도 배경색 적용
+html_pol = html_pol.replace('<th>1~6월 합계</th>', '<th style="background-color:#ffe0b2;">1~6월 합계</th>')
 
-        # 매칭되지 않은 키들
-        unmatched_sgg_keys = excel_sgg_keys - geojson_sgg_keys
+# <tr>에서 <th>7~12월 합계</th>가 포함된 행 전체의 <td>에 스타일 적용
+html_pol = re.sub(
+    r'(<tr>\s*<th>7~12월 합계</th>)(.*?)(</tr>)',
+    lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
+    html_pol,
+    flags=re.DOTALL
+)
+# <th>7~12월 합계</th>에도 배경색 적용
+html_pol = html_pol.replace('<th>7~12월 합계</th>', '<th style="background-color:#ffe0b2;">7~12월 합계</th>')
 
-        # 5. 시군구 경계 병합 및 카운트 데이터 결합
-        merged_features = []
-        for sggnm, features in sggnm_groups.items():
-            geometries = [shape(f['geometry']) for f in features if f.get('geometry')]
-            if not geometries: continue
-            
-            try:
-                merged_geometry = unary_union(geometries)
-                merged_geojson_geom = merged_geometry.__geo_interface__
-                
-                merged_feature = {
-                    'type': 'Feature',
-                    'geometry': merged_geojson_geom,
-                    'properties': {
-                        'sggnm': sggnm,
-                        'value': sgg_counts.get(sggnm, 0)
-                    }
-                }
-                merged_features.append(merged_feature)
-            except Exception:
-                continue
+# ['2025 총합'] 열(마지막 컬럼) 연파랑색(#e3f2fd) 배경
+# <thead>의 마지막 <th>에 스타일 적용
+html_pol = re.sub(
+    r'(<th[^>]*>2025 총합</th>)',
+    r'<th style="background-color:#e3f2fd;">2025 총합</th>',
+    html_pol
+)
 
-        # 6. 매칭되지 않은 주소 찾기
-        unmatched_df = pd.DataFrame()
-        if unmatched_sgg_keys:
-            unmatched_df = df_valid[df_valid['sggnm'].isin(unmatched_sgg_keys)][['주소\n(등록주소지)', 'sido', 'sgg', 'sggnm']].drop_duplicates()
+# <tbody>의 각 행에서 마지막 <td>에 스타일 적용 (2025 총합 데이터 셀)
+html_pol = re.sub(
+    r'(<tr>.*?)(<td[^>]*>[^<]*</td>)(\s*</tr>)',
+    lambda m: re.sub(
+        r'(<td[^>]*>)([^<]*)(</td>)$',
+        r'<td style="background-color:#e3f2fd;">\2</td>',
+        m.group(0)
+    ),
+    html_pol,
+    flags=re.DOTALL
+)
 
-        merged_geojson = {'type': 'FeatureCollection', 'features': merged_features}
-        
-        return merged_geojson, unmatched_df
-        
-    except FileNotFoundError as e:
-        st.error(f"파일을 찾을 수 없습니다: {e.filename}")
-        return None, pd.DataFrame()
-    except Exception as e:
-        st.error(f"데이터 처리 중 오류가 발생했습니다: {e}")
-        return None, pd.DataFrame()
+# <tbody>의 각 행에서 '2025 총합'에 해당하는 <td>에도 배경색 적용 (헤더뿐 아니라 데이터까지)
+# 위에서 이미 마지막 <td>에 칠했으나, 혹시 순서가 바뀌거나 컬럼 추가시 대비해 '2025 총합' 텍스트가 들어간 <td>도 칠함
+html_pol = re.sub(
+    r'(<td[^>]*>)([^<]*2025 총합[^<]*)(</td>)',
+    r'<td style="background-color:#e3f2fd;">\2</td>',
+    html_pol
+)
 
-def create_korea_map(merged_geojson, map_style, color_scale_name):
-    """Plotly를 사용하여 8단계로 구분된 Choropleth 지도를 생성합니다."""
-    if not merged_geojson or not merged_geojson['features']:
-        return None
+# <tbody>의 각 행에서 '1~6월 합계' 컬럼(즉, 7번째 컬럼)과 '7~12월 합계' 컬럼(즉, 14번째 컬럼)에 해당하는 <td>에도 배경색 적용
+def color_sum_column(match):
+    row = match.group(0)
+    # <td>들을 찾아서 색칠
+    tds = re.findall(r'(<td[^>]*>[^<]*</td>)', row)
+    if len(tds) >= 14:  # 7번째와 14번째 <td>에 색칠
+        # 7번째 <td> (1~6월 합계)
+        tds[6] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[6])
+        # 14번째 <td> (7~12월 합계)
+        tds[13] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[13])
+        # 다시 조립
+        row_new = row
+        for i, td in enumerate(tds):
+            # 첫 번째 등장하는 <td>만 순서대로 교체
+            row_new = re.sub(r'(<td[^>]*>[^<]*</td>)', lambda m: td if m.start() == 0 else m.group(0), row_new, count=1)
+        return row_new
+    else:
+        return row
+html_pol = re.sub(r'<tr>(.*?)</tr>', color_sum_column, html_pol, flags=re.DOTALL)
 
-    plot_df = pd.DataFrame([f['properties'] for f in merged_geojson['features']])
-    
-    bins = [-1, 0, 5, 10, 20, 50, 100, 200, float('inf')]
-    labels = ["0", "1-5", "6-10", "11-20", "21-50", "51-100", "101-200", "201+"]
-    plot_df['category'] = pd.cut(plot_df['value'], bins=bins, labels=labels, right=True)
-    
-    # 8단계에 맞는 색상표 생성
-    colors = px.colors.sequential.__getattribute__(color_scale_name)
-    color_map = {label: colors[i] for i, label in enumerate(labels)}
+st.markdown(html_pol, unsafe_allow_html=True)
 
-    fig = px.choropleth_mapbox(
-        plot_df,
-        geojson=merged_geojson,
-        locations='sggnm',
-        featureidkey='properties.sggnm',
-        color='category',
-        color_discrete_map=color_map,
-        category_orders={'category': labels},
-        mapbox_style=map_style,
-        zoom=7,
-        center={'lat': 36.5, 'lon': 127.5},
-        opacity=0.7,
-        labels={'category': '신청 건수', 'sggnm': '시군구'},
-        hover_name='sggnm',
-        hover_data={'value': True}
-    )
-    
-    fig.update_layout(
-        height=700,
-        margin={'r': 0, 't': 0, 'l': 0, 'b': 0},
-        legend_title_text='신청 건수 (구간)'
-    )
-    
-    return fig, plot_df
+st.markdown("---")
 
-def main():
-    # 사이드바 설정
-    st.sidebar.header("⚙️ 지도 설정")
-    map_styles = {
-        "기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter", 
-        "위성 지도": "satellite-streets", "지형도": "stamen-terrain"
-    }
-    color_scales = ["Blues", "Reds", "Greens", "Viridis", "Cividis", "Inferno"]
-    
-    selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
-    selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
-    
-    # 데이터 로드 및 처리
-    merged_geojson, unmatched_df = load_and_process_data('sample.xlsx', 'HangJeongDong_ver20250401.geojson')
-    
-    if merged_geojson:
-        fig, df = create_korea_map(merged_geojson, map_styles[selected_style], selected_color)
-        
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.sidebar.markdown("---")
-            st.sidebar.header("📊 데이터 요약")
-            st.sidebar.metric("총 시군구 수", len(df))
-            st.sidebar.metric("데이터가 있는 시군구", len(df[df['value'] > 0]))
-            st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
-            
-            st.subheader("데이터 테이블 (신청 건수 높은 순)")
-            st.dataframe(df[['sggnm', 'value']].sort_values('value', ascending=False), use_container_width=True)
-
-            # 매칭되지 않은 주소 표시
-            st.markdown("---")
-            if not unmatched_df.empty:
-                st.subheader("⚠️ 매칭되지 않은 주소 목록 (디버깅용)")
-                st.warning(
-                    "아래 목록의 주소들은 GeoJSON 지도 데이터의 시군구명과 정확히 일치하지 않아 지도에 포함되지 않았습니다. "
-                    "주소 파싱 로직이나 원본 데이터의 주소 형식을 확인해 보세요."
-                )
-                st.dataframe(unmatched_df, use_container_width=True)
-            else:
-                st.success("✅ 모든 주소가 지도 데이터와 성공적으로 매칭되었습니다.")
-        else:
-            st.error("지도 생성에 실패했습니다.")
-
-if __name__ == "__main__":
-    main()
+# --- 메모 영역 ---
+st.subheader("메모")
+st.text_area(
+    "메모를 입력하세요", 
+    height=150, 
+    placeholder="여기에 메모를 입력하세요...",
+    label_visibility="collapsed" # subheader가 있으므로 label은 숨김
+)

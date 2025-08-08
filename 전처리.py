@@ -2,7 +2,7 @@ import pandas as pd
 import pickle
 import numpy as np
 from datetime import datetime
-
+import json
 
 def preprocess_and_save_data():
     """
@@ -114,6 +114,14 @@ def preprocess_and_save_data():
         except FileNotFoundError:
             df_6 = pd.DataFrame()
 
+        try:
+            with open("preprocessed_map.geojson", "r", encoding="utf-8") as f:
+                preprocessed_map_geojson = json.load(f)
+            print("전처리된 지도 데이터(preprocessed_map.geojson)를 로드했습니다.")
+        except FileNotFoundError:
+            print("'preprocessed_map.geojson' 파일을 찾을 수 없습니다. 먼저 preprocess_map.py를 실행해주세요.")
+            preprocessed_map_geojson = None
+
         # ---------- 6. 저장 ----------
         data_to_save = {
             "df": pd.DataFrame(),  # 더 이상 사용되지 않지만 구조 유지
@@ -127,7 +135,8 @@ def preprocess_and_save_data():
             "df_2_fail_q3": df_2_fail_q3,
             "update_time_str": update_time_str,
             "df_master": df_master,
-            "df_6": df_6
+            "df_6": df_6,
+            "preprocessed_map_geojson": preprocessed_map_geojson
         }
 
         with open("preprocessed_data.pkl", "wb") as f:
