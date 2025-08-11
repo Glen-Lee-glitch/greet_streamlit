@@ -232,7 +232,7 @@ today_kst = datetime.now(KST).date()
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
     st.header("👁️ 뷰어 옵션")
-    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타(테스트)', '지도(테스트)', '분석'), key="viewer_option")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)', '분석'), key="viewer_option")
     st.markdown("---")
     st.header("📊 조회 옵션")
     view_option = st.radio(
@@ -1273,7 +1273,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             st.altair_chart(corp_combo, use_container_width=True)
 
 # 폴스타 뷰 시작 부분
-if viewer_option == '폴스타(테스트)':
+if viewer_option == '폴스타':
     # pkl에서 폴스타 DataFrame 로드
     @st.cache_data
     def load_polestar_data():
@@ -1372,27 +1372,25 @@ if viewer_option == '폴스타(테스트)':
 
     # 상세 내역 부분도 계산된 데이터 사용
     with st.expander("상세 내역 보기"):
-        detail_row_index = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+        detail_row_index = ['지원신청', '폴스타 내부지원', '접수 후 취소']
         
         if selected_month_label == "8월":
             # 8월은 현재 월이므로 실제 데이터 사용
             detailed_second_data = {
-                '전월 이월수량': [86, 54, 32, 0],  # 이 부분은 별도 계산 필요
-                '당일': [0, 0, 0, 0],  # 당일 데이터는 별도 계산 필요
-                '당월_누계': [current_month_data['pipeline_month_total'], 
-                           current_month_data['apply_month_total'], 
-                           current_month_data['pak_month_total'], 
-                           current_month_data['cancel_month_total']]
+                '전월 이월수량': [54, 32, 0],  # 파이프라인 제거
+                '당일': [0, 0, 0],  # 당일 데이터는 별도 계산 필요
+                '당월_누계': [current_month_data['apply_month_total'], 
+                        current_month_data['pak_month_total'], 
+                        current_month_data['cancel_month_total']]
             }
         else:
             # 과거 월은 누계 데이터만 표시
             detailed_second_data = {
-                '전월 이월수량': [0, 0, 0, 0],
-                '당일': [0, 0, 0, 0],
-                '당월_누계': [current_month_data['pipeline_month_total'], 
-                           current_month_data['apply_month_total'], 
-                           current_month_data['pak_month_total'], 
-                           current_month_data['cancel_month_total']]
+                '전월 이월수량': [0, 0, 0],
+                '당일': [0, 0, 0],
+                '당월_누계': [current_month_data['apply_month_total'], 
+                        current_month_data['pak_month_total'], 
+                        current_month_data['cancel_month_total']]
             }
         
         second_detail_df = pd.DataFrame(detailed_second_data, index=detail_row_index)
@@ -1403,15 +1401,14 @@ if viewer_option == '폴스타(테스트)':
             st.subheader(f"{selected_month_label} 현황 (상세)")
             st.markdown(second_detail_html, unsafe_allow_html=True)
         with expander_col2:
-            st.subheader("미접수/보완/취소 현황 (상세)")
+            st.subheader("미접수/보완 현황 (상세)")
 
-            # 간단한 테이블로 표시
+            # 간단한 테이블로 표시 (취소 제거)
             detail_summary_df = pd.DataFrame({
-                '구분': ['미접수', '보완', '취소'],
+                '구분': ['미접수', '보완'],
                 '수량': [
                     current_month_data['unreceived_total'],
-                    current_month_data['supplement_total'],
-                    current_month_data['cancel_total']
+                    current_month_data['supplement_total']
                 ]
             })
             st.markdown(detail_summary_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
