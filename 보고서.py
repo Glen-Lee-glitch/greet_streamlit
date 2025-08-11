@@ -1858,6 +1858,8 @@ if viewer_option == '분석':
 
             with tab3:
                 st.subheader("작성자별 작업 현황")
+                # 주의사항 한줄(심플)
+                st.markdown('<span style="color:#666; font-size:14px;">※ 5월 20일 이전까지는 배은영, 이경구 계정으로 매크로 작업이 많았습니다.</span>', unsafe_allow_html=True)
                 
                 if '작성자' in df_filtered.columns:
                     # 작성자별 통계
