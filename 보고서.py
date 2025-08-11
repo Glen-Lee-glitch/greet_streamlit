@@ -1923,39 +1923,71 @@ if viewer_option == '분석':
                     st.info("현재 파일의 컬럼명:", list(df_filtered.columns))
 
             with tab4:
-                st.header("지자체별 현황 정리")
+                st.markdown("""
+                <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 30px;">
+                    <h2 style="color: #1f77b4; margin: 0; font-weight: 600;">🏛️ 지자체별 현황 정리</h2>
+                    <p style="color: #666; margin: 10px 0 0 0; font-size: 16px;">지역별 보조금 현황 및 필요 서류 정보</p>
+                </div>
+                """, unsafe_allow_html=True)
                 if df_master.empty or '지역' not in df_master.columns:
                     st.warning("지자체 데이터가 없습니다.")
                 else:
                     region_list = df_master['지역'].dropna().unique().tolist()
-                    selected_region = st.selectbox("지역 선택", region_list, label_visibility="collapsed")
+                    # 수정된 코드
+                    st.markdown("##### 📍 분석 대상 지역")
+                    selected_region = st.selectbox(
+                        "지역을 선택하세요",
+                        options=region_list,
+                        index=0,
+                        help="분석할 지자체를 선택하세요"
+                    )
+                    st.markdown(f"**선택된 지역:** `{selected_region}`")
 
                     # 선택된 지역의 데이터 추출 (한 행)
                     filtered = df_master[df_master['지역'] == selected_region].iloc[0]
 
                     # --- 1. 현황 (차량 대수) ---
-                    st.subheader("📊 현황 (차량 대수)")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        general_status = filtered.get('현황_일반', 0)
-                        try:
-                            if pd.isna(general_status) or general_status == '' or str(general_status).strip() == '':
-                                general_status = 0
-                            else:
-                                general_status = int(float(str(general_status).replace(',', '')))
-                        except (ValueError, TypeError):
+                    st.markdown("### 📊 현황 (차량 대수)")
+                    st.markdown("---")
+
+                    # 먼저 변수들을 계산
+                    general_status = filtered.get('현황_일반', 0)
+                    try:
+                        if pd.isna(general_status) or general_status == '' or str(general_status).strip() == '':
                             general_status = 0
-                        st.metric(label="일반 현황", value=f"{general_status:,} 대")
-                    with col2:
-                        priority_status = filtered.get('현황_우선', 0)
-                        try:
-                            if pd.isna(priority_status) or priority_status == '' or str(priority_status).strip() == '':
-                                priority_status = 0
-                            else:
-                                priority_status = int(float(str(priority_status).replace(',', '')))
-                        except (ValueError, TypeError):
+                        else:
+                            general_status = int(float(str(general_status).replace(',', '')))
+                    except (ValueError, TypeError):
+                        general_status = 0
+
+                    priority_status = filtered.get('현황_우선', 0)
+                    try:
+                        if pd.isna(priority_status) or priority_status == '' or str(priority_status).strip() == '':
                             priority_status = 0
-                        st.metric(label="우선 현황", value=f"{priority_status:,} 대")
+                        else:
+                            priority_status = int(float(str(priority_status).replace(',', '')))
+                    except (ValueError, TypeError):
+                        priority_status = 0
+
+                    # 그 다음에 HTML 표시
+                    status_cols = st.columns(2)
+                    with status_cols[0]:
+                        st.markdown("""
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                    padding: 20px; border-radius: 15px; color: white; text-align: center;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 18px;">일반 현황</h4>
+                            <h2 style="margin: 0; font-size: 32px; font-weight: 700;">{general_status:,} 대</h2>
+                        </div>
+                        """.format(general_status=general_status), unsafe_allow_html=True)
+
+                    with status_cols[1]:
+                        st.markdown("""
+                        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                                    padding: 20px; border-radius: 15px; color: white; text-align: center;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 18px;">우선 현황</h4>
+                            <h2 style="margin: 0; font-size: 32px; font-weight: 700;">{priority_status:,} 대</h2>
+                        </div>
+                        """.format(priority_status=priority_status), unsafe_allow_html=True)
 
                     st.markdown("---")
 
@@ -1972,25 +2004,34 @@ if viewer_option == '분석':
                         'Model Y New LongRange': 'Model Y New LongRange_기본'
                     }
 
-                    model_info_cols = st.columns(3)
-                    col_idx = 0
+                    # 보조금 데이터 수집
+                    subsidy_data = []
                     for model_name, col_name in model_cols.items():
                         if col_name in filtered.index:
-                            # 수정된 코드
                             subsidy_value = filtered[col_name]
                             try:
                                 if pd.notna(subsidy_value) and subsidy_value != '' and str(subsidy_value).strip() != '':
-                                    # 숫자로 변환 가능한지 확인
                                     numeric_value = float(str(subsidy_value).replace(',', ''))
                                     if numeric_value > 0:
-                                        with model_info_cols[col_idx % 3]:
-                                            st.metric(label=model_name, value=f"{int(numeric_value):,} 만 원")
-                                            col_idx += 1
+                                        subsidy_data.append((model_name, numeric_value))
                             except (ValueError, TypeError):
-                                # 숫자로 변환할 수 없는 경우 건너뛰기
                                 continue
 
-                    if col_idx == 0:
+                    if subsidy_data:
+                        # 3열 그리드로 표시
+                        cols = st.columns(3)
+                        for idx, (model_name, amount) in enumerate(subsidy_data):
+                            with cols[idx % 3]:
+                                st.markdown(f"""
+                                <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; 
+                                            border-left: 3px solid #007bff; margin: 5px 0;">
+                                    <h6 style="margin: 0 0 5px 0; color: #495057; font-size: 12px; font-weight: 600;">{model_name}</h6>
+                                    <h4 style="margin: 0; color: #007bff; font-size: 18px; font-weight: 600;">
+                                        {int(amount):,} 만원
+                                    </h4>
+                                </div>
+                                """, unsafe_allow_html=True)
+                    else:
                         st.info("해당 지역의 모델별 보조금 정보가 없습니다.")
 
                     st.markdown("---")
