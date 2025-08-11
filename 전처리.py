@@ -1,6 +1,7 @@
 import pandas as pd
 import pickle
 import numpy as np
+import sqlite3
 from datetime import datetime
 import json
 
@@ -46,13 +47,53 @@ def preprocess_and_save_data():
 
         print("Q3.xlsx, Q2.xlsx, Q1.xlsx의 시트를 성공적으로 로드했습니다.")
 
-        # polestar_file 로드
-        polestar_file = "polestar.xlsx"
+        # polestar_file 로드 부분을 data.db 사용으로 수정
         try:
-            df_pole_pipeline = pd.read_excel(polestar_file, sheet_name="파이프라인")
-            df_pole_apply = pd.read_excel(polestar_file, sheet_name="지원신청")
-        except FileNotFoundError:
-            print("'polestar.xlsx' 파일을 찾을 수 없습니다. 판매현황 데이터는 빈 DataFrame으로 저장됩니다.")
+            # 데이터베이스에서 폴스타 데이터 로드
+            def load_polestar_from_db():
+                """data.db에서 폴스타 데이터를 DataFrame으로 로드"""
+                try:
+                    conn = sqlite3.connect('data.db')
+                    
+                    # 파이프라인 데이터 조회
+                    pipeline_query = '''
+                        SELECT 날짜, 파이프라인
+                        FROM 파이프라인 
+                        WHERE strftime('%Y', 날짜) = '2025'
+                        ORDER BY 날짜
+                    '''
+                    df_pole_pipeline = pd.read_sql_query(pipeline_query, conn)
+                    
+                    # 지원신청 데이터 조회
+                    support_query = '''
+                        SELECT 날짜, 지원신청, PAK_내부지원, 접수후취소, 미신청건, 보완
+                        FROM 지원신청 
+                        WHERE strftime('%Y', 날짜) = '2025'
+                        ORDER BY 날짜
+                    '''
+                    df_pole_apply = pd.read_sql_query(support_query, conn)
+                    
+                    # 날짜 컬럼 타입 변환
+                    if not df_pole_pipeline.empty and '날짜' in df_pole_pipeline.columns:
+                        df_pole_pipeline['날짜'] = pd.to_datetime(df_pole_pipeline['날짜'], errors='coerce')
+                    if not df_pole_apply.empty and '날짜' in df_pole_apply.columns:
+                        df_pole_apply['날짜'] = pd.to_datetime(df_pole_apply['날짜'], errors='coerce')
+                    
+                    conn.close()
+                    return df_pole_pipeline, df_pole_apply
+                    
+                except sqlite3.Error as e:
+                    print(f"데이터베이스에서 폴스타 데이터 로드 중 오류: {e}")
+                    return pd.DataFrame(), pd.DataFrame()
+                except Exception as e:
+                    print(f"폴스타 데이터 처리 중 오류: {e}")
+                    return pd.DataFrame(), pd.DataFrame()
+            
+            df_pole_pipeline, df_pole_apply = load_polestar_from_db()
+            print("data.db에서 폴스타 데이터를 로드했습니다.")
+            
+        except Exception as e:
+            print(f"폴스타 데이터 로드 중 오류: {e}")
             df_pole_pipeline = pd.DataFrame()
             df_pole_apply = pd.DataFrame()
 

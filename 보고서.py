@@ -321,7 +321,6 @@ if viewer_option in lst_1:
 else:
     pass
 
-
 # --- 계산 함수 (기존과 동일) ---
 def get_corporate_metrics(df3_raw, df4_raw, start, end):
     """기간 내 법인팀 실적을 계산합니다."""
@@ -1273,8 +1272,61 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             )
             st.altair_chart(corp_combo, use_container_width=True)
 
-# --- 폴스타 뷰 (test.py 기반 구성) ---
+# 폴스타 뷰 시작 부분
 if viewer_option == '폴스타(테스트)':
+    # pkl에서 폴스타 DataFrame 로드
+    @st.cache_data
+    def load_polestar_data():
+        try:
+            with open("preprocessed_data.pkl", "rb") as f:
+                data = pickle.load(f)
+            return data.get('df_pole_pipeline', pd.DataFrame()), data.get('df_pole_apply', pd.DataFrame())
+        except FileNotFoundError:
+            st.error("preprocessed_data.pkl 파일을 찾을 수 없습니다. 먼저 전처리.py를 실행해주세요.")
+            return pd.DataFrame(), pd.DataFrame()
+        except Exception as e:
+            st.error(f"데이터 로드 중 오류: {e}")
+            return pd.DataFrame(), pd.DataFrame()
+    
+    df_pole_pipeline, df_pole_apply = load_polestar_data()
+    
+    # 월별 집계 계산 함수
+    @st.cache_data
+    def calculate_monthly_summary(pipeline_df, apply_df, selected_month):
+        """선택된 월의 데이터를 계산"""
+        month_num = int(selected_month.replace('월', ''))
+        
+        # 파이프라인 월 누계
+        pipeline_month_total = 0
+        if not pipeline_df.empty and '날짜' in pipeline_df.columns:
+            month_pipeline = pipeline_df[pipeline_df['날짜'].dt.month == month_num]
+            pipeline_month_total = month_pipeline['파이프라인'].sum()
+        
+        # 지원신청 월 누계
+        apply_month_total = pak_month_total = cancel_month_total = unreceived_total = supplement_total = 0
+        if not apply_df.empty and '날짜' in apply_df.columns:
+            month_apply = apply_df[apply_df['날짜'].dt.month == month_num]
+            apply_month_total = month_apply['지원신청'].sum()
+            pak_month_total = month_apply['PAK_내부지원'].sum()
+            cancel_month_total = month_apply['접수후취소'].sum()
+            unreceived_total = month_apply['미신청건'].sum()
+            supplement_total = month_apply['보완'].sum()
+        
+        return {
+            'pipeline_today': 0,  # 당일 데이터는 현재 0
+            'pipeline_month_total': pipeline_month_total,
+            'apply_today': 0,  # 당일 데이터는 현재 0
+            'apply_month_total': apply_month_total,
+            'unreceived_today': 0,  # 당일 데이터는 현재 0
+            'unreceived_total': unreceived_total,
+            'supplement_today': 0,  # 당일 데이터는 현재 0
+            'supplement_total': supplement_total,
+            'cancel_today': 0,  # 당일 데이터는 현재 0
+            'cancel_total': cancel_month_total,
+            'pak_month_total': pak_month_total,
+            'cancel_month_total': cancel_month_total
+        }
+    
     # 제목 영역
     st.title(f"📊 폴스타 2025 보고서 - {today_kst.strftime('%Y년 %m월 %d일')}")
 
@@ -1295,67 +1347,8 @@ if viewer_option == '폴스타(테스트)':
     current_month_label = f"{today_kst.month}월"
     is_current_month_selected = (selected_month_label == current_month_label)
 
-    # 월별 지표 데이터 (예시 데이터)
-    monthly_indicator_by_month = {
-        "8월": {
-            "pipeline_today": 5, "pipeline_month_total": 125,
-            "apply_today": 3, "apply_month_total": 88,
-            "unreceived_today": 4, "unreceived_total": 75,
-            "supplement_today": 4, "supplement_total": 43,
-            "cancel_today": 9, "cancel_total": 80
-        },
-        "7월": {
-            "pipeline_today": 0, "pipeline_month_total": 140,
-            "apply_today": 0, "apply_month_total": 83,
-            "unreceived_today": 0, "unreceived_total": 48,
-            "supplement_today": 0, "supplement_total": 9,
-            "cancel_today": 0, "cancel_total": 0
-        },
-        "6월": {
-            "pipeline_today": 0, "pipeline_month_total": 47,
-            "apply_today": 0, "apply_month_total": 29,
-            "unreceived_today": 0, "unreceived_total": 11,
-            "supplement_today": 0, "supplement_total": 7,
-            "cancel_today": 0, "cancel_total": 0
-        },
-        "5월": {
-            "pipeline_today": 0, "pipeline_month_total": 332,
-            "apply_today": 0, "apply_month_total": 246,
-            "unreceived_today": 0, "unreceived_total": 63,
-            "supplement_today": 0, "supplement_total": 23,
-            "cancel_today": 0, "cancel_total": 0
-        },
-        "4월": {
-            "pipeline_today": 0, "pipeline_month_total": 182,
-            "apply_today": 0, "apply_month_total": 146,
-            "unreceived_today": 0, "unreceived_total": 16,
-            "supplement_today": 0, "supplement_total": 20,
-            "cancel_today": 0, "cancel_total": 0
-        },
-        "3월": {
-            "pipeline_today": 0, "pipeline_month_total": 279,
-            "apply_today": 0, "apply_month_total": 249,
-            "unreceived_today": 0, "unreceived_total": 20,
-            "supplement_today": 0, "supplement_total": 10,
-            "cancel_today": 0, "cancel_total": 0
-        },
-        "2월": {
-            "pipeline_today": 0, "pipeline_month_total": 52,
-            "apply_today": 0, "apply_month_total": 27,
-            "unreceived_today": 0, "unreceived_total": 25,
-            "supplement_today": 0, "supplement_total": 0,
-            "cancel_today": 0, "cancel_total": 0
-        },
-        "1월": {
-            "pipeline_today": 0, "pipeline_month_total": 72,
-            "apply_today": 0, "apply_month_total": 0,
-            "unreceived_today": 0, "unreceived_total": 68,
-            "supplement_today": 0, "supplement_total": 4,
-            "cancel_today": 0, "cancel_total": 0
-        }
-    }
-
-    current_month_data = monthly_indicator_by_month.get(selected_month_label, monthly_indicator_by_month["8월"])
+    # 월별 지표 데이터를 계산된 데이터로 교체
+    current_month_data = calculate_monthly_summary(df_pole_pipeline, df_pole_apply, selected_month_label)
 
     # 상단 요약 카드
     if is_current_month_selected:
@@ -1377,30 +1370,31 @@ if viewer_option == '폴스타(테스트)':
         with metric_columns[1]:
             st.metric(label="지원신청", value=f"{current_month_data['apply_month_total']} 건")
 
-    # 상세 내역 (Expander)
+    # 상세 내역 부분도 계산된 데이터 사용
     with st.expander("상세 내역 보기"):
         detail_row_index = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+        
         if selected_month_label == "8월":
+            # 8월은 현재 월이므로 실제 데이터 사용
             detailed_second_data = {
-                '전월 이월수량': [86, 54, 32, 0],
-                '당일': [current_month_data['pipeline_today'], current_month_data['apply_today'], 1, 0],
-                '당월_누계': [current_month_data['pipeline_month_total'], current_month_data['apply_month_total'], 45, 2]
+                '전월 이월수량': [86, 54, 32, 0],  # 이 부분은 별도 계산 필요
+                '당일': [0, 0, 0, 0],  # 당일 데이터는 별도 계산 필요
+                '당월_누계': [current_month_data['pipeline_month_total'], 
+                           current_month_data['apply_month_total'], 
+                           current_month_data['pak_month_total'], 
+                           current_month_data['cancel_month_total']]
             }
-            detailed_third_data = [
-                [2, 2, 4, 0, 6, 3],  # 당일
-                [45, 30, 28, 15, 55, 25]  # 누계
-            ]
         else:
+            # 과거 월은 누계 데이터만 표시
             detailed_second_data = {
                 '전월 이월수량': [0, 0, 0, 0],
                 '당일': [0, 0, 0, 0],
-                '당월_누계': [current_month_data['pipeline_month_total'], current_month_data['apply_month_total'], 0, 0]
+                '당월_누계': [current_month_data['pipeline_month_total'], 
+                           current_month_data['apply_month_total'], 
+                           current_month_data['pak_month_total'], 
+                           current_month_data['cancel_month_total']]
             }
-            detailed_third_data = [
-                [0, 0, 0, 0, 0, 0],  # 당일
-                [current_month_data['unreceived_total'], 0, current_month_data['supplement_total'], 0, current_month_data['cancel_total'], 0]  # 누계
-            ]
-
+        
         second_detail_df = pd.DataFrame(detailed_second_data, index=detail_row_index)
         second_detail_html = second_detail_df.to_html(classes='custom_table', border=0, escape=False)
 
@@ -1411,34 +1405,20 @@ if viewer_option == '폴스타(테스트)':
         with expander_col2:
             st.subheader("미접수/보완/취소 현황 (상세)")
 
-            unreceived_df = pd.DataFrame(
-                [detailed_third_data[0][0:2], detailed_third_data[1][0:2]],
-                columns=['서류미비', '대기요청'],
-                index=['당일', '누계']
-            )
-            supplement_df = pd.DataFrame(
-                [detailed_third_data[0][2:4], detailed_third_data[1][2:4]],
-                columns=['서류미비', '미처리'],
-                index=['당일', '누계']
-            )
-            cancel_df = pd.DataFrame(
-                [detailed_third_data[0][4:6], detailed_third_data[1][4:6]],
-                columns=['단순취소', '내부지원전환'],
-                index=['당일', '누계']
-            )
-
-            st.markdown("<p class='detail-subheader'>미접수량</p>", unsafe_allow_html=True)
-            st.markdown(unreceived_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
-
-            st.markdown("<p class='detail-subheader'>보완 잔여 수량</p>", unsafe_allow_html=True)
-            st.markdown(supplement_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
-
-            st.markdown("<p class='detail-subheader'>취소</p>", unsafe_allow_html=True)
-            st.markdown(cancel_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
+            # 간단한 테이블로 표시
+            detail_summary_df = pd.DataFrame({
+                '구분': ['미접수', '보완', '취소'],
+                '수량': [
+                    current_month_data['unreceived_total'],
+                    current_month_data['supplement_total'],
+                    current_month_data['cancel_total']
+                ]
+            })
+            st.markdown(detail_summary_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # 폴스타 월별 요약 (표 + 스타일)
+    # 폴스타 월별 요약 (표 + 스타일) - 기존 스타일 유지
     st.subheader("폴스타 월별 요약")
 
     summary_row_index = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
