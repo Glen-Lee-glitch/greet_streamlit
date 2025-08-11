@@ -11,7 +11,7 @@ from shapely.geometry import shape
 from shapely.ops import unary_union
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pytz
 
 # --- 페이지 설정 및 기본 스타일 ---
@@ -1067,15 +1067,15 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         )
         # --- 데이터프레임 생성 ---
         corp_df_data = {
-            '7월': ['', july_pipeline, july_apply, july_distribute],
-            '8월': ['', august_pipeline, august_apply, august_distribute]
+            '7월': ['', july_pipeline, july_apply, '', july_distribute],
+            '8월': ['', august_pipeline, august_apply, '', august_distribute]
         }
-        corp_df = pd.DataFrame(corp_df_data, index=['타겟 (진척률)', '파이프라인', '지원신청', '지급신청'])
+        corp_df = pd.DataFrame(corp_df_data, index=['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청'])
         corp_df['계'] = corp_df['7월'] + corp_df['8월']
 
         # --- '타겟 (진척률)' 데이터 계산 ---
         q3_target_corp = 1500
-        ttl_apply_corp = corp_df.loc['지원신청', '계']
+        ttl_apply_corp = corp_df.loc['지원신청완료', '계']
         progress_rate_corp = ttl_apply_corp / q3_target_corp if q3_target_corp > 0 else 0
         formatted_progress_corp = f"{progress_rate_corp:.2%}"
         target_text = f"{q3_target_corp} ({formatted_progress_corp})"
@@ -1090,7 +1090,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             lambda m: m.group(1) + 
                         re.sub(
                             r'<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>\s*<td([^>]*)>([^<]*)</td>',
-                            f'<td\\1 colspan="3" style="background-color:#e0f7fa;">{target_text}</td>',
+                            f'<td\\1 colspan="5" style="background-color:#e0f7fa;">{target_text}</td>',
                             m.group(2), count=1
                         ) + 
                         m.group(3),
@@ -1716,29 +1716,37 @@ if viewer_option == '분석':
                 st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
                 st.header("🔍 데이터 필터")
                 
+                default_end_date = pd.to_datetime('2025-08-06').date()
+                
                 # 1. 기간 필터
                 date_col = next((col for col in df_original.columns if '신청일자' in col), None)
                 min_date = df_original[date_col].min().date()
                 max_date = df_original[date_col].max().date()
-                
-                date_range_value = st.date_input(
-                    "신청일자 범위",
-                    value=(min_date, max_date),
-                    min_value=min_date,
-                    max_value=max_date,
-                    key="date_range_filter_v2"
-                )
 
-                # 단일/범위 입력 모두 안전 처리
-                if isinstance(date_range_value, (list, tuple)) and len(date_range_value) == 2:
-                    start_date, end_date = date_range_value
-                else:
-                    # 단일 날짜가 반환되거나 비정상 입력 시 방어적 기본값 적용
-                    start_date = date_range_value if date_range_value else min_date
-                    end_date = start_date
+                # 시작일과 종료일을 분리해서 입력
+                date_col1, date_col2 = st.columns(2)
 
-                # 역순 선택 방지: 시작일이 종료일보다 늦으면 스왑
+                with date_col1:
+                    start_date = st.date_input(
+                        "시작일",
+                        value=min_date,
+                        min_value=min_date,
+                        max_value=max_date,
+                        key="start_date_filter"
+                    )
+
+                with date_col2:
+                    end_date = st.date_input(
+                        "종료일",
+                        value=default_end_date,
+                        min_value=min_date,
+                        max_value=max_date,
+                        key="end_date_filter"
+                    )
+
+                # 날짜 유효성 검사 및 보정
                 if start_date > end_date:
+                    st.warning("⚠️ 시작일이 종료일보다 늦습니다. 자동으로 교체합니다.")
                     start_date, end_date = end_date, start_date
 
                 # 2. 차종 필터
@@ -1908,31 +1916,6 @@ if viewer_option == '분석':
                             hide_index=True
                         )
                     
-                    # 작성자별 차종 분석
-                    st.markdown("---")
-                    st.subheader("작성자별 차종 분석")
-                    
-                    if not writer_counts.empty:
-                        # 상위 5명 작성자의 차종별 분석
-                        top_5_writers = writer_counts.head(5).index
-                        writer_model_data = df_filtered[df_filtered['작성자'].isin(top_5_writers)]
-                        
-                        if not writer_model_data.empty:
-                            writer_model_cross = pd.crosstab(
-                                writer_model_data['작성자'], 
-                                writer_model_data['분류된_차종'],
-                                margins=True,
-                                margins_name='합계'
-                            )
-                            
-                            st.dataframe(
-                                writer_model_cross,
-                                use_container_width=True
-                            )
-                        else:
-                            st.info("분석할 데이터가 없습니다.")
-                    else:
-                        st.info("작성자 데이터가 없습니다.")
                 else:
                     st.warning("⚠️ '작성자' 컬럼을 찾을 수 없습니다.")
                     st.info("현재 파일의 컬럼명:", list(df_filtered.columns))
