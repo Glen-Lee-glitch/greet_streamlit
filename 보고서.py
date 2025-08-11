@@ -1936,14 +1936,24 @@ if viewer_option == '분석':
                     col1, col2 = st.columns(2)
                     with col1:
                         general_status = filtered.get('현황_일반', 0)
-                        if pd.isna(general_status):
+                        try:
+                            if pd.isna(general_status) or general_status == '' or str(general_status).strip() == '':
+                                general_status = 0
+                            else:
+                                general_status = int(float(str(general_status).replace(',', '')))
+                        except (ValueError, TypeError):
                             general_status = 0
-                        st.metric(label="일반 현황", value=f"{int(general_status):,} 대")
+                        st.metric(label="일반 현황", value=f"{general_status:,} 대")
                     with col2:
                         priority_status = filtered.get('현황_우선', 0)
-                        if pd.isna(priority_status):
+                        try:
+                            if pd.isna(priority_status) or priority_status == '' or str(priority_status).strip() == '':
+                                priority_status = 0
+                            else:
+                                priority_status = int(float(str(priority_status).replace(',', '')))
+                        except (ValueError, TypeError):
                             priority_status = 0
-                        st.metric(label="우선 현황", value=f"{int(priority_status):,} 대")
+                        st.metric(label="우선 현황", value=f"{priority_status:,} 대")
 
                     st.markdown("---")
 
@@ -1964,11 +1974,19 @@ if viewer_option == '분석':
                     col_idx = 0
                     for model_name, col_name in model_cols.items():
                         if col_name in filtered.index:
+                            # 수정된 코드
                             subsidy_value = filtered[col_name]
-                            if pd.notna(subsidy_value) and subsidy_value > 0:
-                                with model_info_cols[col_idx % 3]:
-                                    st.metric(label=model_name, value=f"{int(subsidy_value):,} 만 원")
-                                    col_idx += 1
+                            try:
+                                if pd.notna(subsidy_value) and subsidy_value != '' and str(subsidy_value).strip() != '':
+                                    # 숫자로 변환 가능한지 확인
+                                    numeric_value = float(str(subsidy_value).replace(',', ''))
+                                    if numeric_value > 0:
+                                        with model_info_cols[col_idx % 3]:
+                                            st.metric(label=model_name, value=f"{int(numeric_value):,} 만 원")
+                                            col_idx += 1
+                            except (ValueError, TypeError):
+                                # 숫자로 변환할 수 없는 경우 건너뛰기
+                                continue
 
                     if col_idx == 0:
                         st.info("해당 지역의 모델별 보조금 정보가 없습니다.")
