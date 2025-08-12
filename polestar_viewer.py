@@ -91,15 +91,13 @@ def show_polestar_viewer(data, today_kst):
     st.title(f"📊 폴스타 2025 보고서 - {today_kst.strftime('%Y년 %m월 %d일')}")
     st.markdown("---")
     
-    # 현황 요약 (날짜 선택)
-    header_col, select_col = st.columns([3, 1])
-    with header_col:
-        st.subheader("📈 현황 요약")
-    with select_col:
-        # 오늘 날짜를 기본값으로 설정 (today_kst 대신 datetime.now() 사용)
-        from datetime import datetime
-        default_date = datetime.now().date()
-        
+    # 오늘 날짜를 기본값으로 설정 (today_kst 대신 datetime.now() 사용)
+    from datetime import datetime
+    default_date = datetime.now().date()
+    
+    d_col, margin_col = st.columns([5, 5])
+    with d_col:
+
         # 날짜 선택 위젯 (최근 30일 범위에서 선택 가능)
         selected_date = st.date_input(
             '날짜 선택',
@@ -112,60 +110,77 @@ def show_polestar_viewer(data, today_kst):
     # 선택된 날짜의 데이터 계산
     current_date_data = calculate_daily_summary(df_pole_pipeline, df_pole_apply, selected_date)
     
-    # 선택된 날짜가 현재 월인지 확인
-    selected_month = selected_date.month
-    current_month = today_kst.month
-    is_current_month_selected = (selected_month == current_month)
+    # 전일 데이터 계산
+    yesterday_date = selected_date - timedelta(days=1)
+    yesterday_data = calculate_daily_summary(df_pole_pipeline, df_pole_apply, yesterday_date)
+    
+    # 누적 총계 계산 (6월 1일부터 선택된 날짜까지)
+    from datetime import datetime as dt
+    year = selected_date.year
+    cumulative_start = dt(year, 6, 1).date()
+    
+    # 누적 파이프라인 계산
+    total_pipeline = 0
+    if not df_pole_pipeline.empty and '날짜' in df_pole_pipeline.columns:
+        cumulative_pipeline = df_pole_pipeline[
+            (df_pole_pipeline['날짜'].dt.date >= cumulative_start) & 
+            (df_pole_pipeline['날짜'].dt.date <= selected_date)
+        ]
+        total_pipeline = cumulative_pipeline['파이프라인'].sum()
+    
+    # 누적 지원신청 및 기타 계산
+    total_apply = total_unreceived = total_supplement = total_cancel = 0
+    if not df_pole_apply.empty and '날짜' in df_pole_apply.columns:
+        cumulative_apply = df_pole_apply[
+            (df_pole_apply['날짜'].dt.date >= cumulative_start) & 
+            (df_pole_apply['날짜'].dt.date <= selected_date)
+        ]
+        total_apply = cumulative_apply['지원신청'].sum()
+        total_unreceived = cumulative_apply['미신청건'].sum()
+        total_supplement = cumulative_apply['보완'].sum()
+        total_cancel = cumulative_apply['접수후취소'].sum()
+    
+    # 변동량 계산
+    delta_pipeline = current_date_data['pipeline_today'] - yesterday_data['pipeline_today']
+    delta_apply = current_date_data['apply_today'] - yesterday_data['apply_today']
+    delta_unreceived = current_date_data['unreceived_today'] - yesterday_data['unreceived_today']
+    delta_supplement = current_date_data['supplement_today'] - yesterday_data['supplement_today']
+    delta_cancel = current_date_data['cancel_today'] - yesterday_data['cancel_today']
+    
+    def format_delta(value):
+        if value > 0: return f'<span style="color:blue;">+{value}</span>'
+        elif value < 0: return f'<span style="color:red;">{value}</span>'
+        return str(value)
 
-    # 상단 요약 카드 - 항상 당일 데이터와 월 누계를 표시
-    metric_columns = st.columns(5)
-    with metric_columns[0]:
-        st.metric(label="파이프라인", value=f"{current_date_data['pipeline_month_total']} 건", delta=f"{current_date_data['pipeline_today']} 건 (당일)")
-    with metric_columns[1]:
-        st.metric(label="지원신청", value=f"{current_date_data['apply_month_total']} 건", delta=f"{current_date_data['apply_today']} 건 (당일)")
-    with metric_columns[2]:
-        st.metric(label="미접수", value=f"{current_date_data['unreceived_total']} 건", delta=f"{current_date_data['unreceived_today']} 건 (당일)", delta_color="inverse")
-    with metric_columns[3]:
-        st.metric(label="보완필요", value=f"{current_date_data['supplement_total']} 건", delta=f"{current_date_data['supplement_today']} 건 (당일)", delta_color="inverse")
-    with metric_columns[4]:
-        st.metric(label="취소", value=f"{current_date_data['cancel_total']} 건", delta=f"{current_date_data['cancel_today']} 건 (당일)", delta_color="inverse")
+    col1, col2 = st.columns([5, 5])
+    with col1:
+        st.subheader("📊 폴스타 금일/전일 요약")
 
-    # 상세 내역 부분 - 선택된 날짜에 맞는 데이터 사용
-    with st.expander("상세 내역 보기"):
-        detail_row_index = ['지원신청', '폴스타 내부지원', '접수 후 취소']
+        table_data = pd.DataFrame({
+            ('지원', '파이프라인', '파이프라인 건수'): [yesterday_data['pipeline_today'], current_date_data['pipeline_today'], total_pipeline],
+            ('지원', '신청', '지원신청 건수'): [yesterday_data['apply_today'], current_date_data['apply_today'], total_apply],
+            ('지원', '신청', '미접수건'): [yesterday_data['unreceived_today'], current_date_data['unreceived_today'], total_unreceived],
+            ('지원', '신청', '보완필요건'): [yesterday_data['supplement_today'], current_date_data['supplement_today'], total_supplement],
+            ('지원', '신청', '취소건'): [yesterday_data['cancel_today'], current_date_data['cancel_today'], total_cancel]
+        }, index=[f'전일 ({yesterday_date})', f'금일 ({selected_date})', '누적 총계 (8월~)'])
         
-        # 선택된 날짜가 속한 월의 데이터 사용
-        detailed_second_data = {
-            '전월 이월수량': [0, 0, 0],  # 전월 이월수량은 별도 계산 필요
-            '당일': [current_date_data['apply_today'], 
-                    current_date_data['pak_month_total'] - (current_date_data['apply_month_total'] - current_date_data['apply_today']), 
-                    current_date_data['cancel_today']],
-            '당월_누계': [current_date_data['apply_month_total'], 
-                        current_date_data['pak_month_total'], 
-                        current_date_data['cancel_month_total']]
-        }
+        # 변동(Delta) 행 추가
+        table_data.loc['변동'] = [
+            format_delta(delta_pipeline),
+            format_delta(delta_apply),
+            format_delta(delta_unreceived),
+            format_delta(delta_supplement),
+            format_delta(delta_cancel)
+        ]
         
-        second_detail_df = pd.DataFrame(detailed_second_data, index=detail_row_index)
-        second_detail_html = second_detail_df.to_html(classes='custom_table', border=0, escape=False)
-
-        expander_col1, expander_col2 = st.columns(2)
-        with expander_col1:
-            st.subheader(f"{selected_date.strftime('%Y년 %m월 %d일')} 현황 (상세)")
-            st.markdown(second_detail_html, unsafe_allow_html=True)
-        with expander_col2:
-            st.subheader("미접수/보완 현황 (상세)")
-
-            # 간단한 테이블로 표시
-            detail_summary_df = pd.DataFrame({
-                '구분': ['미접수', '보완'],
-                '수량': [
-                    current_date_data['unreceived_total'],
-                    current_date_data['supplement_total']
-                ]
-            })
-            st.markdown(detail_summary_df.to_html(classes='custom_table', border=0, escape=False), unsafe_allow_html=True)
-
-    st.markdown("---")
+        html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
+        st.markdown(html_table, unsafe_allow_html=True)
+        
+        st.markdown("---")
+    with col2:
+        pass
+    
+    
 
     # 폴스타 월별 요약 (표 + 스타일) - 기존 스타일 유지
     st.subheader("폴스타 월별 요약")
