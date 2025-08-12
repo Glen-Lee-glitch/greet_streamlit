@@ -363,8 +363,8 @@ def show_polestar_viewer(data, today_kst):
         
         # col3에서 사용한 월별 데이터를 그대로 활용 (지원신청 컬럼)
         # 1월~7월까지의 지원신청 데이터
-        months_to_show = [1, 2, 3, 4, 5, 6, 7]
-        apply_counts = [0, 27, 249, 146, 246, 29, 83]  # 월별 지원신청 수 (monthly_data에서 가져옴)
+        months_to_show = [2, 3, 4, 5, 6, 7]
+        apply_counts = [27, 249, 146, 246, 29, 83]  # 월별 지원신청 수 (monthly_data에서 가져옴)
         
         # 차트용 데이터프레임 생성
         polestar_chart_df = pd.DataFrame(
