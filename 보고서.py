@@ -147,15 +147,27 @@ def load_and_process_data(region_counts, geojson_path):
             
             # Case 2 & 3: '수원시' -> '경기도 수원시'와 같은 시군구명 매칭
             if not matched:
-                # get_base_city_name을 df_6의 지역명에도 적용하여 키 일관성 확보
                 base_region = get_base_city_name(region_str)
+
+                # 1) 기존: '... {시}'로 끝나는 키 우선 매칭
                 for key in final_counts.keys():
                     if key.endswith(" " + base_region):
                         final_counts[key] += count
                         unmatched_regions.discard(region_str)
                         matched = True
-                        # 하나의 시군구는 하나의 시도에만 속하므로 break
                         break
+
+                # 2) 보강: 키의 시 부분만 추출해서 동일한지 비교 (예: '경기도 부천시소사구' → '부천시')
+                if not matched:
+                    for key in final_counts.keys():
+                        # '경기도 부천시소사구' → '부천시소사구' → '부천시'
+                        key_body = key.split(" ", 1)[1] if " " in key else key
+                        key_city_base = get_base_city_name(key_body)
+                        if key_city_base == base_region:
+                            final_counts[key] += count
+                            unmatched_regions.discard(region_str)
+                            matched = True
+                            break
         
         # --- 5. 최종 GeoJSON 생성 ---
         merged_features = []

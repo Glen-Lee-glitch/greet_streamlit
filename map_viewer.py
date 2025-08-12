@@ -57,12 +57,22 @@ def apply_counts_to_map_optimized(_preprocessed_map, _region_counts):
             matched_count = region_count_map[region_name]
             unmatched_regions.discard(region_name)
         else:
-            # 부분 매칭 (최적화된 방식)
+            # 1) 기존: '... {시}'로 끝나는 경우
             for region, count in region_count_map.items():
                 if region_name.endswith(" " + region):
                     matched_count = count
                     unmatched_regions.discard(region)
                     break
+
+            # 2) 보강: 지도 키의 시 부분만 추출해서 동일 시로 매칭
+            if matched_count == 0:
+                # '경기도 부천시소사구' → '부천시소사구' → '부천시'
+                key_body = region_name.split(" ", 1)[1] if " " in region_name else region_name
+                m = re.search(r'(.+?시)', str(key_body))
+                map_city_base = m.group(1) if m else key_body
+                if map_city_base in region_count_map:
+                    matched_count = region_count_map[map_city_base]
+                    unmatched_regions.discard(map_city_base)
         
         new_feature['properties']['value'] = matched_count
         final_geojson['features'].append(new_feature)
