@@ -288,19 +288,67 @@ def show_polestar_viewer(data, today_kst):
             polestar_df = pd.DataFrame(q2_data, index=summary_row_index)
             
         elif polestar_period_option == '전체':
-            # 전체 분기별 요약 표시
+            # 전체 이중헤더 형태로 표시 - 수동 HTML 생성
             q1_total = [sum(monthly_data[f'{m}월'][i] for m in [1, 2, 3]) for i in range(4)]
             q2_total = [sum(monthly_data[f'{m}월'][i] for m in [4, 5, 6]) for i in range(4)]
             q3_total = [sum(monthly_data[f'{m}월'][i] for m in [7, 8, 9]) for i in range(4)]
             total_all = [q1_total[i] + q2_total[i] + q3_total[i] for i in range(4)]
             
-            polestar_summary_data = {
-                'Q1': q1_total,
-                'Q2': q2_total,
-                'Q3': q3_total,
-                '계': total_all
-            }
-            polestar_df = pd.DataFrame(polestar_summary_data, index=summary_row_index)
+            # 수동으로 이중헤더 HTML 테이블 생성
+            html_polestar = '''
+            <table class="custom_table" border="0">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="background-color: #f7f7f9;">항목</th>
+                        <th colspan="4" style="background-color: #ffe0b2;">Q1</th>
+                        <th colspan="4" style="background-color: #ffcc9c;">Q2</th>
+                        <th colspan="4" style="background-color: #ffb3ba;">Q3</th>
+                        <th rowspan="2" style="background-color: #c7ceea;">총계</th>
+                    </tr>
+                    <tr>
+                        <th style="background-color: #fff2cc;">1월</th>
+                        <th style="background-color: #fff2cc;">2월</th>
+                        <th style="background-color: #fff2cc;">3월</th>
+                        <th style="background-color: #ffe0b2;">계</th>
+                        <th style="background-color: #ffe5cc;">4월</th>
+                        <th style="background-color: #ffe5cc;">5월</th>
+                        <th style="background-color: #ffe5cc;">6월</th>
+                        <th style="background-color: #ffcc9c;">계</th>
+                        <th style="background-color: #ffd6dd;">7월</th>
+                        <th style="background-color: #ffd6dd;">8월</th>
+                        <th style="background-color: #ffd6dd;">9월</th>
+                        <th style="background-color: #ffb3ba;">계</th>
+                    </tr>
+                </thead>
+                <tbody>'''
+            
+            # 각 행 데이터 추가
+            for i, row_name in enumerate(summary_row_index):
+                row_class = 'style="background-color: #fafafa;"' if i % 2 == 1 else ''
+                html_polestar += f'''
+                    <tr {row_class}>
+                        <th style="background-color: #f7f7f9;">{row_name}</th>
+                        <td>{monthly_data["1월"][i]}</td>
+                        <td>{monthly_data["2월"][i]}</td>
+                        <td>{monthly_data["3월"][i]}</td>
+                        <td style="background-color: #fff2e6;">{q1_total[i]}</td>
+                        <td>{monthly_data["4월"][i]}</td>
+                        <td>{monthly_data["5월"][i]}</td>
+                        <td>{monthly_data["6월"][i]}</td>
+                        <td style="background-color: #fff7e6;">{q2_total[i]}</td>
+                        <td>{monthly_data["7월"][i]}</td>
+                        <td>{monthly_data["8월"][i]}</td>
+                        <td>{monthly_data["9월"][i]}</td>
+                        <td style="background-color: #ffe6e8;">{q3_total[i]}</td>
+                        <td style="background-color: #e6e8f0;">{total_all[i]}</td>
+                    </tr>'''
+            
+            html_polestar += '''
+                </tbody>
+            </table>'''
+            
+            # 직접 HTML을 출력하도록 설정
+            polestar_df = None
             
         elif polestar_period_option.endswith('월'):
             # 개별 월 선택
@@ -319,27 +367,13 @@ def show_polestar_viewer(data, today_kst):
                 polestar_df = pd.DataFrame({'선택 월': [0, 0, 0, 0]}, index=summary_row_index)
         
         # HTML 변환 및 스타일링
-        html_polestar = polestar_df.to_html(classes='custom_table', border=0, escape=False)
-        
-        # 리테일과 동일한 스타일링 적용
-        if polestar_period_option == '전체':
-            # Q1, Q2, Q3 컬럼 헤더 하이라이트
-            html_polestar = re.sub(
-                r'(<th[^>]*>Q1</th>)',
-                r'<th style="background-color: #ffe0b2;">Q1</th>',
-                html_polestar
-            )
-            html_polestar = re.sub(
-                r'(<th[^>]*>Q2</th>)',
-                r'<th style="background-color: #ffe0b2;">Q2</th>',
-                html_polestar
-            )
-            html_polestar = re.sub(
-                r'(<th[^>]*>Q3</th>)',
-                r'<th style="background-color: #ffe0b2;">Q3</th>',
-                html_polestar
-            )
+        if polestar_period_option == '전체' and polestar_df is None:
+            # 이미 HTML이 생성된 경우 (전체 선택 시)
+            st.markdown(html_polestar, unsafe_allow_html=True)
         else:
+            # 일반적인 경우 pandas DataFrame을 HTML로 변환
+            html_polestar = polestar_df.to_html(classes='custom_table', border=0, escape=False)
+            
             # "계" 컬럼 하이라이트 (개별 분기/월 선택 시)
             html_polestar = re.sub(
                 r'(<th[^>]*>계</th>)',
@@ -354,8 +388,8 @@ def show_polestar_viewer(data, today_kst):
                 html_polestar,
                 flags=re.DOTALL
             )
-        
-        st.markdown(html_polestar, unsafe_allow_html=True)
+            
+            st.markdown(html_polestar, unsafe_allow_html=True)
     
     with col4:
         # 폴스타 월별 추이 그래프 (지원신청 데이터 기준)
