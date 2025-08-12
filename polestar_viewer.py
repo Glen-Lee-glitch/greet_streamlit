@@ -96,7 +96,7 @@ def show_polestar_viewer(data, today_kst):
     from datetime import datetime
     default_date = datetime.now().date()
     
-    d_col, margin_col = st.columns([5, 5])
+    d_col, margin_col = st.columns([4, 6])
     with d_col:
 
         # 날짜 선택 위젯 (최근 30일 범위에서 선택 가능)
@@ -153,7 +153,7 @@ def show_polestar_viewer(data, today_kst):
         elif value < 0: return f'<span style="color:red;">{value}</span>'
         return str(value)
 
-    col1, col2 = st.columns([5, 5])
+    col1, col2 = st.columns([4, 6])
     with col1:
         st.subheader("📊 폴스타 금일/전일 요약")
 
@@ -213,7 +213,7 @@ def show_polestar_viewer(data, today_kst):
     st.markdown("<hr style='margin-top:1rem;margin-bottom:1rem;'>", unsafe_allow_html=True)
 
     # 폴스타 월별 요약을 리테일 형태로 변경
-    col3, col4 = st.columns([5, 5])
+    col3, col4 = st.columns([4, 6])
     
     with col3:
         # 폴스타 월별 요약 헤더 및 기간 선택
