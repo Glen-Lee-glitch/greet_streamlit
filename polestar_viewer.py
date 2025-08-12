@@ -179,8 +179,6 @@ def show_polestar_viewer(data, today_kst):
         st.markdown("---")
     with col2:
         pass
-    
-    
 
     # 폴스타 월별 요약 (표 + 스타일) - 기존 스타일 유지
     st.subheader("폴스타 월별 요약")

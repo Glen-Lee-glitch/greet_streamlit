@@ -16,6 +16,7 @@ import pytz
 
 # 별도 뷰어 모듈 임포트
 from polestar_viewer import show_polestar_viewer
+from map_viewer import show_map_viewer
 
 # --- 페이지 설정 및 기본 스타일 ---
 st.set_page_config(layout="wide")
@@ -189,27 +190,6 @@ def load_memo():
             return f.read()
     except FileNotFoundError:
         return ""
-
-def create_korea_map_data():
-    """간단한 한국 지도 데이터를 생성합니다."""
-    # 한국의 주요 지역 데이터 (간소화된 버전)
-    import numpy as np
-    korea_data = {
-        'region': [
-            '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', '울산광역시',
-            '세종특별자치시', '경기도', '강원도', '충청북도', '충청남도', '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도'
-        ],
-        'lat': [
-            37.5665, 35.1796, 35.8714, 37.4563, 35.1595, 36.3504, 35.5384,
-            36.4870, 37.4138, 37.8228, 36.8000, 36.5184, 35.7175, 34.8679, 36.4919, 35.4606, 33.4996
-        ],
-        'lon': [
-            126.9780, 129.0756, 128.6014, 126.7052, 126.8526, 127.3845, 129.3114,
-            127.2822, 127.5183, 128.1555, 127.7000, 126.8000, 127.1530, 126.9910, 128.8889, 128.2132, 126.5312
-        ],
-        'value': np.random.randint(10, 1000, size=17).tolist()  # 10~999 사이 랜덤값
-    }
-    return pd.DataFrame(korea_data)
 
 # --- 데이터 로딩 ---
 data = load_data()
@@ -1318,147 +1298,10 @@ if viewer_option == '폴스타':
 
 # --- 지도 뷰어 ---
 if viewer_option == '지도(테스트)':
-    # --- 지도 관련 라이브러리 임포트 ---
-    import json
-    import pandas as pd
-    import plotly.express as px
-    import re
+    show_map_viewer(data, df_6)
 
-    @st.cache_data
-    def load_preprocessed_map(geojson_path):
-        """
-        미리 병합된 가벼운 GeoJSON 파일을 로드합니다.
-        이 함수는 무거운 지오메트리 연산을 수행하지 않습니다.
-        """
-        try:
-            with open(geojson_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            st.error(f"'{geojson_path}' 파일을 찾을 수 없습니다. 먼저 preprocess_map.py를 실행해주세요.")
-            return None
-        except Exception as e:
-            st.error(f"지도 데이터 로드 중 오류: {e}")
-            return None
 
-    @st.cache_data
-    def get_filtered_data_optimized(selected_quarter):
-        """사전 계산된 분기별 데이터에서 바로 반환"""
-        quarterly_counts = data.get("quarterly_region_counts", {})
-        return quarterly_counts.get(selected_quarter, {})
-        
-    @st.cache_data
-    def apply_counts_to_map_optimized(_preprocessed_map, _region_counts):
-        """메모리 효율적인 GeoJSON 매핑"""
-        if not _preprocessed_map:
-            return None, pd.DataFrame()
-
-        # 깊은 복사 대신 참조로 처리하고 필요한 부분만 수정
-        final_geojson = {
-            'type': _preprocessed_map['type'],
-            'features': []
-        }
-        
-        # 지역별 카운트 맵 생성 (한 번만)
-        region_count_map = _region_counts
-        unmatched_regions = set(_region_counts.keys())
-        
-        for feature in _preprocessed_map['features']:
-            new_feature = {
-                'type': feature['type'],
-                'geometry': feature['geometry'],  # 지오메트리는 참조만
-                'properties': feature['properties'].copy()  # 속성만 복사
-            }
-            
-            region_name = new_feature['properties']['sggnm']
-            matched_count = 0
-            
-            # 직접 매칭
-            if region_name in region_count_map:
-                matched_count = region_count_map[region_name]
-                unmatched_regions.discard(region_name)
-            else:
-                # 부분 매칭 (최적화된 방식)
-                for region, count in region_count_map.items():
-                    if region_name.endswith(" " + region):
-                        matched_count = count
-                        unmatched_regions.discard(region)
-                        break
-            
-            new_feature['properties']['value'] = matched_count
-            final_geojson['features'].append(new_feature)
-        
-        unmatched_df = pd.DataFrame({
-            '지역구분': list(unmatched_regions),
-            '카운트': [region_count_map.get(r, 0) for r in unmatched_regions]
-        })
-
-        return final_geojson, unmatched_df
-
-    @st.cache_data
-    def create_korea_map(_merged_geojson, map_style, color_scale_name):
-        """Plotly 지도를 생성합니다. (캐시 적용)"""
-        if not _merged_geojson or not _merged_geojson['features']: 
-            return None, pd.DataFrame()
-        
-        plot_df = pd.DataFrame([f['properties'] for f in _merged_geojson['features']])
-        if not plot_df.empty and plot_df['value'].max() > 0:
-            bins = [-1, 0, 15, 60, 100, 200, 500, 1000, 3000, float('inf')]
-            labels = ["0", "1-15", "16-60", "61-100", "101-200", "201-500", "501-1000", "1001-3000", "3001+"]
-        else:
-            bins = [-1, 0, float('inf')]
-            labels = ["0", "1+"]
-        plot_df['category'] = pd.cut(plot_df['value'], bins=bins, labels=labels, right=True).astype(str)
-        colors = px.colors.sequential.__getattribute__(color_scale_name)
-        color_map = {label: colors[i % len(colors)] for i, label in enumerate(labels)}
-        fig = px.choropleth_mapbox(
-            plot_df, geojson=_merged_geojson, locations='sggnm', featureidkey='properties.sggnm',
-            color='category', color_discrete_map=color_map, category_orders={'category': labels},
-            mapbox_style=map_style, zoom=6, center={'lat': 36.5, 'lon': 127.5}, opacity=0.7,
-            labels={'category': '신청 건수', 'sggnm': '지역'}, hover_name='sggnm', hover_data={'value': True}
-        )
-        fig.update_layout(height=700, margin={'r': 0, 't': 0, 'l': 0, 'b': 0}, legend_title_text='신청 건수 (구간)')
-        return fig, plot_df
-
-    # --- 대한민국 지도 시각화 실행 로직 ---
-    st.header("🗺️ 지도 시각화")
-    quarter_options = ['전체', '1Q', '2Q', '3Q']
-    selected_quarter = st.selectbox("분기 선택", quarter_options)
     
-    # 미리 처리된 가벼운 지도 파일을 로드 (캐시됨)
-    preprocessed_map = load_preprocessed_map('preprocessed_map.geojson')
-    
-    if preprocessed_map and not df_6.empty:
-        # 분기별 필터링된 데이터 가져오기 (캐시됨)
-        region_counts = get_filtered_data_optimized(selected_quarter)
-        
-        # 필터링된 데이터를 지도에 적용 (캐시됨)
-        final_geojson, unmatched_df = apply_counts_to_map_optimized(preprocessed_map, region_counts)
-        
-        st.sidebar.header("⚙️ 지도 설정")
-        map_styles = {"기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter"}
-        color_scales = ["Reds","Blues", "Greens", "Viridis"]
-        selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
-        selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
-        
-        # 지도 생성 (캐시됨)
-        result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
-        if result:
-            fig, df = result
-            st.plotly_chart(fig, use_container_width=True)
-            st.sidebar.metric("총 지역 수", len(df))
-            st.sidebar.metric("데이터가 있는 지역", len(df[df['value'] > 0]))
-            st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
-            st.subheader("데이터 테이블")
-            st.dataframe(df[['sggnm', 'value']].sort_values('value', ascending=False), use_container_width=True)
-            if not unmatched_df.empty:
-                st.subheader("⚠️ 매칭되지 않은 지역 목록")
-                st.dataframe(unmatched_df, use_container_width=True)
-            else:
-                st.success("✅ 모든 지역이 성공적으로 매칭되었습니다.")
-        else:
-            st.error("지도 생성 실패.")
-    else:
-        st.error("전처리된 지도(preprocessed_map.geojson) 또는 df_6 데이터를 찾을 수 없습니다.")
 
 # --- 지자체별 정리 ---
 if viewer_option == '분석':
