@@ -1,4 +1,5 @@
 import json
+import gzip
 from shapely.geometry import shape
 from shapely.ops import unary_union
 import pandas as pd
@@ -78,6 +79,36 @@ def create_preprocessed_map(geojson_path, output_path):
     except Exception as e:
         print(f"오류 발생: {e}")
 
+def compress_geojson(input_path, output_path):
+    """GeoJSON 파일을 압축하고 정밀도를 줄여 크기 최적화"""
+    with open(input_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    # 좌표 정밀도 줄이기 (소수점 4자리까지)
+    def round_coordinates(geometry):
+        if geometry['type'] == 'Polygon':
+            geometry['coordinates'] = [
+                [[round(coord[0], 4), round(coord[1], 4)] for coord in ring]
+                for ring in geometry['coordinates']
+            ]
+        elif geometry['type'] == 'MultiPolygon':
+            geometry['coordinates'] = [
+                [[[round(coord[0], 4), round(coord[1], 4)] for coord in ring]
+                 for ring in polygon]
+                for polygon in geometry['coordinates']
+            ]
+        return geometry
+    
+    for feature in data['features']:
+        feature['geometry'] = round_coordinates(feature['geometry'])
+    
+    # 압축된 파일로 저장
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, separators=(',', ':'), ensure_ascii=False)
+    
+    print(f"압축 완료: {input_path} -> {output_path}")
+
 if __name__ == "__main__":
     # 이 스크립트를 실행하여 preprocessed_map.geojson 파일을 생성합니다.
-    create_preprocessed_map('HangJeongDong_ver20250401.geojson', 'preprocessed_map.geojson')
+    # create_preprocessed_map('HangJeongDong_ver20250401.geojson', 'preprocessed_map.geojson')
+    compress_geojson('preprocessed_map.geojson', 'preprocessed_map_compressed.geojson')

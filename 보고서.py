@@ -225,6 +225,19 @@ df_6 = data.get("df_6", pd.DataFrame())  # 지역구분 데이터
 df_tesla_ev = data["df_tesla_ev"]
 preprocessed_map_geojson = data["preprocessed_map_geojson"]
 
+def load_quarterly_counts():
+    """분기별 카운트 데이터만 별도로 로드"""
+    try:
+        with open("preprocessed_data.pkl", "rb") as f:
+            data = pickle.load(f)
+        return data.get("quarterly_region_counts", {})
+    except:
+        return {}
+
+# 전역 변수로 한 번만 로드
+if 'quarterly_counts' not in st.session_state:
+    st.session_state.quarterly_counts = load_quarterly_counts()
+
 # --- 시간대 설정 ---
 KST = pytz.timezone('Asia/Seoul')
 today_kst = datetime.now(KST).date()
@@ -1555,64 +1568,55 @@ if viewer_option == '지도(테스트)':
             return None
 
     @st.cache_data
-    def get_filtered_data(_df_6, selected_quarter):
-        """
-        분기별로 필터링된 데이터를 반환합니다.
-        """
-        if selected_quarter == '전체':
-            return _df_6['지역구분'].value_counts().to_dict()
+    def get_filtered_data_optimized(selected_quarter):
+        """사전 계산된 분기별 데이터에서 바로 반환"""
+        quarterly_counts = data.get("quarterly_region_counts", {})
+        return quarterly_counts.get(selected_quarter, {})
         
-        filtered_df = _df_6.copy()
-        filtered_df['신청일자'] = pd.to_datetime(filtered_df['신청일자'], errors='coerce')
-        q_map = {'1Q': [1,2,3], '2Q': [4,5,6], '3Q': [7,8,9], '4Q': [10,11,12]}
-        if selected_quarter in q_map:
-            filtered_df = filtered_df[filtered_df['신청일자'].dt.month.isin(q_map[selected_quarter])]
-        
-        return filtered_df['지역구분'].value_counts().to_dict()
-
     @st.cache_data
-    def apply_counts_to_map(_preprocessed_map, _region_counts):
-        """
-        미리 병합된 GeoJSON에 count 데이터를 빠르게 매핑합니다.
-        """
+    def apply_counts_to_map_optimized(_preprocessed_map, _region_counts):
+        """메모리 효율적인 GeoJSON 매핑"""
         if not _preprocessed_map:
             return None, pd.DataFrame()
 
-        # 원본 GeoJSON을 복사하여 사용
-        final_geojson = _preprocessed_map.copy()
+        # 깊은 복사 대신 참조로 처리하고 필요한 부분만 수정
+        final_geojson = {
+            'type': _preprocessed_map['type'],
+            'features': []
+        }
         
-        # 지도에 있는 모든 지역의 count를 0으로 초기화
-        final_counts = {feat['properties']['sggnm']: 0 for feat in final_geojson['features']}
+        # 지역별 카운트 맵 생성 (한 번만)
+        region_count_map = _region_counts
         unmatched_regions = set(_region_counts.keys())
-
-        # df_6의 데이터를 지도에 매핑
-        for region, count in _region_counts.items():
-            region_str = str(region).strip()
-            matched = False
-            
-            # Case 1: '서울특별시'와 같은 시도명 직접 매칭
-            if region_str in final_counts:
-                final_counts[region_str] += count
-                unmatched_regions.discard(region_str)
-                matched = True
-            
-            # Case 2 & 3: '수원시' -> '경기도 수원시'와 같은 시군구명 매칭
-            if not matched:
-                for key in final_counts.keys():
-                    if key.endswith(" " + region_str):
-                        final_counts[key] += count
-                        unmatched_regions.discard(region_str)
-                        matched = True
-                        break
         
-        # 최종 계산된 count 값을 GeoJSON의 'value' 속성에 주입
-        for feature in final_geojson['features']:
-            key = feature['properties']['sggnm']
-            feature['properties']['value'] = final_counts.get(key, 0)
+        for feature in _preprocessed_map['features']:
+            new_feature = {
+                'type': feature['type'],
+                'geometry': feature['geometry'],  # 지오메트리는 참조만
+                'properties': feature['properties'].copy()  # 속성만 복사
+            }
             
+            region_name = new_feature['properties']['sggnm']
+            matched_count = 0
+            
+            # 직접 매칭
+            if region_name in region_count_map:
+                matched_count = region_count_map[region_name]
+                unmatched_regions.discard(region_name)
+            else:
+                # 부분 매칭 (최적화된 방식)
+                for region, count in region_count_map.items():
+                    if region_name.endswith(" " + region):
+                        matched_count = count
+                        unmatched_regions.discard(region)
+                        break
+            
+            new_feature['properties']['value'] = matched_count
+            final_geojson['features'].append(new_feature)
+        
         unmatched_df = pd.DataFrame({
             '지역구분': list(unmatched_regions),
-            '카운트': [_region_counts.get(r, 0) for r in unmatched_regions]
+            '카운트': [region_count_map.get(r, 0) for r in unmatched_regions]
         })
 
         return final_geojson, unmatched_df
@@ -1652,10 +1656,10 @@ if viewer_option == '지도(테스트)':
     
     if preprocessed_map and not df_6.empty:
         # 분기별 필터링된 데이터 가져오기 (캐시됨)
-        region_counts = get_filtered_data(df_6, selected_quarter)
+        region_counts = get_filtered_data_optimized(selected_quarter)
         
         # 필터링된 데이터를 지도에 적용 (캐시됨)
-        final_geojson, unmatched_df = apply_counts_to_map(preprocessed_map, region_counts)
+        final_geojson, unmatched_df = apply_counts_to_map_optimized(preprocessed_map, region_counts)
         
         st.sidebar.header("⚙️ 지도 설정")
         map_styles = {"기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter"}

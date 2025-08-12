@@ -173,6 +173,26 @@ def preprocess_and_save_data():
         except FileNotFoundError:
             df_6 = pd.DataFrame()
 
+        def precompute_quarterly_counts(df_6):
+            """분기별 지역 카운트를 미리 계산하여 저장"""
+            if df_6.empty:
+                return {}
+            
+            # 신청일자 컬럼 처리
+            df_6_copy = df_6.copy()
+            df_6_copy['신청일자'] = pd.to_datetime(df_6_copy['신청일자'], errors='coerce')
+            
+            quarterly_counts = {
+                '전체': df_6_copy['지역구분'].value_counts().to_dict(),
+                '1Q': df_6_copy[df_6_copy['신청일자'].dt.month.isin([1,2,3])]['지역구분'].value_counts().to_dict(),
+                '2Q': df_6_copy[df_6_copy['신청일자'].dt.month.isin([4,5,6])]['지역구분'].value_counts().to_dict(),
+                '3Q': df_6_copy[df_6_copy['신청일자'].dt.month.isin([7,8,9])]['지역구분'].value_counts().to_dict(),
+                '4Q': df_6_copy[df_6_copy['신청일자'].dt.month.isin([10,11,12])]['지역구분'].value_counts().to_dict()
+            }
+            return quarterly_counts
+
+        quarterly_region_counts = precompute_quarterly_counts(df_6)
+
         # ---------- 추가: test1.py용 테슬라 EV 데이터 전처리 ----------
         try:
             df_tesla_ev = pd.read_excel("2025년 테슬라 EV추출파일.xlsx")
@@ -244,7 +264,7 @@ def preprocess_and_save_data():
             print("테슬라 EV 데이터 전처리 완료")
         except FileNotFoundError:
             print("'2025년 테슬라 EV추출파일.xlsx' 파일을 찾을 수 없습니다. 테슬라 EV 데이터는 빈 DataFrame으로 저장됩니다.")
-            df_tesla_ev = pd.DataFrame()
+            df_tesla_ev = pd.DataFrame()    
         except Exception as e:
             print(f"테슬라 EV 데이터 전처리 중 오류: {e}")
             df_tesla_ev = pd.DataFrame()
@@ -274,7 +294,8 @@ def preprocess_and_save_data():
             "preprocessed_map_geojson": preprocessed_map_geojson,
             "df_tesla_ev": df_tesla_ev,  # test1.py용 테슬라 EV 데이터
             "df_pole_pipeline": df_pole_pipeline,
-            "df_pole_apply": df_pole_apply
+            "df_pole_apply": df_pole_apply,
+            "quarterly_region_counts": quarterly_region_counts
         }
 
         with open("preprocessed_data.pkl", "wb") as f:
