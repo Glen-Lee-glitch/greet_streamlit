@@ -64,15 +64,25 @@ def apply_counts_to_map_optimized(_preprocessed_map, _region_counts):
                     unmatched_regions.discard(region)
                     break
 
-            # 2) 보강: 지도 키의 시 부분만 추출해서 동일 시로 매칭
+            # 2) 보강: 지도 키에서 시/시도+시를 모두 후보로 매칭
             if matched_count == 0:
-                # '경기도 부천시소사구' → '부천시소사구' → '부천시'
-                key_body = region_name.split(" ", 1)[1] if " " in region_name else region_name
+                # '경기도 부천시소사구' → sido='경기도', key_body='부천시소사구' → city='부천시'
+                parts = region_name.split(" ", 1)
+                sido = parts[0] if len(parts) == 2 else ""
+                key_body = parts[1] if len(parts) == 2 else region_name
+
                 m = re.search(r'(.+?시)', str(key_body))
                 map_city_base = m.group(1) if m else key_body
-                if map_city_base in region_count_map:
-                    matched_count = region_count_map[map_city_base]
-                    unmatched_regions.discard(map_city_base)
+
+                candidates = [map_city_base]  # '부천시'
+                if sido and map_city_base:
+                    candidates.append(f"{sido} {map_city_base}")  # '경기도 부천시'
+
+                for cand in candidates:
+                    if cand in region_count_map:
+                        matched_count = region_count_map[cand]
+                        unmatched_regions.discard(cand)
+                        break
         
         new_feature['properties']['value'] = matched_count
         final_geojson['features'].append(new_feature)

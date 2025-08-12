@@ -1312,9 +1312,6 @@ if viewer_option == '폴스타':
 if viewer_option == '지도(테스트)':
     show_map_viewer(data, df_6)
 
-
-    
-
 # --- 지자체별 정리 ---
 if viewer_option == '분석':
 

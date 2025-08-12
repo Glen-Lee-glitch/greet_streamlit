@@ -4,6 +4,7 @@ import numpy as np
 import pickle
 from datetime import datetime, timedelta
 import re
+import altair as alt
 
 def show_polestar_viewer(data, today_kst):
     """폴스타 뷰어 대시보드를 표시합니다."""
@@ -176,82 +177,231 @@ def show_polestar_viewer(data, today_kst):
         html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
         st.markdown(html_table, unsafe_allow_html=True)
         
-        st.markdown("---")
     with col2:
-        pass
+        st.subheader("📝 특이사항 메모")
 
-    # 폴스타 월별 요약 (표 + 스타일) - 기존 스타일 유지
-    st.subheader("폴스타 월별 요약")
+        def load_polestar_memo(path: str):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except FileNotFoundError:
+                return None
 
-    summary_row_index = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
-    monthly_summary_data = {
-        '1월': [72, 0, 68, 4],
-        '2월': [52, 27, 25, 0],
-        '3월': [279, 249, 20, 10],
-        '4월': [182, 146, 16, 20],
-        '5월': [332, 246, 63, 23],
-        '6월': [47, 29, 11, 7],
-        '1~6월 합계': [964, 697, 203, 64],
-        '7월': [140, 83, 48, 9],
-        '8월': [np.nan, np.nan, np.nan, np.nan],
-        '9월': [np.nan, np.nan, np.nan, np.nan],
-        '10월': [np.nan, np.nan, np.nan, np.nan],
-        '11월': [np.nan, np.nan, np.nan, np.nan],
-        '12월': [np.nan, np.nan, np.nan, np.nan],
-        '7~12월 합계': [140, 83, 48, 9],
-        '2025 총합': [1104, 780, 251, 73]
-    }
-    summary_df = pd.DataFrame(monthly_summary_data, index=summary_row_index)
+        def save_polestar_memo(path: str, content: str):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
 
-    html_summary = summary_df.fillna('-').to_html(classes='custom_table', border=0, escape=False)
-    html_summary = re.sub(
-        r'(<thead>\s*<tr>)',
-        r'\1<th rowspan="2">청구<br>세금계산서</th>',
-        html_summary,
-        count=1
-    )
-    html_summary = re.sub(
-        r'(<tr>\s*<th>1~6월 합계</th>)(.*?)(</tr>)',
-        lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
-        html_summary,
-        flags=re.DOTALL
-    )
-    html_summary = html_summary.replace('<th>1~6월 합계</th>', '<th style="background-color:#ffe0b2;">1~6월 합계</th>')
-    html_summary = re.sub(
-        r'(<tr>\s*<th>7~12월 합계</th>)(.*?)(</tr>)',
-        lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
-        html_summary,
-        flags=re.DOTALL
-    )
-    html_summary = html_summary.replace('<th>7~12월 합계</th>', '<th style="background-color:#ffe0b2;">7~12월 합계</th>')
-    html_summary = re.sub(
-        r'(<th[^>]*>2025 총합</th>)',
-        r'<th style="background-color:#e3f2fd;">2025 총합</th>',
-        html_summary
-    )
-    html_summary = re.sub(
-        r'(<tr>.*?)(<td[^>]*>[^<]*</td>)(\s*</tr>)',
-        lambda m: re.sub(
-            r'(<td[^>]*>)([^<]*)(</td>)$',
-            r'<td style="background-color:#e3f2fd;">\2</td>',
-            m.group(0)
-        ),
-        html_summary,
-        flags=re.DOTALL
-    )
-    def color_sum_cols(match):
-        row = match.group(0)
-        tds = re.findall(r'(<td[^>]*>[^<]*</td>)', row)
-        if len(tds) >= 14:
-            tds[6] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[6])
-            tds[13] = re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', tds[13])
-            row_new = row
-            for i, td in enumerate(tds):
-                row_new = re.sub(r'(<td[^>]*>[^<]*</td>)', lambda m: td if m.start() == 0 else m.group(0), row_new, count=1)
-            return row_new
-        return row
-    html_summary = re.sub(r'<tr>(.*?)</tr>', color_sum_cols, html_summary, flags=re.DOTALL)
-    st.markdown(html_summary, unsafe_allow_html=True)
+        memo_path = "polestar_memo.txt"
+        memo_content = load_polestar_memo(memo_path)
+
+        if memo_content is not None:
+            # 파일이 있으면 읽어서 보여주기(수정 불가)
+            st.markdown(
+                f"<div style='background-color:#e0f7fa; padding:16px; border-radius:8px; margin-bottom:8px; white-space:pre-wrap; font-size:16px;'><b>{memo_content}</b></div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            # 파일이 없으면 입력창 제공 및 저장
+            memo_input = st.text_area(
+                "특이사항 메모를 입력하세요. (저장 시 polestar_memo.txt로 저장됩니다)",
+                height=180,
+                key="polestar_memo_input"
+            )
+            if st.button("메모 저장"):
+                save_polestar_memo(memo_path, memo_input)
+
+    st.markdown("<hr style='margin-top:1rem;margin-bottom:1rem;'>", unsafe_allow_html=True)
+
+    # 폴스타 월별 요약을 리테일 형태로 변경
+    col3, col4 = st.columns([5, 5])
+    
+    with col3:
+        # 폴스타 월별 요약 헤더 및 기간 선택
+        header_col, sel_col = st.columns([4, 2])
+        with header_col:
+            st.write("##### 폴스타 월별 요약")
+        with sel_col:
+            polestar_period_option = st.selectbox(
+                '기간 선택',
+                ['3Q', '7월', '8월', '9월', '전체', '1Q', '2Q'] + [f'{m}월' for m in range(1, 13) if m not in [7, 8, 9]],
+                index=0,
+                key='polestar_period'
+            )
+
+        # 기간별 데이터 계산
+        year = selected_date.year
+        
+        # 기본 월별 데이터 (실제 데이터에서 계산해야 할 부분 - 현재는 샘플 데이터 사용)
+        monthly_data = {
+            '1월': [72, 0, 68, 4],
+            '2월': [52, 27, 25, 0],
+            '3월': [279, 249, 20, 10],
+            '4월': [182, 146, 16, 20],
+            '5월': [332, 246, 63, 23],
+            '6월': [47, 29, 11, 7],
+            '7월': [140, 83, 48, 9],
+            '8월': [0, 0, 0, 0],  # 실제 데이터로 대체 필요
+            '9월': [0, 0, 0, 0],  # 실제 데이터로 대체 필요
+            '10월': [0, 0, 0, 0],
+            '11월': [0, 0, 0, 0],
+            '12월': [0, 0, 0, 0]
+        }
+        
+        summary_row_index = ['파이프라인', '지원신청', '폴스타 내부지원', '접수 후 취소']
+        
+        # 기간별 데이터 필터링
+        if polestar_period_option == '3Q':
+            # 3분기 (7~9월) 표시
+            q3_data = {
+                '7': monthly_data['7월'],
+                '8': monthly_data['8월'],
+                '9': monthly_data['9월']
+            }
+            # 합계 계산
+            q3_total = [sum(q3_data[m][i] for m in ['7', '8', '9']) for i in range(4)]
+            q3_data['계'] = q3_total
+            
+            polestar_df = pd.DataFrame(q3_data, index=summary_row_index)
+            
+        elif polestar_period_option == '1Q':
+            # 1분기 (1~3월) 표시
+            q1_data = {
+                '1': monthly_data['1월'],
+                '2': monthly_data['2월'], 
+                '3': monthly_data['3월']
+            }
+            q1_total = [sum(q1_data[m][i] for m in ['1', '2', '3']) for i in range(4)]
+            q1_data['계'] = q1_total
+            
+            polestar_df = pd.DataFrame(q1_data, index=summary_row_index)
+            
+        elif polestar_period_option == '2Q':
+            # 2분기 (4~6월) 표시
+            q2_data = {
+                '4': monthly_data['4월'],
+                '5': monthly_data['5월'],
+                '6': monthly_data['6월']
+            }
+            q2_total = [sum(q2_data[m][i] for m in ['4', '5', '6']) for i in range(4)]
+            q2_data['계'] = q2_total
+            
+            polestar_df = pd.DataFrame(q2_data, index=summary_row_index)
+            
+        elif polestar_period_option == '전체':
+            # 전체 분기별 요약 표시
+            q1_total = [sum(monthly_data[f'{m}월'][i] for m in [1, 2, 3]) for i in range(4)]
+            q2_total = [sum(monthly_data[f'{m}월'][i] for m in [4, 5, 6]) for i in range(4)]
+            q3_total = [sum(monthly_data[f'{m}월'][i] for m in [7, 8, 9]) for i in range(4)]
+            total_all = [q1_total[i] + q2_total[i] + q3_total[i] for i in range(4)]
+            
+            polestar_summary_data = {
+                'Q1': q1_total,
+                'Q2': q2_total,
+                'Q3': q3_total,
+                '계': total_all
+            }
+            polestar_df = pd.DataFrame(polestar_summary_data, index=summary_row_index)
+            
+        elif polestar_period_option.endswith('월'):
+            # 개별 월 선택
+            month_num = polestar_period_option[:-1]
+            try:
+                month_name = f'{int(month_num)}월'
+                if month_name in monthly_data:
+                    month_data = {month_num: monthly_data[month_name]}
+                    polestar_df = pd.DataFrame(month_data, index=summary_row_index)
+                else:
+                    # 데이터가 없는 월
+                    month_data = {month_num: [0, 0, 0, 0]}
+                    polestar_df = pd.DataFrame(month_data, index=summary_row_index)
+            except ValueError:
+                # 잘못된 월 형식
+                polestar_df = pd.DataFrame({'선택 월': [0, 0, 0, 0]}, index=summary_row_index)
+        
+        # HTML 변환 및 스타일링
+        html_polestar = polestar_df.to_html(classes='custom_table', border=0, escape=False)
+        
+        # 리테일과 동일한 스타일링 적용
+        if polestar_period_option == '전체':
+            # Q1, Q2, Q3 컬럼 헤더 하이라이트
+            html_polestar = re.sub(
+                r'(<th[^>]*>Q1</th>)',
+                r'<th style="background-color: #ffe0b2;">Q1</th>',
+                html_polestar
+            )
+            html_polestar = re.sub(
+                r'(<th[^>]*>Q2</th>)',
+                r'<th style="background-color: #ffe0b2;">Q2</th>',
+                html_polestar
+            )
+            html_polestar = re.sub(
+                r'(<th[^>]*>Q3</th>)',
+                r'<th style="background-color: #ffe0b2;">Q3</th>',
+                html_polestar
+            )
+        else:
+            # "계" 컬럼 하이라이트 (개별 분기/월 선택 시)
+            html_polestar = re.sub(
+                r'(<th[^>]*>계</th>)',
+                r'<th style="background-color: #ffe0b2;">계</th>',
+                html_polestar
+            )
+            
+            # "계" 행의 데이터 셀들도 하이라이트
+            html_polestar = re.sub(
+                r'(<tr>\s*<th>계</th>)(.*?)(</tr>)',
+                lambda m: m.group(1) + re.sub(r'<td([^>]*)>', r'<td\1 style="background-color:#ffe0b2;">', m.group(2)) + m.group(3),
+                html_polestar,
+                flags=re.DOTALL
+            )
+        
+        st.markdown(html_polestar, unsafe_allow_html=True)
+    
+    with col4:
+        # 폴스타 월별 추이 그래프 (지원신청 데이터 기준)
+        st.write("##### 폴스타 월별 추이")
+        
+        # col3에서 사용한 월별 데이터를 그대로 활용 (지원신청 컬럼)
+        # 1월~7월까지의 지원신청 데이터
+        months_to_show = [1, 2, 3, 4, 5, 6, 7]
+        apply_counts = [0, 27, 249, 146, 246, 29, 83]  # 월별 지원신청 수 (monthly_data에서 가져옴)
+        
+        # 차트용 데이터프레임 생성
+        polestar_chart_df = pd.DataFrame(
+            {
+                '월': months_to_show,
+                '지원신청 건수': apply_counts
+            }
+        )
+        polestar_chart_df['월 라벨'] = polestar_chart_df['월'].astype(str) + '월'
+        
+        # 막대 그래프 (지원신청)
+        bar_polestar = alt.Chart(polestar_chart_df).mark_bar(size=25, color='#ff7f0e').encode(
+            x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show], axis=alt.Axis(labelAngle=0)),
+            y=alt.Y('지원신청 건수:Q', title='건수')
+        )
+        
+        # 선 그래프 + 포인트
+        line_polestar = alt.Chart(polestar_chart_df).mark_line(color='#d62728', strokeWidth=2).encode(
+            x='월 라벨:N',
+            y='지원신청 건수:Q'
+        )
+        point_polestar = alt.Chart(polestar_chart_df).mark_point(color='#d62728', size=60).encode(
+            x='월 라벨:N',
+            y='지원신청 건수:Q'
+        )
+        
+        # 값 레이블 텍스트
+        text_polestar = alt.Chart(polestar_chart_df).mark_text(dy=-10, color='black').encode(
+            x='월 라벨:N',
+            y='지원신청 건수:Q',
+            text=alt.Text('지원신청 건수:Q')
+        )
+        
+        polestar_combo_chart = (bar_polestar + line_polestar + point_polestar + text_polestar).properties(
+            title=f"{selected_date.year}년 폴스타 지원신청 추이 (1월~7월)"
+        )
+        st.altair_chart(polestar_combo_chart, use_container_width=True)
 
 
 # 독립 실행을 위한 메인 함수
