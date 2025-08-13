@@ -153,7 +153,7 @@ def show_polestar_viewer(data, today_kst):
         elif value < 0: return f'<span style="color:red;">{value}</span>'
         return str(value)
 
-    col1, col2 = st.columns([4, 6])
+    col1, col2 = st.columns([5, 5])
     with col1:
         st.subheader("📊 폴스타 금일/전일 요약")
 
@@ -213,7 +213,7 @@ def show_polestar_viewer(data, today_kst):
     st.markdown("<hr style='margin-top:1rem;margin-bottom:1rem;'>", unsafe_allow_html=True)
 
     # 폴스타 월별 요약을 리테일 형태로 변경
-    col3, col4 = st.columns([4, 6])
+    col3, col4 = st.columns([5, 5])
     
     with col3:
         # 폴스타 월별 요약 헤더 및 기간 선택
@@ -223,7 +223,7 @@ def show_polestar_viewer(data, today_kst):
         with sel_col:
             polestar_period_option = st.selectbox(
                 '기간 선택',
-                ['3Q', '7월', '8월', '9월', '전체', '1Q', '2Q'] + [f'{m}월' for m in range(1, 13) if m not in [7, 8, 9]],
+                ['전체','3Q', '7월', '8월', '9월', '1Q', '2Q'] + [f'{m}월' for m in range(1, 13) if m not in [7, 8, 9]],
                 index=0,
                 key='polestar_period'
             )

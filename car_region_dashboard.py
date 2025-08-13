@@ -367,7 +367,7 @@ def show_car_region_dashboard(data=None, today_kst=None):
             st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
             st.header("🔍 데이터 필터")
             
-            default_end_date = pd.to_datetime('2025-08-06').date()
+            default_end_date = pd.to_datetime('2025-08-13').date()
             
             # 1. 기간 필터
             date_col = next((col for col in df_original.columns if '신청일자' in col), None)
