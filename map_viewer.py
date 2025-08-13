@@ -97,27 +97,76 @@ def apply_counts_to_map_optimized(_preprocessed_map, _region_counts):
 
 @st.cache_data
 def create_korea_map(_merged_geojson, map_style, color_scale_name):
-    """Plotly 지도를 생성합니다. (캐시 적용)"""
+    """Plotly 지도를 생성합니다. (캐시 적용, 성능 최적화)"""
     if not _merged_geojson or not _merged_geojson['features']: 
         return None, pd.DataFrame()
     
-    plot_df = pd.DataFrame([f['properties'] for f in _merged_geojson['features']])
+    # GeoJSON 간소화 - 불필요한 속성 제거
+    simplified_geojson = {
+        'type': 'FeatureCollection',
+        'features': [
+            {
+                'type': 'Feature',
+                'geometry': f['geometry'],
+                'properties': {'sggnm': f['properties']['sggnm'], 'value': f['properties']['value']}
+            } for f in _merged_geojson['features']
+        ]
+    }
+    
+    plot_df = pd.DataFrame([f['properties'] for f in simplified_geojson['features']])
+    
+    # 더 단순한 색상 구간으로 변경
     if not plot_df.empty and plot_df['value'].max() > 0:
-        bins = [-1, 0, 15, 60, 100, 200, 500, 1000, 3000, float('inf')]
-        labels = ["0", "1-15", "16-60", "61-100", "101-200", "201-500", "501-1000", "1001-3000", "3001+"]
+        bins = [-1, 0, 50, 200, 1000, float('inf')]
+        labels = ["0", "1-50", "51-200", "201-1000", "1000+"]
     else:
         bins = [-1, 0, float('inf')]
         labels = ["0", "1+"]
+    
     plot_df['category'] = pd.cut(plot_df['value'], bins=bins, labels=labels, right=True).astype(str)
-    colors = px.colors.sequential.__getattribute__(color_scale_name)
-    color_map = {label: colors[i % len(colors)] for i, label in enumerate(labels)}
+    
+    # 고정된 색상 맵 사용 (계산 시간 단축)
+    color_map = {
+        "0": "#f0f0f0",
+        "1-50": "#fee5d9", 
+        "51-200": "#fcae91",
+        "201-1000": "#fb6a4a",
+        "1000+": "#cb181d",
+        "1+": "#fee5d9"
+    }
+    
     fig = px.choropleth_mapbox(
-        plot_df, geojson=_merged_geojson, locations='sggnm', featureidkey='properties.sggnm',
-        color='category', color_discrete_map=color_map, category_orders={'category': labels},
-        mapbox_style=map_style, zoom=6, center={'lat': 36.5, 'lon': 127.5}, opacity=0.7,
-        labels={'category': '신청 건수', 'sggnm': '지역'}, hover_name='sggnm', hover_data={'value': True}
+        plot_df, 
+        geojson=simplified_geojson, 
+        locations='sggnm', 
+        featureidkey='properties.sggnm',
+        color='category', 
+        color_discrete_map=color_map, 
+        category_orders={'category': labels},
+        mapbox_style=map_style, 
+        zoom=6, 
+        center={'lat': 36.5, 'lon': 127.5}, 
+        opacity=0.8,
+        labels={'category': '신청 건수', 'sggnm': '지역'}, 
+        hover_name='sggnm', 
+        hover_data={'value': True}
     )
-    fig.update_layout(height=700, margin={'r': 0, 't': 0, 'l': 0, 'b': 0}, legend_title_text='신청 건수 (구간)')
+    
+    # 레이아웃 최적화
+    fig.update_layout(
+        height=700, 
+        margin={'r': 0, 't': 0, 'l': 0, 'b': 0}, 
+        legend_title_text='신청 건수',
+        showlegend=True,
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.01)
+    )
+    
+    # 지도 성능 최적화
+    fig.update_traces(
+        marker_line_width=0.5,
+        marker_line_color='white'
+    )
+    
     return fig, plot_df
 
 def show_map_viewer(data, df_6, use_preloaded=True):
