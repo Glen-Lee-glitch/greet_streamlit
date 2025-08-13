@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import plotly.express as px
+import os
 import re
 
 @st.cache_data
@@ -119,12 +120,78 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name):
     fig.update_layout(height=700, margin={'r': 0, 't': 0, 'l': 0, 'b': 0}, legend_title_text='신청 건수 (구간)')
     return fig, plot_df
 
-def show_map_viewer(data, df_6):
-
-    # --- 대한민국 지도 시각화 실행 로직 ---
+def show_map_viewer(data, df_6, use_preloaded=True):
+    """지도 뷰어 표시 - 사전 로딩된 데이터 활용 옵션 추가"""
+    
     st.header("🗺️ 지도 시각화")
     quarter_options = ['전체', '1Q', '2Q', '3Q']
     selected_quarter = st.selectbox("분기 선택", quarter_options)
+    
+    # 사전 로딩된 데이터 사용
+    if use_preloaded and hasattr(st.session_state, 'map_preloaded_data'):
+        preloaded_data = st.session_state.map_preloaded_data.get(selected_quarter)
+        
+        if preloaded_data:
+            final_geojson = preloaded_data['geojson']
+            unmatched_df = preloaded_data['unmatched']
+            
+            st.sidebar.header("⚙️ 지도 설정")
+            map_styles = {"기본 (밝음)": "carto-positron", "기본 (어두움)": "carto-darkmatter"}
+            color_scales = ["Reds","Blues", "Greens", "Viridis"]
+            selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
+            selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
+            
+            # 지도와 매칭 정보를 나란히 배치 (9:1 비율)
+            map_col, info_col = st.columns([9, 1])
+            
+            with map_col:
+                # 즉시 지도 표시 (캐시된 데이터 사용)
+                result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
+                if result:
+                    fig, df = result
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            with info_col:
+                # 매칭되지 않은 지역 목록을 오른쪽에 작게 표시
+                if not unmatched_df.empty:
+                    st.markdown("**⚠️ 매칭 안됨**")
+                    # 작은 폰트로 표시
+                    for _, row in unmatched_df.iterrows():
+                        st.markdown(f"<small>{row['지역구분']} ({row['카운트']})</small>", unsafe_allow_html=True)
+                else:
+                    st.markdown("**✅ 매칭 완료**")
+                    st.markdown("<small>모든 지역 매칭됨</small>", unsafe_allow_html=True)
+            
+            # 사이드바 메트릭들
+            if result:
+                fig, df = result
+                st.sidebar.metric("총 지역 수", len(df))
+                st.sidebar.metric("데이터가 있는 지역", len(df[df['value'] > 0]))
+                st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
+                st.sidebar.metric("값 0 지역 수", len(df[df['value'] == 0]))
+                
+                # 데이터 테이블 표시 (지도 아래)
+                st.subheader("데이터 테이블")
+                df_nonzero = df[df['value'] > 0][['sggnm', 'value']].sort_values('value', ascending=False)
+                df_zero = df[df['value'] == 0][['sggnm', 'value']].sort_values('sggnm')
+                
+                if not df_nonzero.empty:
+                    st.dataframe(df_nonzero, use_container_width=True)
+                else:
+                    st.info("value > 0 인 지역이 없습니다.")
+                
+                if not df_zero.empty:
+                    st.markdown("---")
+                    st.subheader("값 0 지역 목록")
+                    html_zero = df_zero.to_html(classes='custom_table', border=0, index=False)
+                    st.markdown(html_zero, unsafe_allow_html=True)
+                else:
+                    st.info("value = 0 인 지역이 없습니다.")
+                    
+            return  # 사전 로딩 데이터 사용 완료
+    
+    # 기존 로직 (fallback) - 사전 로딩 실패시
+    st.warning("사전 로딩된 데이터를 사용할 수 없어 기존 방식으로 로딩합니다...")
     
     # 미리 처리된 가벼운 지도 파일을 로드 (캐시됨)
     preprocessed_map = load_preprocessed_map('preprocessed_map.geojson')
@@ -142,16 +209,34 @@ def show_map_viewer(data, df_6):
         selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
         selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
         
-
-
-        # 지도 생성 (캐시됨)
-        result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
+        # 지도와 매칭 정보를 나란히 배치 (9:1 비율)
+        map_col, info_col = st.columns([9, 1])
+        
+        with map_col:
+            # 지도 생성 (캐시됨)
+            result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
+            if result:
+                fig, df = result
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with info_col:
+            # 매칭되지 않은 지역 목록을 오른쪽에 작게 표시
+            if not unmatched_df.empty:
+                st.markdown("**⚠️ 매칭 안됨**")
+                # 작은 폰트로 표시
+                for _, row in unmatched_df.iterrows():
+                    st.markdown(f"<small>{row['지역구분']} ({row['카운트']})</small>", unsafe_allow_html=True)
+            else:
+                st.markdown("**✅ 매칭 완료**")
+                st.markdown("<small>모든 지역 매칭됨</small>", unsafe_allow_html=True)
+        
         if result:
             fig, df = result
-            st.plotly_chart(fig, use_container_width=True)
             st.sidebar.metric("총 지역 수", len(df))
             st.sidebar.metric("데이터가 있는 지역", len(df[df['value'] > 0]))
             st.sidebar.metric("최대 신청 건수", f"{df['value'].max():,}")
+            st.sidebar.metric("값 0 지역 수", len(df[df['value'] == 0]))
+            
             st.subheader("데이터 테이블")
 
             # 값 유무에 따라 분할
@@ -172,16 +257,6 @@ def show_map_viewer(data, df_6):
                 st.markdown(html_zero, unsafe_allow_html=True)
             else:
                 st.info("value = 0 인 지역이 없습니다.")
-
-            # 사이드바 메트릭(추가)
-            st.sidebar.metric("값 0 지역 수", len(df_zero))
-
-            # 매칭되지 않은 지역
-            if not unmatched_df.empty:
-                st.subheader("⚠️ 매칭되지 않은 지역 목록")
-                st.dataframe(unmatched_df, use_container_width=True)
-            else:
-                st.success("✅ 모든 지역이 성공적으로 매칭되었습니다.")
 
 def main():
     """지도 뷰어를 독립적으로 실행하기 위한 메인 함수"""

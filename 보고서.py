@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import pickle
+import os
 import json
 import re
 import plotly.express as px
@@ -16,8 +17,45 @@ import pytz
 
 # 별도 뷰어 모듈 임포트
 from polestar_viewer import show_polestar_viewer
-from map_viewer import show_map_viewer
+from map_viewer import show_map_viewer, apply_counts_to_map_optimized
 from car_region_dashboard import show_car_region_dashboard
+
+# 기존 import 섹션 뒤에 추가
+@st.cache_data(ttl=7200)  # 2시간 캐시
+def preload_map_data():
+    """애플리케이션 시작 시 지도 데이터를 미리 로드합니다."""
+    try:
+        # 1. 전처리된 지도 파일 로드
+        if os.path.exists('preprocessed_map.geojson'):
+            with open('preprocessed_map.geojson', 'r', encoding='utf-8') as f:
+                preprocessed_map = json.load(f)
+        else:
+            return None, {}
+        
+        # 2. 분기별 데이터 모두 미리 처리
+        quarter_options = ['전체', '1Q', '2Q', '3Q']
+        preloaded_maps = {}
+        
+        for quarter in quarter_options:
+            # 분기별 지역 카운트 가져오기
+            quarterly_counts = st.session_state.quarterly_counts
+            region_counts = quarterly_counts.get(quarter, {})
+            
+            # 지도에 데이터 적용
+            final_geojson, unmatched_df = apply_counts_to_map_optimized(
+                preprocessed_map, region_counts
+            )
+            
+            preloaded_maps[quarter] = {
+                'geojson': final_geojson,
+                'unmatched': unmatched_df
+            }
+        
+        return preprocessed_map, preloaded_maps
+        
+    except Exception as e:
+        st.error(f"지도 사전 로딩 중 오류: {e}")
+        return None, {}
 
 # --- 페이지 설정 및 기본 스타일 ---
 st.set_page_config(layout="wide")
@@ -230,9 +268,17 @@ def load_quarterly_counts():
     except:
         return {}
 
-# 전역 변수로 한 번만 로드
 if 'quarterly_counts' not in st.session_state:
     st.session_state.quarterly_counts = load_quarterly_counts()
+
+# 지도 데이터 사전 로딩
+if 'map_preloaded' not in st.session_state:
+    with st.spinner('🗺️ 지도 데이터를 준비하는 중입니다...'):
+        preprocessed_map, preloaded_maps = preload_map_data()
+        st.session_state.map_preprocessed = preprocessed_map
+        st.session_state.map_preloaded_data = preloaded_maps
+        st.session_state.map_preloaded = True
+
 
 # --- 시간대 설정 ---
 KST = pytz.timezone('Asia/Seoul')
@@ -240,6 +286,14 @@ today_kst = datetime.now(KST).date()
 
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
+    if hasattr(st.session_state, 'map_preloaded') and st.session_state.map_preloaded:
+        st.success("✅ 지도 준비 완료")
+        if hasattr(st.session_state, 'map_preloaded_data'):
+            quarters_ready = len(st.session_state.map_preloaded_data)
+    else:
+        st.warning("⏳ 지도 준비 중...")
+
+
     st.header("👁️ 뷰어 옵션")
     viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)', '분석'), key="viewer_option")
     st.markdown("---")
@@ -1311,7 +1365,11 @@ if viewer_option == '폴스타':
 
 # --- 지도 뷰어 ---
 if viewer_option == '지도(테스트)':
-    show_map_viewer(data, df_6)
+    if hasattr(st.session_state, 'map_preloaded') and st.session_state.map_preloaded:
+        show_map_viewer(data, df_6, use_preloaded=True)
+    else:
+        st.warning("지도 데이터가 아직 준비되지 않았습니다.")
+        show_map_viewer(data, df_6, use_preloaded=False)
 
 # --- 분석 뷰어 ---
 if viewer_option == '분석':
