@@ -114,6 +114,27 @@ def preprocess_and_save_data():
             print(f"테슬라 판매현황을 불러오는 중 오류: {e}")
             df_sales = pd.DataFrame()
 
+        # ---------- 추가: 전기차 신청현황 로드 ----------
+        ev_status_file = "전기차 신청현황.xls"
+        try:
+            # 첫 번째 표: 신청금액 관련 데이터 (header=4, 데이터 8행, 칼럼수 6개로 제한)
+            df_ev_amount = pd.read_excel(ev_status_file, header=4, nrows=8).iloc[:, :6]
+            df_ev_amount.columns = ['단계', '신청대수', '신청국비(만원)', '신청지방비(만원)', '신청추가지원금(만원)', '신청금액합산(만원)']
+            
+            # 두 번째 표: 단계별 진행현황 데이터 (header=17, 데이터 1행)
+            df_ev_step = pd.read_excel(ev_status_file, header=17, nrows=1).iloc[:1,:]
+            df_ev_step.columns = ['차종', '신청', '승인', '출고', '자격부여', '대상자선정', '지급신청', '지급완료', '취소']
+            
+            print("전기차 신청현황 데이터를 로드했습니다.")
+        except FileNotFoundError:
+            print("'전기차 신청현황.xls' 파일을 찾을 수 없습니다. 전기차 신청현황 데이터는 빈 DataFrame으로 저장됩니다.")
+            df_ev_amount = pd.DataFrame()
+            df_ev_step = pd.DataFrame()
+        except Exception as e:
+            print(f"전기차 신청현황을 불러오는 중 오류: {e}")
+            df_ev_amount = pd.DataFrame()
+            df_ev_step = pd.DataFrame()
+
         # --- 추가: 지자체 정리 master.xlsx 로드
         try:
             df_master = pd.read_excel("master.xlsx")
@@ -295,7 +316,9 @@ def preprocess_and_save_data():
             "df_tesla_ev": df_tesla_ev,  # test1.py용 테슬라 EV 데이터
             "df_pole_pipeline": df_pole_pipeline,
             "df_pole_apply": df_pole_apply,
-            "quarterly_region_counts": quarterly_region_counts
+            "quarterly_region_counts": quarterly_region_counts,
+            "df_ev_amount": df_ev_amount,  # 전기차 신청금액 현황
+            "df_ev_step": df_ev_step       # 전기차 단계별 진행현황
         }
 
         with open("preprocessed_data.pkl", "wb") as f:
