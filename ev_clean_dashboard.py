@@ -110,7 +110,7 @@ def load_all_data():
         
         # 숫자형 컬럼 변환
         numeric_cols = ['공고_전체', '공고_우선순위', '공고_일반', '접수_전체', '접수_우선순위', '접수_일반',
-                       '잔여_전체', '잔여_일반', '출고_일반']
+                    '잔여_전체', '잔여_일반', '출고_일반']
         
         for col in numeric_cols:
             if col in df_overview.columns:
@@ -673,20 +673,23 @@ def create_regional_dashboard(df_overview, df_tesla):
             # 잔여: 전체
             remaining = int(region_data['잔여_전체'].sum())
             
-            # 지역 현황 메트릭
+            # 지역 현황 메트릭 (간단한 텍스트)
             col1, col2, col3 = st.columns(3)
-            
+
             with col1:
-                st.metric("총 공고", f"{announcement_final:,}건")
+                st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>총 공고</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{announcement_final:,}건</span>", unsafe_allow_html=True)
                 
             with col2:
-                st.metric("접수 완료", f"{received_final:,}건")
+                st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>접수 완료</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{received_final:,}건</span>", unsafe_allow_html=True)
                 
             with col3:
-                st.metric("남은 대수", f"{remaining:,}건")
+                st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>남은 대수</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{remaining:,}건</span>", unsafe_allow_html=True)
             
             st.markdown("<br>" * 1, unsafe_allow_html=True)
- 
+
         
         # 6:4 비율로 분할 - 세로 섹션들과 사이드 리스트
         main_content, side_list = st.columns([6, 4])

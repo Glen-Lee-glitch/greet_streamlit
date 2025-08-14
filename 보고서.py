@@ -613,9 +613,10 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 new_single_sum = int(df_cumulative.loc[mask_single, '신청대수'].sum())
                 new_bulk_count = int(mask_bulk.sum())
                 today_bulk_count = int((df_today['신청대수'] > 1).sum())
+                today_bulk_sum = int(df_today[df_today['신청대수'] > 1]['신청대수'].sum())
                 today_single_count = int((df_today['신청대수'] == 1).sum())
 
-                return new_bulk_sum, new_single_sum, new_bulk_count, today_bulk_count, today_single_count
+                return new_bulk_sum, new_single_sum, new_bulk_count, today_bulk_count, today_bulk_sum, today_single_count
 
             def process_give(df, end_date):
                 df = df.copy()
@@ -638,7 +639,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
 
                 return give_bulk_sum, give_single_sum, give_bulk_count, give_today_bulk_count, give_today_single_count
 
-            new_bulk_sum, new_single_sum, new_bulk_count, new_today_bulk_count, new_today_single_count = process_new(df_3, selected_date)
+            new_bulk_sum, new_single_sum, new_bulk_count, new_today_bulk_count, new_today_bulk_sum, new_today_single_count = process_new(df_3, selected_date)
             give_bulk_sum, give_single_sum, give_bulk_count, give_today_bulk_count, give_today_single_count = process_give(df_4, selected_date)
 
             row_names = ['벌크', '낱개', 'TTL']
@@ -653,7 +654,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             df_total.loc['낱개', ('지원', '파이프라인', '대수')] = new_single_sum
             df_total.loc['TTL', ('지원', '파이프라인', '대수')] = new_bulk_sum + new_single_sum
 
-            df_total.loc['벌크', ('지원', '신청(건)', '당일')] = new_today_bulk_count
+            df_total.loc['벌크', ('지원', '신청(건)', '당일')] = f"{new_today_bulk_count}({new_today_bulk_sum})"
             df_total.loc['낱개', ('지원', '신청(건)', '당일')] = new_today_single_count
             df_total.loc['TTL', ('지원', '신청(건)', '당일')] = new_today_bulk_count + new_today_single_count
 
@@ -678,6 +679,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             st.markdown(html_table_corp, unsafe_allow_html=True)
         else:
             st.warning("법인팀 실적을 계산하기 위한 필수 컬럼이 누락되었습니다.")
+    
     # --- 메모 영역 ---
     with col3:
 
