@@ -85,23 +85,32 @@ def render_comprehensive_analysis(df_filtered):
             return
         
         # ev_clean_dashboard의 함수들을 직접 구현하거나 데이터 전달
-        from ev_clean_dashboard import create_total_overview_dashboard_1, create_total_overview_dashboard_2, create_total_overview_dashboard_3, create_regional_dashboard_top, create_regional_dashboard_bottom
+        from ev_clean_dashboard import create_total_overview_dashboard_1, create_total_overview_dashboard_2, create_total_overview_dashboard_3, create_regional_dashboard_top_1, create_regional_dashboard_bottom
         
-        # 3:7 비율로 좌우 분할
-        left_col, right_col = st.columns([3, 7])
-        
-        with left_col:
+        # 1행: [테슬라 전국 총 현황]  |  [지역별 상세 현황]
+        row1_left, row1_right = st.columns([3, 7])
+        with row1_left:
             create_total_overview_dashboard_1(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
+        with row1_right:
+            create_regional_dashboard_top_1(df_grit_overview, df_tesla)
+
+        # 행과 행 사이 “일직선” 구분선
+        st.divider()  # 구버전이면: st.markdown("<hr style='margin:8px 0;border:none;border-top:1px solid #e5e7eb;'>", unsafe_allow_html=True)
+
+        # 2행: [테슬라 현황 + 진행단계]  |  [지역별 총 접수 vs 테슬라 접수 + 잔여 비율 낮은 지역]
+        row2_left, row2_right = st.columns([3, 7])
+        with row2_left:
             create_total_overview_dashboard_2(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
             create_total_overview_dashboard_3(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
-        
-        with right_col:
-            selected_region, received_final = create_regional_dashboard_top(df_grit_overview, df_tesla)
-            create_regional_dashboard_bottom(df_grit_overview, df_tesla, selected_region, received_final)
+
+        with row2_right:
+            create_regional_dashboard_bottom(df_grit_overview, df_tesla)
             
     except Exception as e:
         st.error(f"데이터 로드 중 오류: {e}")
         render_original_tesla_analysis(df_filtered)
+
+
 
 def render_original_tesla_analysis(df_filtered):
     """기존 테슬라 분석 (백업용)"""

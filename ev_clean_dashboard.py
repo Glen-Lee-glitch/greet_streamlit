@@ -78,6 +78,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
+
 @st.cache_data
 def load_tesla_data():
     """테슬라 EV 데이터 로드"""
@@ -545,8 +547,7 @@ def create_total_overview_dashboard_3(df_step, df_overview, df_amount, df_tesla)
             )
             st.plotly_chart(fig, use_container_width=True)
 
-
-def create_regional_dashboard_top(df_overview, df_tesla):
+def create_regional_dashboard_top_1(df_overview, df_tesla):
     """지역별 대시보드 (오른쪽 영역) - 지역 선택 및 상단 메트릭, 선택된 지역 반환"""
     st.subheader("🗺️ 지역별 상세 현황")
     st.info("💡 **테슬라가 아닌 모든 전기차 보조금 현황입니다**")
@@ -573,16 +574,71 @@ def create_regional_dashboard_top(df_overview, df_tesla):
 
             remaining = int(region_data['잔여_전체'].sum())
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>총 공고</span>", unsafe_allow_html=True)
-                st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{announcement_final:,}건</span>", unsafe_allow_html=True)
-            with col2:
-                st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>접수 완료</span>", unsafe_allow_html=True)
-                st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{received_final:,}건</span>", unsafe_allow_html=True)
-            with col3:
-                st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>남은 대수</span>", unsafe_allow_html=True)
-                st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{remaining:,}건</span>", unsafe_allow_html=True)
+            
+            top_col1, top_col2 = st.columns([6.5,3.5])
+            
+            with top_col1:
+                st.subheader(f"🚗 {selected_region} 총 현황")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(
+                        f"""
+                        <div style='text-align:center;'>
+                            <span style='font-size:1.2rem; font-weight:bold;'>총 공고</span><br>
+                            <span style='font-size:2rem; font-weight:bold; color:#1e40af'>{announcement_final:,}건</span>
+                        </div>
+                        """, unsafe_allow_html=True
+                    )
+                with col2:
+                    st.markdown(
+                        f"""
+                        <div style='text-align:center;'>
+                            <span style='font-size:1.2rem; font-weight:bold;'>접수 완료</span><br>
+                            <span style='font-size:2rem; font-weight:bold; color:#1e40af'>{received_final:,}건</span>
+                        </div>
+                        """, unsafe_allow_html=True
+                    )
+                with col3:
+                    st.markdown(
+                        f"""
+                        <div style='text-align:center;'>
+                            <span style='font-size:1.2rem; font-weight:bold;'>남은 대수</span><br>
+                            <span style='font-size:2rem; font-weight:bold; color:#1e40af'>{remaining:,}건</span>
+                        </div>
+                        """, unsafe_allow_html=True
+                    )
+
+            with top_col2:
+                # 해당 지역 테슬라 현황
+                if (
+                    selected_region is not None
+                    and not df_tesla.empty
+                    and '지역구분' in df_tesla.columns
+                ):
+                    tesla_count = len(df_tesla[df_tesla['지역구분'] == selected_region])
+                    tesla_share_region = (tesla_count / received_final * 100) if received_final > 0 else 0
+
+                    st.subheader(f"🚗 {selected_region} 테슬라 현황")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(
+                            f"""
+                            <div style='text-align:center;'>
+                                <span style='font-size:1.1rem; font-weight:bold;'>테슬라 접수</span><br>
+                                <span style='font-size:1.7rem; font-weight:bold; color:#e11d48'>{tesla_count:,}건</span>
+                            </div>
+                            """, unsafe_allow_html=True
+                        )
+                    with col2:
+                        st.markdown(
+                            f"""
+                            <div style='text-align:center;'>
+                                <span style='font-size:1.1rem; font-weight:bold;'>지역 점유율</span><br>
+                                <span style='font-size:1.7rem; font-weight:bold; color:#e11d48'>{tesla_share_region:.1f}%</span>
+                            </div>
+                            """, unsafe_allow_html=True
+                        )
+
     return selected_region, received_final
 
 def render_region_tesla_summary(selected_region, received_final, df_tesla):
@@ -603,7 +659,6 @@ def render_region_tesla_summary(selected_region, received_final, df_tesla):
 		st.metric("테슬라 접수", f"{tesla_count:,}건")
 	with col2:
 		st.metric("지역 점유율", f"{tesla_share_region:.1f}%")
-
 
 def render_region_total_vs_tesla_chart(df_overview, df_tesla):
 	st.subheader("📊 지역별 총 접수 vs 테슬라 접수")
@@ -656,7 +711,6 @@ def render_region_total_vs_tesla_chart(df_overview, df_tesla):
 	)
 	st.plotly_chart(fig, use_container_width=True)
 
-
 def render_low_remaining_list(df_overview):
 	st.subheader("📉 잔여 비율 낮은 지역")
 	st.caption("공고 대비 잔여 대수가 적은 순으로 정렬")
@@ -694,27 +748,12 @@ def render_low_remaining_list(df_overview):
 		}
 	)
 
-def create_regional_dashboard_bottom(df_overview, df_tesla, selected_region, received_final):
+
+def create_regional_dashboard_bottom(df_overview, df_tesla):
     # 6:4 비율로 분할 - 세로 섹션들과 사이드 리스트
     main_content, side_list = st.columns([6, 4])
 
     with main_content:
-        # 해당 지역 테슬라 현황
-        if (
-            selected_region is not None
-            and not df_tesla.empty
-            and '지역구분' in df_tesla.columns
-        ):
-            tesla_count = len(df_tesla[df_tesla['지역구분'] == selected_region])
-            tesla_share_region = (tesla_count / received_final * 100) if received_final > 0 else 0
-
-            st.subheader(f"🚗 {selected_region} 테슬라 현황")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("테슬라 접수", f"{tesla_count:,}건")
-            with col2:
-                st.metric("지역 점유율", f"{tesla_share_region:.1f}%")
-
         # 지역별 총 접수 vs 테슬라 접수 차트
         st.subheader("📊 지역별 총 접수 vs 테슬라 접수")
 
@@ -834,16 +873,23 @@ def main():
         st.error("데이터를 로드할 수 없습니다. 파일 경로를 확인해주세요.")
         return
     
-    # 3:7 비율로 좌우 분할
-    left_col, right_col = st.columns([3, 7])
-    
-    with left_col:
+    # 1행: [테슬라 전국 총 현황]  |  [지역별 상세 현황]
+    row1_left, row1_right = st.columns([3, 7])
+    with row1_left:
         create_total_overview_dashboard_1(df_step, df_overview, df_amount, df_tesla)
+    with row1_right:
+        selected_region, received_final = create_regional_dashboard_top_1(df_overview, df_tesla)
+
+    # 행과 행 사이 “일직선” 구분선
+    st.divider()  # 구버전이면: st.markdown("<hr style='margin:8px 0;border:none;border-top:1px solid #e5e7eb;'>", unsafe_allow_html=True)
+
+    # 2행: [테슬라 현황 + 진행단계]  |  [지역별 총 접수 vs 테슬라 접수 + 잔여 비율 낮은 지역]
+    row2_left, row2_right = st.columns([3, 7])
+    with row2_left:
         create_total_overview_dashboard_2(df_step, df_overview, df_amount, df_tesla)
         create_total_overview_dashboard_3(df_step, df_overview, df_amount, df_tesla)
-    
-    with right_col:
-        selected_region, received_final = create_regional_dashboard_top(df_overview, df_tesla)
+
+    with row2_right:
         create_regional_dashboard_bottom(df_overview, df_tesla, selected_region, received_final)
     
     # 푸터
