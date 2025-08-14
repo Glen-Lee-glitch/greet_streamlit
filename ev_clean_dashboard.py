@@ -437,69 +437,122 @@ def parse_delivery_data(delivery_string):
         return 0, 0
 
 def create_total_overview_dashboard_1(df_step, df_overview, df_amount, df_tesla):
-    """총 현황 대시보드 (왼쪽 영역)"""
-    st.subheader("📊 테슬라 전국 총 현황")
-    
-    # 전체 접수 완료 계산 (모든 지역의 접수_전체 - 접수_택시)
+    """개선된 UI로 총 현황 대시보드를 생성합니다."""
+    st.subheader("📊 신청/출고 현황")
+
+    # --- 데이터 계산 (기존 로직과 동일) ---
     total_received_all = 0
     if not df_overview.empty:
-        # 한국환경공단 제외하고 계산
         filtered_overview = df_overview[df_overview['지역'] != '한국환경공단']
         total_received_all = int(filtered_overview['접수_전체'].sum() - filtered_overview['접수_택시'].sum())
     
-    # 출고 데이터 파싱
-    total_delivery = 0
-    taxi_delivery = 0
+    total_delivery, taxi_delivery = 0, 0
     if not df_overview.empty and '출고_전체' in df_overview.columns:
-        # 한국환경공단 제외하고 모든 지역의 출고 데이터 합계
         filtered_overview = df_overview[df_overview['지역'] != '한국환경공단']
         for delivery_data in filtered_overview['출고_전체']:
             total, taxi = parse_delivery_data(delivery_data)
             total_delivery += total
             taxi_delivery += taxi
-    
     delivery_excluding_taxi = total_delivery - taxi_delivery
     
-    # 주요 지표 카드 (2x2 형태)
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card" style="height: 100px;">
-            <div style="font-size: 0.75rem; opacity: 0.9;">전체 신청</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: #1e40af;">{total_received_all:,}</div>
+    tesla_applications = df_step['신청'].iloc[0] if not df_step.empty and '신청' in df_step.columns else 0
+    tesla_delivered = df_step['출고'].iloc[0] if not df_step.empty and '출고' in df_step.columns else 0
+
+    # --- 개선된 카드 CSS ---
+    st.markdown("""
+    <style>
+    .metric-card-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .custom-metric-card {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid #e0e0e0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: all 0.3s ease;
+        height: 104px; /* 높이를 130px에서 104px로 조정 */
+    }
+    .custom-metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+    }
+    .metric-title {
+        font-size: 1rem;
+        color: #4a5568; /* Gray-600 */
+        display: flex;
+        align-items: center;
+        font-weight: 500;
+    }
+    .metric-icon {
+        margin-right: 10px;
+        width: 24px;
+        height: 24px;
+        stroke-width: 2;
+    }
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1e3a8a; /* Blue-800 */
+        text-align: right;
+        line-height: 1;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- 아이콘 SVG 정의 ---
+    icon_total_apply = """
+    <svg xmlns="http://www.w3.org/2000/svg" class="metric-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    """
+    icon_total_delivery = """
+    <svg xmlns="http://www.w3.org/2000/svg" class="metric-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    """
+    icon_tesla_apply = """
+    <svg xmlns="http://www.w3.org/2000/svg" class="metric-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+    """
+    icon_tesla_delivery = """
+    <svg xmlns="http://www.w3.org/2000/svg" class="metric-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+    """
+
+    # --- 개선된 카드 UI (HTML) ---
+    st.markdown(f"""
+    <div class="metric-card-container">
+        <div class="custom-metric-card">
+            <div class="metric-title">{icon_total_apply}<span>전체 신청</span></div>
+            <div class="metric-value">{total_received_all:,}</div>
         </div>
-        """, unsafe_allow_html=True)
-        
-    with col2:
-        st.markdown(f"""
-        <div class="metric-card" style="height: 100px;">
-            <div style="font-size: 0.75rem; opacity: 0.9;">전체 출고</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: #1e40af;">{delivery_excluding_taxi:,}</div>
+        <div class="custom-metric-card">
+            <div class="metric-title">{icon_total_delivery}<span>전체 출고</span></div>
+            <div class="metric-value">{delivery_excluding_taxi:,}</div>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="custom-metric-card">
+            <div class="metric-title">{icon_tesla_apply}<span>테슬라 총 신청</span></div>
+            <div class="metric-value">{tesla_applications:,}</div>
+        </div>
+        <div class="custom-metric-card">
+            <div class="metric-title">{icon_tesla_delivery}<span>테슬라 출고</span></div>
+            <div class="metric-value">{tesla_delivered:,}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.markdown("<br>" * 1, unsafe_allow_html=True)
-    # 두 번째 줄
-    col3, col4 = st.columns(2)
-    
-    with col3:
-        tesla_applications = df_step['신청'].iloc[0] if not df_step.empty and '신청' in df_step.columns else 0
-        st.markdown(f"""
-        <div class="metric-card" style="height: 100px;">
-            <div style="font-size: 0.75rem; opacity: 0.9;">테슬라 총 신청</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: #1e40af;">{tesla_applications:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col4:
-        tesla_delivered = df_step['출고'].iloc[0] if not df_step.empty and '출고' in df_step.columns else 0
-        st.markdown(f"""
-        <div class="metric-card" style="height: 100px;">
-            <div style="font-size: 0.75rem; opacity: 0.9;">테슬라 출고</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: #1e40af;">{tesla_delivered:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+    st.info("💡 **전체 신청은 EV의 모든 차량 신청 건입니다.**")
+
 def create_total_overview_dashboard_2(df_step, df_overview, df_amount, df_tesla):
     # 테슬라 현황 (간소화)
     if not df_tesla.empty:
@@ -611,7 +664,7 @@ def create_regional_dashboard_top_1(df_overview, df_tesla):
                     )
 
             with vline_col:
-                st.markdown("<div style='height: 160px; border-left: 1px solid #e5e7eb; margin: 0 auto;'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='height: 220px; border-left: 1px solid #e5e7eb; margin: 0 auto;'></div>", unsafe_allow_html=True)
 
             with top_col2:
                 # 해당 지역 테슬라 현황
@@ -643,7 +696,6 @@ def create_regional_dashboard_top_1(df_overview, df_tesla):
                             </div>
                             """, unsafe_allow_html=True
                         )
-
 
 def render_region_tesla_summary(selected_region, received_final, df_tesla):
 	st.subheader(f"🚗 {selected_region} 테슬라 현황")
