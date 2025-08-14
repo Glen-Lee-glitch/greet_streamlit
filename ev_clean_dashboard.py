@@ -546,176 +546,280 @@ def create_total_overview_dashboard_3(df_step, df_overview, df_amount, df_tesla)
             st.plotly_chart(fig, use_container_width=True)
 
 
-def create_regional_dashboard(df_overview, df_tesla):
-    """지역별 대시보드 (오른쪽 영역)"""
+def create_regional_dashboard_top(df_overview, df_tesla):
+    """지역별 대시보드 (오른쪽 영역) - 지역 선택 및 상단 메트릭, 선택된 지역 반환"""
     st.subheader("🗺️ 지역별 상세 현황")
-    
-    # 표기 방식 설명
     st.info("💡 **테슬라가 아닌 모든 전기차 보조금 현황입니다**")
-    
-    # 지역 선택 드롭다운
+
+    selected_region = None
+    received_final = 0  # 하단에서 활용할 변수도 반환
     if not df_overview.empty:
         # '한국환경공단' 제외한 지역 목록
         regions = df_overview[df_overview['지역'] != '한국환경공단']['지역'].unique()
         selected_region = st.selectbox("📍 지역 선택", regions, index=0)
-        
+
         # 선택된 지역의 상세 정보
         region_data = df_overview[df_overview['지역'] == selected_region]
-        
+
         if not region_data.empty:
             # 새로운 집계 방식: 전체 - 택시
-            # 총 공고: 전체 - 택시
             total_announcement = int(region_data['공고_전체'].sum())
             taxi_announcement = int(region_data['공고_택시'].sum())
             announcement_final = total_announcement - taxi_announcement
-            
-            # 접수 완료: 전체 - 택시  
+
             total_received = int(region_data['접수_전체'].sum())
             taxi_received = int(region_data['접수_택시'].sum())
             received_final = total_received - taxi_received
-            
-            # 잔여: 전체
-            remaining = int(region_data['잔여_전체'].sum())
-            
-            # 지역 현황 메트릭 (간단한 텍스트)
-            col1, col2, col3 = st.columns(3)
 
+            remaining = int(region_data['잔여_전체'].sum())
+
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>총 공고</span>", unsafe_allow_html=True)
                 st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{announcement_final:,}건</span>", unsafe_allow_html=True)
-                
             with col2:
                 st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>접수 완료</span>", unsafe_allow_html=True)
                 st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{received_final:,}건</span>", unsafe_allow_html=True)
-                
             with col3:
                 st.markdown("<span style='font-size:1.2rem; font-weight:bold;'>남은 대수</span>", unsafe_allow_html=True)
                 st.markdown(f"<span style='font-size:2rem; font-weight:bold;'>{remaining:,}건</span>", unsafe_allow_html=True)
-            
-            st.markdown("<br>" * 1, unsafe_allow_html=True)
+    return selected_region, received_final
 
-        
-        # 6:4 비율로 분할 - 세로 섹션들과 사이드 리스트
-        main_content, side_list = st.columns([6, 4])
-        
-        with main_content:
-            # 해당 지역 테슬라 현황 (다시 위치)
-            if not df_tesla.empty and '지역구분' in df_tesla.columns:
-                tesla_count = len(df_tesla[df_tesla['지역구분'] == selected_region])
-                tesla_share_region = (tesla_count / received_final * 100) if received_final > 0 else 0
-                
-                st.subheader(f"🚗 {selected_region} 테슬라 현황")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("테슬라 접수", f"{tesla_count:,}건")
-                with col2:
-                    st.metric("지역 점유율", f"{tesla_share_region:.1f}%")
-            
-            # 지역별 총 접수 vs 테슬라 접수 차트
-            st.subheader("📊 지역별 총 접수 vs 테슬라 접수")
-            
-            # 전체 접수 현황 (지역별) - '한국환경공단' 제외
-            total_by_region = df_overview[df_overview['지역'] != '한국환경공단'].groupby('지역')['접수_전체'].sum().reset_index()
-            total_by_region['total_excluding_taxi'] = df_overview[df_overview['지역'] != '한국환경공단'].groupby('지역')['접수_택시'].sum().values
-            total_by_region['접수_택시제외'] = total_by_region['접수_전체'] - total_by_region['total_excluding_taxi']
-            
-            # 테슬라 접수 현황 (지역구분별) - '한국환경공단' 제외
-            if not df_tesla.empty and '지역구분' in df_tesla.columns:
-                tesla_by_region = df_tesla[df_tesla['지역구분'] != '한국환경공단']['지역구분'].value_counts().reset_index()
-                tesla_by_region.columns = ['지역', '테슬라_접수']
-                
-                # 두 데이터 병합
-                comparison_df = pd.merge(total_by_region[['지역', '접수_택시제외']], tesla_by_region, on='지역', how='left').fillna(0)
-                
-                # 상위 10개 지역만 선택 (전체 접수 기준)
-                top_regions = comparison_df.nlargest(10, '접수_택시제외')
-                
-                fig = go.Figure()
-                
-                # 전체 접수 막대 (배경)
-                fig.add_trace(go.Bar(
-                    x=top_regions['지역'],
-                    y=top_regions['접수_택시제외'],
-                    name='전체 접수(택시제외)',
-                    marker_color='lightblue',
-                    opacity=0.7
-                ))
-                
-                # 테슬라 접수 막대 (전면)
-                fig.add_trace(go.Bar(
-                    x=top_regions['지역'],
-                    y=top_regions['테슬라_접수'],
-                    name='테슬라 접수',
-                    marker_color='#1e40af'
-                ))
-                
-                fig.update_layout(
-                    title="지역별 총 접수 vs 테슬라 접수 (상위 10개 지역)",
-                    xaxis_title="지역",
-                    yaxis_title="접수 건수",
-                    barmode='overlay',  # 막대를 겹치게 표시
-                    height=400,
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="right",
-                        x=1
-                    ),
-                    title_font_size=14
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-        
-        with side_list:
-            # 잔여 비율이 낮은 지역 리스트
-            st.subheader("📉 잔여 비율 낮은 지역")
-            st.caption("공고 대비 잔여 대수가 적은 순으로 정렬")
-            
-            if not df_overview.empty:
-                # 한국환경공단 제외하고 계산
-                filtered_overview = df_overview[df_overview['지역'] != '한국환경공단'].copy()
-                
-                # 지역별 집계
-                remaining_analysis = filtered_overview.groupby('지역').agg({
-                    '공고_전체': 'sum',
-                    '잔여_전체': 'sum'
-                }).reset_index()
-                
-                # 잔여 비율 계산 (공고 대비)
-                remaining_analysis['잔여_비율'] = (remaining_analysis['잔여_전체'] / remaining_analysis['공고_전체'] * 100).round(1)
-                
-                # 공고가 0인 지역 제외
-                remaining_analysis = remaining_analysis[remaining_analysis['공고_전체'] > 0]
-                
-                # 잔여 비율이 낮은 순으로 정렬 (모든 지자체)
-                all_remaining = remaining_analysis.sort_values('잔여_비율').reset_index(drop=True)
-                
-                # 컬럼명 정리
-                all_remaining = all_remaining.rename(columns={
-                    '지역': '지역',
-                    '잔여_전체': '잔여 대수',
-                    '잔여_비율': '잔여 비율(%)'
-                })
-                
-                # 숫자 포맷팅
-                all_remaining['잔여 대수'] = all_remaining['잔여 대수'].astype(int)
-                
-                # 표시할 컬럼만 선택
-                display_cols = ['지역', '잔여 대수', '잔여 비율(%)']
-                
-                st.dataframe(
-                    all_remaining[display_cols],
-                    use_container_width=True,
-                    hide_index=True,
-                    height=450,
-                    column_config={
-                        "지역": st.column_config.TextColumn("지역", width="medium"),
-                        "잔여 대수": st.column_config.NumberColumn("잔여 대수", format="%d"),
-                        "잔여 비율(%)": st.column_config.NumberColumn("잔여 비율(%)", format="%.1f%%"),
-                    }
-                )
+def render_region_tesla_summary(selected_region, received_final, df_tesla):
+	st.subheader(f"🚗 {selected_region} 테슬라 현황")
+	if (
+		selected_region is None
+		or df_tesla.empty
+		or '지역구분' not in df_tesla.columns
+	):
+		st.info("표시할 데이터가 없습니다.")
+		return
+
+	tesla_count = len(df_tesla[df_tesla['지역구분'] == selected_region])
+	tesla_share_region = (tesla_count / received_final * 100) if received_final > 0 else 0.0
+
+	col1, col2 = st.columns(2)
+	with col1:
+		st.metric("테슬라 접수", f"{tesla_count:,}건")
+	with col2:
+		st.metric("지역 점유율", f"{tesla_share_region:.1f}%")
+
+
+def render_region_total_vs_tesla_chart(df_overview, df_tesla):
+	st.subheader("📊 지역별 총 접수 vs 테슬라 접수")
+	if df_overview.empty or df_tesla.empty or '지역구분' not in df_tesla.columns:
+		st.info("표시할 데이터가 없습니다.")
+		return
+
+	total_by_region = df_overview[df_overview['지역'] != '한국환경공단'] \
+		.groupby('지역')['접수_전체'].sum().reset_index()
+	total_by_region['total_excluding_taxi'] = df_overview[df_overview['지역'] != '한국환경공단'] \
+		.groupby('지역')['접수_택시'].sum().values
+	total_by_region['접수_택시제외'] = total_by_region['접수_전체'] - total_by_region['total_excluding_taxi']
+
+	tesla_by_region = df_tesla[df_tesla['지역구분'] != '한국환경공단']['지역구분'] \
+		.value_counts().reset_index()
+	tesla_by_region.columns = ['지역', '테슬라_접수']
+
+	comparison_df = pd.merge(
+		total_by_region[['지역', '접수_택시제외']],
+		tesla_by_region,
+		on='지역',
+		how='left'
+	).fillna(0)
+
+	top_regions = comparison_df.nlargest(10, '접수_택시제외')
+
+	fig = go.Figure()
+	fig.add_trace(go.Bar(
+		x=top_regions['지역'],
+		y=top_regions['접수_택시제외'],
+		name='전체 접수(택시제외)',
+		marker_color='lightblue',
+		opacity=0.7
+	))
+	fig.add_trace(go.Bar(
+		x=top_regions['지역'],
+		y=top_regions['테슬라_접수'],
+		name='테슬라 접수',
+		marker_color='#1e40af'
+	))
+	fig.update_layout(
+		title="지역별 총 접수 vs 테슬라 접수 (상위 10개 지역)",
+		xaxis_title="지역",
+		yaxis_title="접수 건수",
+		barmode='overlay',
+		height=400,
+		showlegend=True,
+		legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+		title_font_size=14
+	)
+	st.plotly_chart(fig, use_container_width=True)
+
+
+def render_low_remaining_list(df_overview):
+	st.subheader("📉 잔여 비율 낮은 지역")
+	st.caption("공고 대비 잔여 대수가 적은 순으로 정렬")
+	if df_overview.empty:
+		st.info("표시할 데이터가 없습니다.")
+		return
+
+	filtered_overview = df_overview[df_overview['지역'] != '한국환경공단'].copy()
+	remaining_analysis = filtered_overview.groupby('지역').agg({
+		'공고_전체': 'sum',
+		'잔여_전체': 'sum'
+	}).reset_index()
+
+	remaining_analysis['잔여_비율'] = (remaining_analysis['잔여_전체'] / remaining_analysis['공고_전체'] * 100).round(1)
+	remaining_analysis = remaining_analysis[remaining_analysis['공고_전체'] > 0]
+	all_remaining = remaining_analysis.sort_values('잔여_비율').reset_index(drop=True)
+
+	all_remaining = all_remaining.rename(columns={
+		'지역': '지역',
+		'잔여_전체': '잔여 대수',
+		'잔여_비율': '잔여 비율(%)'
+	})
+	all_remaining['잔여 대수'] = all_remaining['잔여 대수'].astype(int)
+
+	display_cols = ['지역', '잔여 대수', '잔여 비율(%)']
+	st.dataframe(
+		all_remaining[display_cols],
+		use_container_width=True,
+		hide_index=True,
+		height=450,
+		column_config={
+			"지역": st.column_config.TextColumn("지역", width="medium"),
+			"잔여 대수": st.column_config.NumberColumn("잔여 대수", format="%d"),
+			"잔여 비율(%)": st.column_config.NumberColumn("잔여 비율(%)", format="%.1f%%"),
+		}
+	)
+
+def create_regional_dashboard_bottom(df_overview, df_tesla, selected_region, received_final):
+    # 6:4 비율로 분할 - 세로 섹션들과 사이드 리스트
+    main_content, side_list = st.columns([6, 4])
+
+    with main_content:
+        # 해당 지역 테슬라 현황
+        if (
+            selected_region is not None
+            and not df_tesla.empty
+            and '지역구분' in df_tesla.columns
+        ):
+            tesla_count = len(df_tesla[df_tesla['지역구분'] == selected_region])
+            tesla_share_region = (tesla_count / received_final * 100) if received_final > 0 else 0
+
+            st.subheader(f"🚗 {selected_region} 테슬라 현황")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("테슬라 접수", f"{tesla_count:,}건")
+            with col2:
+                st.metric("지역 점유율", f"{tesla_share_region:.1f}%")
+
+        # 지역별 총 접수 vs 테슬라 접수 차트
+        st.subheader("📊 지역별 총 접수 vs 테슬라 접수")
+
+        # 전체 접수 현황 (지역별) - '한국환경공단' 제외
+        total_by_region = df_overview[df_overview['지역'] != '한국환경공단'].groupby('지역')['접수_전체'].sum().reset_index()
+        total_by_region['total_excluding_taxi'] = df_overview[df_overview['지역'] != '한국환경공단'].groupby('지역')['접수_택시'].sum().values
+        total_by_region['접수_택시제외'] = total_by_region['접수_전체'] - total_by_region['total_excluding_taxi']
+
+        # 테슬라 접수 현황 (지역구분별) - '한국환경공단' 제외
+        if not df_tesla.empty and '지역구분' in df_tesla.columns:
+            tesla_by_region = df_tesla[df_tesla['지역구분'] != '한국환경공단']['지역구분'].value_counts().reset_index()
+            tesla_by_region.columns = ['지역', '테슬라_접수']
+
+            # 두 데이터 병합
+            comparison_df = pd.merge(total_by_region[['지역', '접수_택시제외']], tesla_by_region, on='지역', how='left').fillna(0)
+
+            # 상위 10개 지역만 선택 (전체 접수 기준)
+            top_regions = comparison_df.nlargest(10, '접수_택시제외')
+
+            fig = go.Figure()
+
+            # 전체 접수 막대 (배경)
+            fig.add_trace(go.Bar(
+                x=top_regions['지역'],
+                y=top_regions['접수_택시제외'],
+                name='전체 접수(택시제외)',
+                marker_color='lightblue',
+                opacity=0.7
+            ))
+
+            # 테슬라 접수 막대 (전면)
+            fig.add_trace(go.Bar(
+                x=top_regions['지역'],
+                y=top_regions['테슬라_접수'],
+                name='테슬라 접수',
+                marker_color='#1e40af'
+            ))
+
+            fig.update_layout(
+                title="지역별 총 접수 vs 테슬라 접수 (상위 10개 지역)",
+                xaxis_title="지역",
+                yaxis_title="접수 건수",
+                barmode='overlay',  # 막대를 겹치게 표시
+                height=400,
+                showlegend=True,
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                ),
+                title_font_size=14
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+    with side_list:
+        # 잔여 비율이 낮은 지역 리스트
+        st.subheader("📉 잔여 비율 낮은 지역")
+        st.caption("공고 대비 잔여 대수가 적은 순으로 정렬")
+
+        if not df_overview.empty:
+            # 한국환경공단 제외하고 계산
+            filtered_overview = df_overview[df_overview['지역'] != '한국환경공단'].copy()
+
+            # 지역별 집계
+            remaining_analysis = filtered_overview.groupby('지역').agg({
+                '공고_전체': 'sum',
+                '잔여_전체': 'sum'
+            }).reset_index()
+
+            # 잔여 비율 계산 (공고 대비)
+            remaining_analysis['잔여_비율'] = (remaining_analysis['잔여_전체'] / remaining_analysis['공고_전체'] * 100).round(1)
+
+            # 공고가 0인 지역 제외
+            remaining_analysis = remaining_analysis[remaining_analysis['공고_전체'] > 0]
+
+            # 잔여 비율이 낮은 순으로 정렬 (모든 지자체)
+            all_remaining = remaining_analysis.sort_values('잔여_비율').reset_index(drop=True)
+
+            # 컬럼명 정리
+            all_remaining = all_remaining.rename(columns={
+                '지역': '지역',
+                '잔여_전체': '잔여 대수',
+                '잔여_비율': '잔여 비율(%)'
+            })
+
+            # 숫자 포맷팅
+            all_remaining['잔여 대수'] = all_remaining['잔여 대수'].astype(int)
+
+            # 표시할 컬럼만 선택
+            display_cols = ['지역', '잔여 대수', '잔여 비율(%)']
+
+            st.dataframe(
+                all_remaining[display_cols],
+                use_container_width=True,
+                hide_index=True,
+                height=450,
+                column_config={
+                    "지역": st.column_config.TextColumn("지역", width="medium"),
+                    "잔여 대수": st.column_config.NumberColumn("잔여 대수", format="%d"),
+                    "잔여 비율(%)": st.column_config.NumberColumn("잔여 비율(%)", format="%.1f%%"),
+                }
+            )
 
 def main():
     """메인 애플리케이션"""
@@ -739,7 +843,8 @@ def main():
         create_total_overview_dashboard_3(df_step, df_overview, df_amount, df_tesla)
     
     with right_col:
-        create_regional_dashboard(df_overview, df_tesla)
+        selected_region, received_final = create_regional_dashboard_top(df_overview, df_tesla)
+        create_regional_dashboard_bottom(df_overview, df_tesla, selected_region, received_final)
     
     # 푸터
     st.markdown(f"""
