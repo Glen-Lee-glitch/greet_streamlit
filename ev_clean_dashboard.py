@@ -630,7 +630,16 @@ def create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla):
                 title="신청 프로세스 현황",
                 color='건수'
             )
-            fig.update_layout(height=300, title_font_size=14)
+            fig.update_layout(
+                height=300, 
+                title_font_size=14
+            )
+            # 데이터 레이블 형식 변경 (천 단위 구분 쉼표 사용, k 표기 제거)
+            fig.update_traces(
+                textinfo='label+value',
+                texttemplate='%{value:,.0f}',
+                textfont_size=12
+            )
             st.plotly_chart(fig, use_container_width=True)
 
 def create_regional_dashboard(df_overview, df_tesla):
