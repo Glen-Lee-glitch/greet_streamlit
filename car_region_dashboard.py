@@ -85,13 +85,15 @@ def render_comprehensive_analysis(df_filtered):
             return
         
         # ev_clean_dashboard의 함수들을 직접 구현하거나 데이터 전달
-        from ev_clean_dashboard import create_total_overview_dashboard, create_regional_dashboard
+        from ev_clean_dashboard import create_total_overview_dashboard_1, create_total_overview_dashboard_2, create_total_overview_dashboard_3, create_regional_dashboard
         
         # 3:7 비율로 좌우 분할
         left_col, right_col = st.columns([3, 7])
         
         with left_col:
-            create_total_overview_dashboard(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
+            create_total_overview_dashboard_1(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
+            create_total_overview_dashboard_2(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
+            create_total_overview_dashboard_3(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
         
         with right_col:
             create_regional_dashboard(df_grit_overview, df_tesla)

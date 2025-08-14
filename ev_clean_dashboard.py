@@ -301,102 +301,6 @@ def create_tesla_comparison_table(df_overview, df_tesla):
     else:
         st.warning("비교할 데이터가 없습니다.")
 
-def create_key_metrics(df_step, df_overview):
-    """주요 지표 카드"""
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_applications = df_step['신청'].iloc[0] if not df_step.empty and '신청' in df_step.columns else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">총 신청</div>
-            <div class="highlight-number">{total_applications:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        total_approved = df_step['승인'].iloc[0] if not df_step.empty and '승인' in df_step.columns else 0
-        approval_rate = (total_approved / total_applications * 100) if total_applications > 0 else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">승인 완료</div>
-            <div class="highlight-number">{total_approved:,}</div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">승인률: {approval_rate:.1f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        total_delivered = df_step['출고'].iloc[0] if not df_step.empty and '출고' in df_step.columns else 0
-        delivery_rate = (total_delivered / total_approved * 100) if total_approved > 0 else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">출고 완료</div>
-            <div class="highlight-number">{total_delivered:,}</div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">출고율: {delivery_rate:.1f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        total_regions = len(df_overview['지역'].unique()) if not df_overview.empty else 0
-        total_overview_applications = df_overview['접수_전체'].sum() if not df_overview.empty else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">전국 현황</div>
-            <div class="highlight-number">{total_overview_applications:,}</div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">{total_regions}개 지역</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-def create_tesla_metrics(df_tesla, df_overview):
-    """테슬라 관련 주요 지표 카드"""
-    st.markdown('<div class="sub-header">🚗 테슬라 현황 요약</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_tesla = len(df_tesla) if not df_tesla.empty else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">테슬라 총 접수</div>
-            <div class="highlight-number">{total_tesla:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        total_all = df_overview['접수_전체'].sum() if not df_overview.empty else 0
-        tesla_share = (total_tesla / total_all * 100) if total_all > 0 else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">전체 점유율</div>
-            <div class="highlight-number">{tesla_share:.1f}%</div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">전체 {total_all:,}건 중</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        if not df_tesla.empty and '지역구분' in df_tesla.columns:
-            top_region = df_tesla['지역구분'].value_counts().index[0]
-            top_region_count = df_tesla['지역구분'].value_counts().iloc[0]
-        else:
-            top_region = "데이터없음"
-            top_region_count = 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">최다 접수 지역</div>
-            <div class="highlight-number">{top_region_count:,}</div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">{top_region}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        unique_regions = len(df_tesla['지역구분'].unique()) if not df_tesla.empty and '지역구분' in df_tesla.columns else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-size: 0.875rem; opacity: 0.9;">진출 지역 수</div>
-            <div class="highlight-number">{unique_regions}</div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">개 지역</div>
-        </div>
-        """, unsafe_allow_html=True)
 
 def create_simple_charts(df_overview, df_step):
     """간단한 시각화"""
@@ -530,9 +434,9 @@ def parse_delivery_data(delivery_string):
     except:
         return 0, 0
 
-def create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla):
+def create_total_overview_dashboard_1(df_step, df_overview, df_amount, df_tesla):
     """총 현황 대시보드 (왼쪽 영역)"""
-    st.header("📊 테슬라 전국 총 현황")
+    st.subheader("📊 테슬라 전국 총 현황")
     
     # 전체 접수 완료 계산 (모든 지역의 접수_전체 - 접수_택시)
     total_received_all = 0
@@ -572,7 +476,7 @@ def create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla):
             <div style="font-size: 1.8rem; font-weight: 700; color: #1e40af;">{delivery_excluding_taxi:,}</div>
         </div>
         """, unsafe_allow_html=True)
-    
+    st.markdown("<br>" * 1, unsafe_allow_html=True)
     # 두 번째 줄
     col3, col4 = st.columns(2)
     
@@ -594,9 +498,7 @@ def create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla):
         </div>
         """, unsafe_allow_html=True)
     
-    # 높이 맞추기 위한 여백 추가  
-    st.markdown("<br>" * 3, unsafe_allow_html=True)
-    
+def create_total_overview_dashboard_2(df_step, df_overview, df_amount, df_tesla):
     # 테슬라 현황 (간소화)
     if not df_tesla.empty:
         st.subheader("🚗 테슬라 현황")
@@ -610,6 +512,7 @@ def create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla):
         with col2:
             st.metric("점유율", f"{tesla_share:.1f}%")
     
+def create_total_overview_dashboard_3(df_step, df_overview, df_amount, df_tesla):
     # 프로세스 현황 차트 (간소화)
     if not df_step.empty:
         st.subheader("🔄 진행 단계")
@@ -642,9 +545,10 @@ def create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla):
             )
             st.plotly_chart(fig, use_container_width=True)
 
+
 def create_regional_dashboard(df_overview, df_tesla):
     """지역별 대시보드 (오른쪽 영역)"""
-    st.header("🗺️ 지역별 상세 현황")
+    st.subheader("🗺️ 지역별 상세 현황")
     
     # 표기 방식 설명
     st.info("💡 **테슬라가 아닌 모든 전기차 보조금 현황입니다**")
@@ -830,7 +734,9 @@ def main():
     left_col, right_col = st.columns([3, 7])
     
     with left_col:
-        create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla)
+        create_total_overview_dashboard_1(df_step, df_overview, df_amount, df_tesla)
+        create_total_overview_dashboard_2(df_step, df_overview, df_amount, df_tesla)
+        create_total_overview_dashboard_3(df_step, df_overview, df_amount, df_tesla)
     
     with right_col:
         create_regional_dashboard(df_overview, df_tesla)
