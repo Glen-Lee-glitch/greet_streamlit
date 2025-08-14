@@ -300,7 +300,7 @@ with st.sidebar:
     st.header("📊 조회 옵션")
     view_option = st.radio(
         "조회 유형을 선택하세요.",
-        ('금일', '특정일 조회', '기간별 조회', '분기별 조회', '월별 조회'),
+        ('금일', '특정일 조회', '기간별 조회'),
         key="view_option"
     )
 
