@@ -243,10 +243,10 @@ def render_writer_analysis(df_filtered):
         st.info("현재 파일의 컬럼명:", list(df_filtered.columns))
 
 def render_regional_analysis(df_master):
-    """지자체별 현황 정리 탭 렌더링"""
+    """지자체별 세부사항 탭 렌더링"""
     st.markdown("""
     <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 30px;">
-        <h2 style="color: #1f77b4; margin: 0; font-weight: 600;">🏛️ 지자체별 현황 정리</h2>
+        <h2 style="color: #1f77b4; margin: 0; font-weight: 600;">🏛️ 지자체별 세부사항</h2>
         <p style="color: #666; margin: 10px 0 0 0; font-size: 16px;">지역별 보조금 현황 및 필요 서류 정보</p>
     </div>
     """, unsafe_allow_html=True)
@@ -267,51 +267,6 @@ def render_regional_analysis(df_master):
 
         # 선택된 지역의 데이터 추출 (한 행)
         filtered = df_master[df_master['지역'] == selected_region].iloc[0]
-
-        # --- 1. 현황 (차량 대수) ---
-        st.markdown("### 📊 현황 (차량 대수)")
-        st.markdown("---")
-
-        # 먼저 변수들을 계산
-        general_status = filtered.get('현황_일반', 0)
-        try:
-            if pd.isna(general_status) or general_status == '' or str(general_status).strip() == '':
-                general_status = 0
-            else:
-                general_status = int(float(str(general_status).replace(',', '')))
-        except (ValueError, TypeError):
-            general_status = 0
-
-        priority_status = filtered.get('현황_우선', 0)
-        try:
-            if pd.isna(priority_status) or priority_status == '' or str(priority_status).strip() == '':
-                priority_status = 0
-            else:
-                priority_status = int(float(str(priority_status).replace(',', '')))
-        except (ValueError, TypeError):
-            priority_status = 0
-
-        # 그 다음에 HTML 표시
-        status_cols = st.columns(2)
-        with status_cols[0]:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        padding: 20px; border-radius: 15px; color: white; text-align: center;">
-                <h4 style="margin: 0 0 10px 0; font-size: 18px;">일반 현황</h4>
-                <h2 style="margin: 0; font-size: 32px; font-weight: 700;">{general_status:,} 대</h2>
-            </div>
-            """.format(general_status=general_status), unsafe_allow_html=True)
-
-        with status_cols[1]:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                        padding: 20px; border-radius: 15px; color: white; text-align: center;">
-                <h4 style="margin: 0 0 10px 0; font-size: 18px;">우선 현황</h4>
-                <h2 style="margin: 0; font-size: 32px; font-weight: 700;">{priority_status:,} 대</h2>
-            </div>
-            """.format(priority_status=priority_status), unsafe_allow_html=True)
-
-        st.markdown("---")
 
         # --- 2. 모델별 보조금 ---
         st.subheader("🚗 모델별 보조금 (단위: 만 원)")
@@ -396,7 +351,7 @@ def show_car_region_dashboard(data=None, today_kst=None):
 
     # --- 탭 구성 먼저 만들기 ---
     st.title("🚗 테슬라 EV 데이터 대시보드")
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 종합 현황", "👥 신청자 분석", "👨‍💼 작업자 분석", "🏛️ 지자체별 현황 정리"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 종합 현황", "👥 신청자 분석", "👨‍💼 작업자 분석", "🏛️ 지자체별 세부사항"])
     
     # --- 종합 현황 탭 (전체 화면 사용) ---
     with tab1:
