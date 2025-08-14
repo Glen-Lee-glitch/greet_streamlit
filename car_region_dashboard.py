@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 import pickle
+from datetime import datetime
 
 # --- 페이지 설정 ---
 st.set_page_config(
@@ -65,7 +67,46 @@ def load_tesla_data():
         return pd.DataFrame(), pd.DataFrame()
 
 def render_comprehensive_analysis(df_filtered):
-    """종합 현황 탭 렌더링"""
+    """종합 현황 탭 렌더링 - ev_clean_dashboard.py 내용 포함"""
+    
+    # ev_clean_dashboard.py의 함수들을 여기서 사용하기 위해 임포트
+    from ev_clean_dashboard import (
+        load_all_data, load_tesla_data, create_total_overview_dashboard, 
+        create_regional_dashboard
+    )
+    
+    # 전기차 보조금 데이터 로드
+    try:
+        df_overview, df_amount, df_step = load_all_data()
+        df_tesla = load_tesla_data()
+        
+        # ev_clean_dashboard의 메인 레이아웃을 여기에 구현
+        st.markdown('<h1 style="text-align: center; font-size: 2rem; font-weight: 700; color: #1f2937; margin-bottom: 1rem;">⚡ 전기차 보조금 현황 확인</h1>', unsafe_allow_html=True)
+        
+        if df_overview.empty and df_amount.empty and df_step.empty:
+            st.error("전기차 보조금 데이터를 로드할 수 없습니다. 파일 경로를 확인해주세요.")
+            st.info("기본 테슬라 데이터 분석으로 전환합니다.")
+            
+            # 기존 테슬라 분석 표시
+            render_original_tesla_analysis(df_filtered)
+            return
+        
+        # 3:7 비율로 좌우 분할
+        left_col, right_col = st.columns([3, 7])
+        
+        with left_col:
+            create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla)
+        
+        with right_col:
+            create_regional_dashboard(df_overview, df_tesla)
+            
+    except Exception as e:
+        st.error(f"전기차 보조금 데이터 로드 중 오류: {e}")
+        st.info("기본 테슬라 데이터 분석으로 전환합니다.")
+        render_original_tesla_analysis(df_filtered)
+
+def render_original_tesla_analysis(df_filtered):
+    """기존 테슬라 분석 (백업용)"""
     st.subheader("핵심 지표")
     
     total_count = len(df_filtered)
