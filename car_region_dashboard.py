@@ -387,26 +387,77 @@ def show_car_region_dashboard(data=None, today_kst=None):
                 min_date = df_original[date_col].min().date()
                 max_date = df_original[date_col].max().date()
 
-                # 시작일과 종료일을 분리해서 입력
-                date_col1, date_col2 = st.columns(2)
-
-                with date_col1:
-                    start_date = st.date_input(
-                        "시작일",
-                        value=min_date,
-                        min_value=min_date,
-                        max_value=max_date,
-                        key="start_date_filter_tab2"
+                # 시작일 설정
+                st.subheader("📅 시작일 설정")
+                start_col1, start_col2, start_col3 = st.columns(3)
+                
+                with start_col1:
+                    year_options = list(range(min_date.year, max_date.year + 1))
+                    start_year = st.selectbox(
+                        "시작 년도", 
+                        year_options, 
+                        index=year_options.index(min_date.year),
+                        key="start_year_filter_tab2"
                     )
-
-                with date_col2:
-                    end_date = st.date_input(
-                        "종료일",
-                        value=default_end_date,
-                        min_value=min_date,
-                        max_value=max_date,
-                        key="end_date_filter_tab2"
+                with start_col2:
+                    month_options = list(range(1, 13))
+                    start_month = st.selectbox(
+                        "시작 월", 
+                        month_options, 
+                        index=month_options.index(min_date.month),
+                        format_func=lambda x: f"{x}월",
+                        key="start_month_filter_tab2"
                     )
+                with start_col3:
+                    day_options = list(range(1, 32))
+                    start_day = st.selectbox(
+                        "시작 일", 
+                        day_options, 
+                        index=day_options.index(min_date.day),
+                        format_func=lambda x: f"{x}일",
+                        key="start_day_filter_tab2"
+                    )
+                
+                # 종료일 설정
+                st.subheader("📅 종료일 설정")
+                end_col1, end_col2, end_col3 = st.columns(3)
+                
+                with end_col1:
+                    end_year = st.selectbox(
+                        "종료 년도", 
+                        year_options, 
+                        index=year_options.index(default_end_date.year),
+                        key="end_year_filter_tab2"
+                    )
+                with end_col2:
+                    end_month = st.selectbox(
+                        "종료 월", 
+                        month_options, 
+                        index=month_options.index(default_end_date.month),
+                        format_func=lambda x: f"{x}월",
+                        key="end_month_filter_tab2"
+                    )
+                with end_col3:
+                    end_day = st.selectbox(
+                        "종료 일", 
+                        day_options, 
+                        index=day_options.index(default_end_date.day),
+                        format_func=lambda x: f"{x}일",
+                        key="end_day_filter_tab2"
+                    )
+                
+                # 날짜 객체 생성
+                try:
+                    start_date = pd.to_datetime(f"{start_year}-{start_month:02d}-{start_day:02d}").date()
+                except:
+                    start_date = min_date
+                    st.error("잘못된 시작일입니다. 기본값으로 설정됩니다.")
+                
+                try:
+                    end_date = pd.to_datetime(f"{end_year}-{end_month:02d}-{end_day:02d}").date()
+                except:
+                    end_date = default_end_date
+                    st.error("잘못된 종료일입니다. 기본값으로 설정됩니다.")
 
                 # 날짜 유효성 검사 및 보정
                 if start_date > end_date:
@@ -441,7 +492,7 @@ def show_car_region_dashboard(data=None, today_kst=None):
         ]
         
         with main_col:
-            st.markdown(f"**조회 기간:** `{start_date}` ~ `{end_date}`")
+            st.markdown(f"**조회 기간:** `{start_date.strftime('%Y년 %m월 %d일')}` ~ `{end_date.strftime('%Y년 %m월 %d일')}`")
             st.markdown("---")
             render_applicant_analysis(df_filtered)
     

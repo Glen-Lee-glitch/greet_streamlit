@@ -730,12 +730,11 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             with sel_col:
                 period_option = st.selectbox(
                     '기간 선택',
-                    ['전체', '3Q', '7월', '8월', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
+                    ['3Q', '전체', '7월', '8월', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
                     index=0,
                     key='retail_period')
         else:
-            st.write("##### 리테일 월별 요약")
-            period_option = '전체'  # 테슬라 옵션일 때는 기본값으로 '전체' 사용
+            period_option = '3Q'  # 테슬라 옵션일 때는 기본값으로 '전체' 사용
             
         year = today_kst.year
         july_start = datetime(year, 7, 1).date()
@@ -1086,7 +1085,6 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                         index=0,
                         key='corp_period')
             else:
-                st.write("##### 법인팀 월별 요약")
                 corp_period_option = '전체'  # 테슬라 옵션일 때는 기본값으로 '전체' 사용
         
         # --- 날짜 변수 설정 ---
@@ -1169,11 +1167,17 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         # --- HTML 테이블 수동 생성 ---
         html_corp = '<table class="custom_table" border="0"><thead><tr>'
         html_corp += '<th rowspan="2" style="background-color: #f7f7f9;">항목</th>'
-        html_corp += '<th colspan="3" style="background-color: #ffb3ba;">Q3</th>'
+        if viewer_option == '내부':
+            html_corp += '<th colspan="3" style="background-color: #ffb3ba;">Q3</th>'
+        else:
+            html_corp += '<th style="background-color: #ffd6dd;">7월</th>'
+            html_corp += '<th style="background-color: #ffd6dd;">8월</th>'
+            html_corp += '<th style="background-color: #ffe0b2;">계</th>'
         html_corp += '</tr><tr>'
-        html_corp += '<th style="background-color: #ffd6dd;">7월</th>'
-        html_corp += '<th style="background-color: #ffd6dd;">8월</th>'
-        html_corp += '<th style="background-color: #ffe0b2;">계</th>'
+        if viewer_option == '내부':
+            html_corp += '<th style="background-color: #ffd6dd;">7월</th>'
+            html_corp += '<th style="background-color: #ffd6dd;">8월</th>'
+            html_corp += '<th style="background-color: #ffe0b2;">계</th>'
         html_corp += '</tr></thead><tbody>'
 
         # --- 데이터 행 ---
@@ -1202,14 +1206,17 @@ if viewer_option == '내부' or viewer_option == '테슬라':
 
     with col6:
         # ----- 기타 헤더 (col4, col5와 동일한 폰트 크기) -----
-        st.markdown("##### 기타")
+        if viewer_option == '내부':
+            st.markdown("##### 기타")
+        else:
+            pass
         
         memo_etc = load_memo_file("memo_etc.txt")
         
         # HTML textarea를 사용하여 '미신청건'과 동일한 스타일 적용
         textarea_html = f"""
         <textarea 
-            style="width: 100%; height: 280px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical;"
+            style="width: 100%; height: 240px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical;"
             id="memo_etc_textarea"
             onchange="updateMemo(this.value)"
         >{memo_etc}</textarea>

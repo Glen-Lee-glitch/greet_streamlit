@@ -303,7 +303,6 @@ def create_tesla_comparison_table(df_overview, df_tesla):
     else:
         st.warning("비교할 데이터가 없습니다.")
 
-
 def create_simple_charts(df_overview, df_step):
     """간단한 시각화"""
     col1, col2 = st.columns(2)
@@ -591,36 +590,72 @@ def create_total_overview_dashboard_2(df_step, df_overview, df_amount, df_tesla)
         st.info("💡 **취소 포함 접수 건입니다.**")
     
 def create_total_overview_dashboard_3(df_step, df_overview, df_amount, df_tesla):
-    # 프로세스 현황 차트 (간소화)
+    """개선된 UI와 전환율 정보를 포함한 프로세스 현황 차트를 생성합니다."""
     if not df_step.empty:
-        st.subheader("🔄 진행 단계")
+        st.subheader("🔄 진행 단계별 현황")
         key_stages = ['신청', '승인', '출고', '지급완료']
         stage_data = []
         
         for stage in key_stages:
             if stage in df_step.columns:
                 value = df_step[stage].iloc[0] if not pd.isna(df_step[stage].iloc[0]) else 0
-                stage_data.append({'단계': stage, '건수': value})
+                stage_data.append({'단계': stage, '건수': int(value)})
         
         if stage_data:
             stage_df = pd.DataFrame(stage_data)
+            
+            # --- 전환율 계산 로직 추가 ---
+            initial_value = stage_df['건수'].iloc[0] if not stage_df.empty else 0
+            
+            # 1. 초기 단계('신청') 대비 비율
+            if initial_value > 0:
+                stage_df['초기 대비 비율 (%)'] = (stage_df['건수'] / initial_value * 100)
+            else:
+                stage_df['초기 대비 비율 (%)'] = 0
+            
+            # 2. 이전 단계 대비 전환율
+            stage_df['이전 단계 대비 전환율 (%)'] = (stage_df['건수'] / stage_df['건수'].shift(1) * 100)
+            stage_df.loc[0, '이전 단계 대비 전환율 (%)'] = 100.0 # 첫 단계는 100%
+
+            # --- 개선된 깔때기형 차트 생성 ---
             fig = px.funnel(
                 stage_df, 
                 x='건수', 
                 y='단계',
                 title="신청 프로세스 현황",
-                color='건수'
+                color_discrete_sequence=px.colors.sequential.Blues_r
             )
+            
+            # --- 차트 레이아웃 및 툴팁 개선 ---
             fig.update_layout(
-                height=300, 
-                title_font_size=14
+                height=270, 
+                title_font_size=12,
+                legend_title_text='구분',
+                margin=dict(t=30, b=8, l=8, r=8), # 여백 조정
+                yaxis=dict(tickfont=dict(size=15)) # 단계 텍스트 크기 조정 (기본 12pt + 3pt)
             )
-            # 데이터 레이블 형식 변경 (천 단위 구분 쉼표 사용, k 표기 제거)
+            
+            # 툴팁에 상세 정보 추가 및 차트 내 텍스트 포맷팅
             fig.update_traces(
-                textinfo='label+value',
-                texttemplate='%{value:,.0f}',
-                textfont_size=12
+                textinfo='value+percent previous', # 값 + 이전 단계 대비 % 표시
+                texttemplate='%{value:,.0f} 건<br>(%{percentPrevious:.1%})',
+                textfont_size=14,
+                insidetextanchor='middle',
+                # 툴팁에 표시될 내용 커스터마이징
+                customdata=stage_df[['초기 대비 비율 (%)', '이전 단계 대비 전환율 (%)']],
+                hovertemplate=(
+                    "<b>%{y}</b><br><br>" +
+                    "<b>건수:</b> %{x:,d} 건<br>" +
+                    "<b>초기 대비:</b> %{customdata[0]:.1f}%<br>" +
+                    "<b>이전 단계 대비:</b> %{customdata[1]:.1f}%" +
+                    "<extra></extra>" # Plotly 보조 툴팁 숨기기
+                ),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=19
+                )
             )
+            
             st.plotly_chart(fig, use_container_width=True)
 
 def create_regional_dashboard_top_1(df_overview, df_tesla):
@@ -865,17 +900,27 @@ def create_regional_dashboard_bottom(df_overview, df_tesla):
             # 지역별 집계
             remaining_analysis = filtered_overview.groupby('지역').agg({
                 '공고_전체': 'sum',
+                '공고_택시': 'sum',
                 '잔여_전체': 'sum'
             }).reset_index()
 
-            # 잔여 비율 계산 (공고 대비)
-            remaining_analysis['잔여_비율'] = (remaining_analysis['잔여_전체'] / remaining_analysis['공고_전체'] * 100).round(1)
+            remaining_analysis['공고_택시제외'] = (
+                remaining_analysis['공고_전체'] - remaining_analysis['공고_택시']
+            ).clip(lower=0)
+
+            remaining_analysis['잔여_비율'] = (
+                remaining_analysis['잔여_전체'] / remaining_analysis['공고_택시제외'] * 100
+            ).replace([np.inf, -np.inf], 0).fillna(0).round(1)
 
             # 공고가 0인 지역 제외
-            remaining_analysis = remaining_analysis[remaining_analysis['공고_전체'] > 0]
+            remaining_analysis = remaining_analysis[remaining_analysis['공고_택시제외'] > 0]
 
             # 잔여 비율이 낮은 순으로 정렬 (모든 지자체)
-            all_remaining = remaining_analysis.sort_values('잔여_비율').reset_index(drop=True)
+            remaining_analysis['is_closed'] = (remaining_analysis['잔여_전체'].fillna(0).astype(int) == 0)
+            all_remaining = remaining_analysis.sort_values(
+                by=['is_closed', '잔여_비율'],
+                ascending=[True, True]
+            ).reset_index(drop=True)
 
             # 컬럼명 정리
             all_remaining = all_remaining.rename(columns={
@@ -885,7 +930,9 @@ def create_regional_dashboard_bottom(df_overview, df_tesla):
             })
 
             # 숫자 포맷팅
-            all_remaining['잔여 대수'] = all_remaining['잔여 대수'].astype(int)
+            all_remaining['잔여 대수'] = all_remaining['잔여 대수'].astype(int).apply(
+                lambda v: '마감' if v == 0 else f"{v:,}건"
+            )
 
             # 표시할 컬럼만 선택
             display_cols = ['지역', '잔여 대수', '잔여 비율(%)']
@@ -897,7 +944,8 @@ def create_regional_dashboard_bottom(df_overview, df_tesla):
                 height=350,
                 column_config={
                     "지역": st.column_config.TextColumn("지역", width="medium"),
-                    "잔여 대수": st.column_config.NumberColumn("잔여 대수", format="%d"),
+                    # 기존: NumberColumn -> 변경: TextColumn
+                    "잔여 대수": st.column_config.TextColumn("잔여 대수", width="small"),
                     "잔여 비율(%)": st.column_config.NumberColumn("잔여 비율(%)", format="%.1f%%"),
                 }
             )
