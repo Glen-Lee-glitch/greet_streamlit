@@ -35,12 +35,18 @@ st.markdown("""
         margin: 1.5rem 0 1rem 0;
     }
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
         padding: 1.5rem;
         border-radius: 12px;
-        color: white;
+        color: #1f2937;
         text-align: center;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #cbd5e1;
+        height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
     }
     .status-table {
         background: white;
@@ -52,7 +58,7 @@ st.markdown("""
     .highlight-number {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #059669;
+        color: #1e40af;
     }
     .region-card {
         background: #f8fafc;
