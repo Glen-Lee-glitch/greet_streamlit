@@ -804,7 +804,7 @@ def create_regional_dashboard(df_overview, df_tesla):
 def main():
     """메인 애플리케이션"""
     # 헤더
-    st.markdown('<h1 class="main-header">⚡ 전기차 보조금 현황 확인</h1>', unsafe_allow_html=True)
+    # st.markdown('<h1 class="main-header">⚡ 전기차 보조금 현황 확인</h1>', unsafe_allow_html=True)
     
     # 데이터 로드
     df_overview, df_amount, df_step = load_all_data()

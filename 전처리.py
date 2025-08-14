@@ -214,6 +214,64 @@ def preprocess_and_save_data():
 
         quarterly_region_counts = precompute_quarterly_counts(df_6)
 
+        # ---------- 추가: 그리트_공유 폴더 데이터 로드 ----------
+        def load_grit_shared_data():
+            """그리트_공유 폴더에서 전기차 보조금 관련 데이터 로드"""
+            try:
+                folder_path = 'C:/Users/HP/Desktop/그리트_공유/파일'
+                
+                # 총괄현황 데이터
+                overview_file = folder_path + '/총괄현황(전기자동차 승용).xls'
+                df_overview = pd.read_excel(overview_file, header=3, engine='xlrd')
+                
+                # 컬럼명 설정
+                columns = [
+                    '시도', '지역', '차종', '접수방법', '공고_요약', '공고_전체', '공고_우선순위', '공고_법인기관', '공고_택시', '공고_일반',
+                    '접수_요약', '접수_전체', '접수_우선순위', '접수_법인기관', '접수_택시', '접수_일반',
+                    '잔여_전체', '잔여_일반', '출고_전체', '출고_일반', '출고잔여_요약', '비고'
+                ]
+                
+                if len(df_overview.columns) == len(columns):
+                    df_overview.columns = columns
+                
+                # 숫자형 컬럼 변환
+                numeric_cols = ['공고_전체', '공고_우선순위', '공고_일반', '접수_전체', '접수_우선순위', '접수_일반',
+                               '잔여_전체', '잔여_일반', '출고_일반']
+                
+                for col in numeric_cols:
+                    if col in df_overview.columns:
+                        df_overview[col] = pd.to_numeric(df_overview[col], errors='coerce').fillna(0)
+                
+                # 신청현황 데이터
+                status_file = folder_path + '/전기차 신청현황.xls'
+                df_amount = pd.read_excel(status_file, header=4, nrows=8, engine='xlrd').iloc[:, :6]
+                df_amount.columns = ['단계', '신청대수', '신청국비(만원)', '신청지방비(만원)', '신청추가지원금(만원)', '신청금액합산(만원)']
+                
+                df_step = pd.read_excel(status_file, header=17, nrows=1, engine='xlrd').iloc[:1,:]
+                df_step.columns = ['차종', '신청', '승인', '출고', '자격부여', '대상자선정', '지급신청', '지급완료', '취소']
+                
+                # 숫자형 변환
+                amount_cols = ['신청대수', '신청국비(만원)', '신청지방비(만원)', '신청추가지원금(만원)', '신청금액합산(만원)']
+                for col in amount_cols:
+                    if col in df_amount.columns:
+                        df_amount[col] = df_amount[col].astype(str).str.replace(',', '').replace('nan', '0')
+                        df_amount[col] = pd.to_numeric(df_amount[col], errors='coerce').fillna(0)
+                
+                step_cols = ['신청', '승인', '출고', '자격부여', '대상자선정', '지급신청', '지급완료', '취소']
+                for col in step_cols:
+                    if col in df_step.columns:
+                        df_step[col] = pd.to_numeric(df_step[col], errors='coerce').fillna(0)
+                
+                return df_overview, df_amount, df_step
+                
+            except Exception as e:
+                print(f"그리트_공유 데이터 로드 오류: {e}")
+                return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+        # 그리트_공유 폴더 데이터 로드 실행
+        df_grit_overview, df_grit_amount, df_grit_step = load_grit_shared_data()
+        print("그리트_공유 폴더 데이터를 로드했습니다.")
+
         # ---------- 추가: test1.py용 테슬라 EV 데이터 전처리 ----------
         try:
             df_tesla_ev = pd.read_excel("2025년 테슬라 EV추출파일.xlsx")
@@ -318,7 +376,10 @@ def preprocess_and_save_data():
             "df_pole_apply": df_pole_apply,
             "quarterly_region_counts": quarterly_region_counts,
             "df_ev_amount": df_ev_amount,  # 전기차 신청금액 현황
-            "df_ev_step": df_ev_step       # 전기차 단계별 진행현황
+            "df_ev_step": df_ev_step,      # 전기차 단계별 진행현황
+            "df_grit_overview": df_grit_overview,  # 그리트_공유 총괄현황 데이터
+            "df_grit_amount": df_grit_amount,      # 그리트_공유 신청금액 데이터  
+            "df_grit_step": df_grit_step           # 그리트_공유 단계별 진행현황 데이터
         }
 
         with open("preprocessed_data.pkl", "wb") as f:

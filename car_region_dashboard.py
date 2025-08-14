@@ -67,42 +67,37 @@ def load_tesla_data():
         return pd.DataFrame(), pd.DataFrame()
 
 def render_comprehensive_analysis(df_filtered):
-    """종합 현황 탭 렌더링 - ev_clean_dashboard.py 내용 포함"""
+    """종합 현황 탭 렌더링 - 그리트_공유 데이터 포함"""
     
-    # ev_clean_dashboard.py의 함수들을 여기서 사용하기 위해 임포트
-    from ev_clean_dashboard import (
-        load_all_data, load_tesla_data, create_total_overview_dashboard, 
-        create_regional_dashboard
-    )
-    
-    # 전기차 보조금 데이터 로드
+    # 전처리된 데이터에서 그리트_공유 데이터 로드
     try:
-        df_overview, df_amount, df_step = load_all_data()
-        df_tesla = load_tesla_data()
+        with open("preprocessed_data.pkl", "rb") as f:
+            data = pickle.load(f)
         
-        # ev_clean_dashboard의 메인 레이아웃을 여기에 구현
-        st.markdown('<h1 style="text-align: center; font-size: 2rem; font-weight: 700; color: #1f2937; margin-bottom: 1rem;">⚡ 전기차 보조금 현황 확인</h1>', unsafe_allow_html=True)
+        df_grit_overview = data.get("df_grit_overview", pd.DataFrame())
+        df_grit_amount = data.get("df_grit_amount", pd.DataFrame()) 
+        df_grit_step = data.get("df_grit_step", pd.DataFrame())
+        df_tesla = data.get("df_tesla_ev", pd.DataFrame())
         
-        if df_overview.empty and df_amount.empty and df_step.empty:
-            st.error("전기차 보조금 데이터를 로드할 수 없습니다. 파일 경로를 확인해주세요.")
-            st.info("기본 테슬라 데이터 분석으로 전환합니다.")
-            
-            # 기존 테슬라 분석 표시
+        if df_grit_overview.empty and df_grit_amount.empty and df_grit_step.empty:
+            st.error("그리트_공유 데이터를 로드할 수 없습니다.")
             render_original_tesla_analysis(df_filtered)
             return
+        
+        # ev_clean_dashboard의 함수들을 직접 구현하거나 데이터 전달
+        from ev_clean_dashboard import create_total_overview_dashboard, create_regional_dashboard
         
         # 3:7 비율로 좌우 분할
         left_col, right_col = st.columns([3, 7])
         
         with left_col:
-            create_total_overview_dashboard(df_step, df_overview, df_amount, df_tesla)
+            create_total_overview_dashboard(df_grit_step, df_grit_overview, df_grit_amount, df_tesla)
         
         with right_col:
-            create_regional_dashboard(df_overview, df_tesla)
+            create_regional_dashboard(df_grit_overview, df_tesla)
             
     except Exception as e:
-        st.error(f"전기차 보조금 데이터 로드 중 오류: {e}")
-        st.info("기본 테슬라 데이터 분석으로 전환합니다.")
+        st.error(f"데이터 로드 중 오류: {e}")
         render_original_tesla_analysis(df_filtered)
 
 def render_original_tesla_analysis(df_filtered):
@@ -399,95 +394,167 @@ def show_car_region_dashboard(data=None, today_kst=None):
         st.warning("데이터를 불러올 수 없습니다. 파일을 확인해주세요.")
         return
 
-    # --- 메인 레이아웃 설정 ---
-    main_col, filter_col = st.columns([0.75, 0.25])
+    # --- 탭 구성 먼저 만들기 ---
+    st.title("🚗 테슬라 EV 데이터 대시보드")
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 종합 현황", "👥 신청자 분석", "👨‍💼 작업자 분석", "🏛️ 지자체별 현황 정리"])
+    
+    # --- 종합 현황 탭 (전체 화면 사용) ---
+    with tab1:
+        render_comprehensive_analysis(df_original)
+    
+    # --- 나머지 탭들 (필터 적용) ---
+    with tab2:
+        # 필터가 필요한 탭들을 위한 레이아웃
+        main_col, filter_col = st.columns([0.75, 0.25])
+        
+        # 필터 영역
+        with filter_col:
+            with st.container():
+                st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
+                st.header("🔍 데이터 필터")
+                
+                default_end_date = pd.to_datetime('2025-08-13').date()
+                
+                # 1. 기간 필터
+                date_col = next((col for col in df_original.columns if '신청일자' in col), None)
+                min_date = df_original[date_col].min().date()
+                max_date = df_original[date_col].max().date()
 
-    # --- 필터 영역 (오른쪽 컬럼) ---
-    with filter_col:
-        with st.container():
-            st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
-            st.header("🔍 데이터 필터")
-            
-            default_end_date = pd.to_datetime('2025-08-13').date()
-            
-            # 1. 기간 필터
-            date_col = next((col for col in df_original.columns if '신청일자' in col), None)
-            min_date = df_original[date_col].min().date()
-            max_date = df_original[date_col].max().date()
+                # 시작일과 종료일을 분리해서 입력
+                date_col1, date_col2 = st.columns(2)
 
-            # 시작일과 종료일을 분리해서 입력
-            date_col1, date_col2 = st.columns(2)
+                with date_col1:
+                    start_date = st.date_input(
+                        "시작일",
+                        value=min_date,
+                        min_value=min_date,
+                        max_value=max_date,
+                        key="start_date_filter_tab2"
+                    )
 
-            with date_col1:
-                start_date = st.date_input(
-                    "시작일",
-                    value=min_date,
-                    min_value=min_date,
-                    max_value=max_date,
-                    key="start_date_filter"
+                with date_col2:
+                    end_date = st.date_input(
+                        "종료일",
+                        value=default_end_date,
+                        min_value=min_date,
+                        max_value=max_date,
+                        key="end_date_filter_tab2"
+                    )
+
+                # 날짜 유효성 검사 및 보정
+                if start_date > end_date:
+                    st.warning("⚠️ 시작일이 종료일보다 늦습니다. 자동으로 교체합니다.")
+                    start_date, end_date = end_date, start_date
+
+                # 2. 차종 필터
+                model_options = df_original['분류된_차종'].unique().tolist()
+                selected_models = st.multiselect(
+                    "차종 선택",
+                    options=model_options,
+                    default=model_options,
+                    key="model_filter_tab2"
                 )
 
-            with date_col2:
-                end_date = st.date_input(
-                    "종료일",
-                    value=default_end_date,
-                    min_value=min_date,
-                    max_value=max_date,
-                    key="end_date_filter"
+                # 3. 신청유형 필터
+                applicant_options = df_original['분류된_신청유형'].unique().tolist()
+                selected_applicants = st.multiselect(
+                    "신청유형 선택",
+                    options=applicant_options,
+                    default=applicant_options,
+                    key="applicant_filter_tab2"
                 )
+                st.markdown("</div>", unsafe_allow_html=True)
 
-            # 날짜 유효성 검사 및 보정
-            if start_date > end_date:
-                st.warning("⚠️ 시작일이 종료일보다 늦습니다. 자동으로 교체합니다.")
-                start_date, end_date = end_date, start_date
-
-            # 2. 차종 필터
-            model_options = df_original['분류된_차종'].unique().tolist()
-            selected_models = st.multiselect(
-                "차종 선택",
-                options=model_options,
-                default=model_options,
-                key="model_filter"
-            )
-
-            # 3. 신청유형 필터
-            applicant_options = df_original['분류된_신청유형'].unique().tolist()
-            selected_applicants = st.multiselect(
-                "신청유형 선택",
-                options=applicant_options,
-                default=applicant_options,
-                key="applicant_filter"
-            )
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    # --- 필터링된 데이터 생성 ---
-    df_filtered = df_original[
-        (df_original[date_col].dt.date >= start_date) &
-        (df_original[date_col].dt.date <= end_date) &
-        (df_original['분류된_차종'].isin(selected_models)) &
-        (df_original['분류된_신청유형'].isin(selected_applicants))
-    ]
-
-    # --- 메인 대시보드 (왼쪽 컬럼) ---
-    with main_col:
-        st.title("🚗 테슬라 EV 데이터 대시보드")
-        st.markdown(f"**조회 기간:** `{start_date}` ~ `{end_date}`")
-        st.markdown("---")
-
-        # --- 탭 구성 ---
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 종합 현황", "👥 신청자 분석", "👨‍💼 작업자 분석", "🏛️ 지자체별 현황 정리"])
-
-        with tab1:
-            render_comprehensive_analysis(df_filtered)
-
-        with tab2:
+        # 필터링된 데이터 생성
+        df_filtered = df_original[
+            (df_original[date_col].dt.date >= start_date) &
+            (df_original[date_col].dt.date <= end_date) &
+            (df_original['분류된_차종'].isin(selected_models)) &
+            (df_original['분류된_신청유형'].isin(selected_applicants))
+        ]
+        
+        with main_col:
+            st.markdown(f"**조회 기간:** `{start_date}` ~ `{end_date}`")
+            st.markdown("---")
             render_applicant_analysis(df_filtered)
+    
+    with tab3:
+        # 필터가 필요한 탭들을 위한 레이아웃
+        main_col, filter_col = st.columns([0.75, 0.25])
+        
+        # 필터 영역
+        with filter_col:
+            with st.container():
+                st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
+                st.header("🔍 데이터 필터")
+                
+                default_end_date = pd.to_datetime('2025-08-13').date()
+                
+                # 1. 기간 필터
+                date_col = next((col for col in df_original.columns if '신청일자' in col), None)
+                min_date = df_original[date_col].min().date()
+                max_date = df_original[date_col].max().date()
 
-        with tab3:
+                # 시작일과 종료일을 분리해서 입력
+                date_col1, date_col2 = st.columns(2)
+
+                with date_col1:
+                    start_date = st.date_input(
+                        "시작일",
+                        value=min_date,
+                        min_value=min_date,
+                        max_value=max_date,
+                        key="start_date_filter_tab3"
+                    )
+
+                with date_col2:
+                    end_date = st.date_input(
+                        "종료일",
+                        value=default_end_date,
+                        min_value=min_date,
+                        max_value=max_date,
+                        key="end_date_filter_tab3"
+                    )
+
+                # 날짜 유효성 검사 및 보정
+                if start_date > end_date:
+                    st.warning("⚠️ 시작일이 종료일보다 늦습니다. 자동으로 교체합니다.")
+                    start_date, end_date = end_date, start_date
+
+                # 2. 차종 필터
+                model_options = df_original['분류된_차종'].unique().tolist()
+                selected_models = st.multiselect(
+                    "차종 선택",
+                    options=model_options,
+                    default=model_options,
+                    key="model_filter_tab3"
+                )
+
+                # 3. 신청유형 필터
+                applicant_options = df_original['분류된_신청유형'].unique().tolist()
+                selected_applicants = st.multiselect(
+                    "신청유형 선택",
+                    options=applicant_options,
+                    default=applicant_options,
+                    key="applicant_filter_tab3"
+                )
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # 필터링된 데이터 생성
+        df_filtered = df_original[
+            (df_original[date_col].dt.date >= start_date) &
+            (df_original[date_col].dt.date <= end_date) &
+            (df_original['분류된_차종'].isin(selected_models)) &
+            (df_original['분류된_신청유형'].isin(selected_applicants))
+        ]
+        
+        with main_col:
+            st.markdown(f"**조회 기간:** `{start_date}` ~ `{end_date}`")
+            st.markdown("---")
             render_writer_analysis(df_filtered)
-
-        with tab4:
-            render_regional_analysis(df_master)
+    
+    with tab4:
+        render_regional_analysis(df_master)
 
 # --- 메인 실행 부분 (독립 실행용) ---
 if __name__ == "__main__":
