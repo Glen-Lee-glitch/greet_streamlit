@@ -183,7 +183,7 @@ def build_subsidy_map(df_master):
 	return subsidy_map
 
 @st.cache_data
-def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=None, models_to_show=None):
+def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=None, models_to_show=None, demographics_map=None):
     """Plotly 지도를 생성합니다. (캐시 적용, 성능 최적화)"""
     if not _merged_geojson or not _merged_geojson['features']: 
         return None, pd.DataFrame()
@@ -201,6 +201,14 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=N
     }
     
     plot_df = pd.DataFrame([f['properties'] for f in simplified_geojson['features']])
+
+    # 성별/연령대 텍스트 매핑 추가
+    if demographics_map:
+        plot_df['gender_text'] = plot_df['sggnm'].map(lambda n: (demographics_map.get(n) or {}).get('gender_text', '-'))
+        plot_df['age_text'] = plot_df['sggnm'].map(lambda n: (demographics_map.get(n) or {}).get('age_text', '-'))
+    else:
+        plot_df['gender_text'] = '-'
+        plot_df['age_text'] = '-'
 
     # subsidy_map, models_to_show의 기본값 처리 (탭/스페이스 혼용 금지)
     if subsidy_map is None:
@@ -278,8 +286,8 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=N
         marker_line_color='white'
     )
 
-    # customdata 구성: [value] + [모델별 보조금 표시 문자열...]
-    custom_cols = ['value'] + [f"보조금표시_{m}" for m in models_to_show]
+    # customdata 구성: [value] + [모델별 보조금 표시 문자열...] + [gender_text, age_text]
+    custom_cols = ['value'] + [f"보조금표시_{m}" for m in models_to_show] + ['gender_text', 'age_text']
     plot_df['value_fmt'] = plot_df['value'].fillna(0).astype(int)
     fig.update_traces(
         customdata=plot_df[custom_cols].to_numpy(),
@@ -292,11 +300,126 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=N
                 for idx, m in enumerate(models_to_show, start=1)
             ])
             +
+            f"<br>%{{customdata[{len(models_to_show) + 1}]}}"  # gender_text
+            +
+            f"<br>%{{customdata[{len(models_to_show) + 2}]}}"  # age_text
+            +
             "<extra></extra>"
         )
     )
     
     return fig, plot_df
+
+
+def _normalize_text_or_empty(value):
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
+def _normalize_gender(value):
+    """다양한 성별 표기를 '남'/'여'로 표준화"""
+    text = _normalize_text_or_empty(value).lower()
+    mapping = {
+        '남': '남', '남자': '남', '남성': '남', 'm': '남', 'male': '남',
+        '여': '여', '여자': '여', '여성': '여', 'f': '여', 'female': '여'
+    }
+    return mapping.get(text, "")
+
+
+def _build_demographics_map(df_6, geojson, selected_quarter):
+    """GeoJSON의 지역명에 맞춰 df_6에서 성별/연령대 비율 텍스트를 생성하여 dict로 반환"""
+    try:
+        if df_6 is None or df_6.empty or '지역구분' not in df_6.columns:
+            return {}
+
+        # 분기 필터
+        df = df_6.copy()
+        if '신청일자' in df.columns:
+            df['신청일자'] = pd.to_datetime(df['신청일자'], errors='coerce')
+        if selected_quarter in ['1Q', '2Q', '3Q', '4Q'] and '신청일자' in df.columns:
+            quarter_months = {
+                '1Q': [1, 2, 3],
+                '2Q': [4, 5, 6],
+                '3Q': [7, 8, 9],
+                '4Q': [10, 11, 12],
+            }[selected_quarter]
+            df = df[df['신청일자'].dt.month.isin(quarter_months)]
+
+        # 안전 컬럼 체크
+        has_gender = '성별' in df.columns
+        has_agegrp = '연령대' in df.columns
+
+        demo_map = {}
+
+        for feature in (geojson or {}).get('features', []):
+            sggnm = _normalize_text_or_empty(feature.get('properties', {}).get('sggnm', ''))
+            if not sggnm:
+                continue
+
+            # 지도 지역명에서 후보 지역 키 생성 (apply_counts_to_map_optimized와 유사)
+            parts = sggnm.split(" ", 1)
+            sido = parts[0] if len(parts) == 2 else ""
+            key_body = parts[1] if len(parts) == 2 else sggnm
+            m = re.search(r'(.+?시)', str(key_body))
+            map_city_base = m.group(1) if m else key_body
+            candidates = [map_city_base]
+            if sido and map_city_base:
+                candidates.append(f"{sido} {map_city_base}")
+
+            # df_6에서 지역 매칭
+            region_series = df['지역구분'].map(_normalize_text_or_empty)
+            mask_direct = region_series.isin(candidates)
+            # 후방 일치(… {key}) 포함
+            mask_suffix = region_series.map(lambda r: bool(sggnm.endswith(" " + r)) or bool(sggnm.endswith(r)))
+            matched = df[mask_direct | mask_suffix]
+
+            total = len(matched)
+            if total == 0:
+                demo_map[sggnm] = {
+                    'gender_text': "성별 데이터 없음",
+                    'age_text': "연령대 데이터 없음"
+                }
+                continue
+
+            # 성별 비율 계산
+            if has_gender:
+                g_counts = matched['성별'].map(_normalize_gender)
+                male = int((g_counts == '남').sum())
+                female = int((g_counts == '여').sum())
+                denom = male + female
+                if denom > 0:
+                    male_pct = int(round(male * 100 / denom))
+                    female_pct = int(round(female * 100 / denom))
+                    gender_text = f"남 {male_pct}%/여 {female_pct}%"
+                else:
+                    gender_text = "성별 데이터 없음"
+            else:
+                gender_text = "성별 데이터 없음"
+
+            # 연령대 비율 계산 (정해진 순서)
+            if has_agegrp:
+                order = ["10대", "20대", "30대", "40대", "50대", "60대", "70대 이상"]
+                a_counts = matched['연령대'].map(_normalize_text_or_empty).value_counts()
+                age_items = []
+                for label in order:
+                    cnt = int(a_counts.get(label, 0))
+                    pct = int(round(cnt * 100 / total)) if total else 0
+                    age_items.append(f"{label}: {pct}%")
+                # 두 개씩 끊어 줄바꿈 처리
+                lines = [" ".join(age_items[i:i+2]) for i in range(0, len(age_items), 2)]
+                age_text = "<br>".join(lines)
+            else:
+                age_text = "연령대 데이터 없음"
+
+            demo_map[sggnm] = {
+                'gender_text': gender_text,
+                'age_text': age_text
+            }
+
+        return demo_map
+    except Exception:
+        return {}
 
 def show_map_viewer(data, df_6, use_preloaded=True):
     """지도 뷰어 표시 - 사전 로딩된 데이터 활용 옵션 추가"""
@@ -347,8 +470,12 @@ def show_map_viewer(data, df_6, use_preloaded=True):
             map_col, info_col = st.columns([9, 1])
             
             with map_col:
-                # 즉시 지도 표시 (캐시된 데이터 사용)
-                result = create_korea_map(final_geojson, map_styles[selected_style], selected_color, subsidy_map, selected_models)
+                # 인구통계 맵 생성 후 즉시 지도 표시 (캐시된 데이터 사용)
+                demo_map = _build_demographics_map(df_6, final_geojson, selected_quarter)
+                result = create_korea_map(
+                    final_geojson, map_styles[selected_style], selected_color,
+                    subsidy_map, selected_models, demographics_map=demo_map
+                )
                 if result:
                     fig, df = result
                     st.plotly_chart(fig, use_container_width=True)
@@ -425,8 +552,12 @@ def show_map_viewer(data, df_6, use_preloaded=True):
         map_col, info_col = st.columns([9, 1])
         
         with map_col:
-            # 지도 생성 (캐시됨)
-            result = create_korea_map(final_geojson, map_styles[selected_style], selected_color, subsidy_map, selected_models)
+            # 인구통계 맵 생성 후 지도 생성 (캐시됨)
+            demo_map = _build_demographics_map(df_6, final_geojson, selected_quarter)
+            result = create_korea_map(
+                final_geojson, map_styles[selected_style], selected_color,
+                subsidy_map, selected_models, demographics_map=demo_map
+            )
             if result:
                 fig, df = result
                 st.plotly_chart(fig, use_container_width=True)

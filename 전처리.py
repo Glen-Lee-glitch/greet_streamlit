@@ -190,7 +190,56 @@ def preprocess_and_save_data():
 
         try:
             df_6 = pd.read_excel("2025년 테슬라 EV추출파일.xlsx")
-            df_6 = df_6[['지역구분', '신청일자', '주소\n(등록주소지)']]
+            # 필요한 컬럼만 선별(존재하는 경우에만)
+            df6_keep_cols = ['지역구분', '신청일자', '주소\n(등록주소지)', '성별', '생년월일\n(법인등록번호)']
+            existing_cols = [c for c in df6_keep_cols if c in df_6.columns]
+            df_6 = df_6[existing_cols]
+
+            # df_6용 연령/연령대 계산 유틸
+            def _calculate_age_generic(birth_value):
+                if pd.isna(birth_value):
+                    return None
+                try:
+                    birth_str = str(birth_value).strip()
+                    # 10자리 전부 숫자인 경우(법인등록번호 패턴) 제외
+                    if len(birth_str) == 10 and birth_str.isdigit():
+                        return None
+                    if len(birth_str) == 8 and birth_str.isdigit():
+                        birth_date = datetime.strptime(birth_str, '%Y%m%d').date()
+                    elif '-' in birth_str:
+                        birth_date = datetime.strptime(birth_str.split(' ')[0], '%Y-%m-%d').date()
+                    else:
+                        return None
+                    today = datetime.now().date()
+                    age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+                    return age if 0 <= age <= 120 else None
+                except Exception:
+                    return None
+
+            def _classify_age_group_generic(age):
+                if age is None:
+                    return "미상"
+                if age < 20:
+                    return "10대"
+                if age < 30:
+                    return "20대"
+                if age < 40:
+                    return "30대"
+                if age < 50:
+                    return "40대"
+                if age < 60:
+                    return "50대"
+                if age < 70:
+                    return "60대"
+                return "70대 이상"
+
+            # 날짜 파싱 및 연령대 생성
+            if '신청일자' in df_6.columns:
+                df_6['신청일자'] = pd.to_datetime(df_6['신청일자'], errors='coerce')
+            birth_col = '생년월일\n(법인등록번호)'
+            if birth_col in df_6.columns:
+                df_6['나이'] = df_6[birth_col].apply(_calculate_age_generic)
+                df_6['연령대'] = df_6['나이'].apply(_classify_age_group_generic)
         except FileNotFoundError:
             df_6 = pd.DataFrame()
 
@@ -386,6 +435,34 @@ def preprocess_and_save_data():
             pickle.dump(data_to_save, f)
 
         print("전처리 완료 및 preprocessed_data.pkl 저장")
+
+        # ---------- 추가 저장: df_6, df_tesla_ev를 개별 pkl로 저장(간단 최적화 포함) ----------
+        try:
+            # df_6 최적화 및 저장
+            if 'df_6' in data_to_save:
+                df_6_opt = data_to_save['df_6'].copy()
+                if not df_6_opt.empty:
+                    # 날짜 파싱 및 카테고리 변환으로 메모리 최적화
+                    if '신청일자' in df_6_opt.columns:
+                        df_6_opt['신청일자'] = pd.to_datetime(df_6_opt['신청일자'], errors='coerce')
+                    for col in ['지역구분', '주소\n(등록주소지)', '성별', '연령대']:
+                        if col in df_6_opt.columns:
+                            df_6_opt[col] = df_6_opt[col].astype('category')
+                    df_6_opt.to_pickle("df_6.pkl.gz", compression="gzip")
+                    print("df_6.pkl.gz 저장(압축, 경량화) 완료")
+
+            # df_tesla_ev 최적화 및 저장
+            if 'df_tesla_ev' in data_to_save:
+                df_tesla_ev_opt = data_to_save['df_tesla_ev'].copy()
+                if not df_tesla_ev_opt.empty:
+                    # 범주형 컬럼은 카테고리로 변환하여 크기 축소
+                    for col in ['작성자', '분류된_차종', '분류된_신청유형', '연령대']:
+                        if col in df_tesla_ev_opt.columns:
+                            df_tesla_ev_opt[col] = df_tesla_ev_opt[col].astype('category')
+                    df_tesla_ev_opt.to_pickle("df_tesla_ev.pkl.gz", compression="gzip")
+                    print("df_tesla_ev.pkl.gz 저장(압축, 경량화) 완료")
+        except Exception as e:
+            print(f"개별 pkl 저장 중 오류: {e}")
 
     except Exception as e:
         print(f"전처리 중 오류: {e}")
