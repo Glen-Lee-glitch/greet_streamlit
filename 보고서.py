@@ -308,7 +308,7 @@ with st.sidebar:
 
 
     st.header("👁️ 뷰어 옵션")
-    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도(테스트)', '분석'), key="viewer_option")
+    viewer_option = st.radio("뷰어 유형을 선택하세요.", ('내부', '테슬라', '폴스타', '지도', '분석'), key="viewer_option")
     st.markdown("---")
     st.header("📊 조회 옵션")
     view_option = st.radio(
@@ -1388,7 +1388,7 @@ if viewer_option == '폴스타':
     show_polestar_viewer(data, today_kst)
 
 # --- 지도 뷰어 ---
-if viewer_option == '지도(테스트)':
+if viewer_option == '지도':
     if hasattr(st.session_state, 'map_preloaded') and st.session_state.map_preloaded:
         show_map_viewer(data, df_6, use_preloaded=True)
     else:
