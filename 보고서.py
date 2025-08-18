@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
+from pandas.tseries.offsets import CustomBusinessDay
 import numpy as np
 import altair as alt
 import pickle
@@ -19,6 +20,7 @@ import pytz
 from polestar_viewer import show_polestar_viewer
 from map_viewer import show_map_viewer, apply_counts_to_map_optimized
 from car_region_dashboard import show_car_region_dashboard
+
 
 # 기존 import 섹션 뒤에 추가
 @st.cache_data(ttl=7200)  # 2시간 캐시
@@ -284,6 +286,17 @@ if 'map_preloaded' not in st.session_state:
 KST = pytz.timezone('Asia/Seoul')
 today_kst = datetime.now(KST).date()
 
+# 전일 계산에서 제외할 공휴일(YYYY-MM-DD)
+holiday_lst = [
+	'2025-08-15',
+    '2025-10-03',
+    '2025-10-06',
+    '2025-10-07',
+    '2025-10-09',
+]
+# 주말 + 공휴일 제외 영업일 오프셋
+cbd = CustomBusinessDay(weekmask='Mon Tue Wed Thu Fri', holidays=pd.to_datetime(holiday_lst))
+
 # --- 사이드바: 조회 옵션 설정 ---
 with st.sidebar:
     if hasattr(st.session_state, 'map_preloaded') and st.session_state.map_preloaded:
@@ -466,7 +479,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
 
         selected_date = end_date
         day0 = selected_date
-        day1 = (pd.to_datetime(selected_date) - pd.tseries.offsets.BDay(1)).date()
+        day1 = (pd.to_datetime(selected_date) - cbd).date()
 
         year = selected_date.year
         q3_start_default = datetime(year, 6, 24).date()
@@ -730,7 +743,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             with sel_col:
                 period_option = st.selectbox(
                     '기간 선택',
-                    ['3Q', '전체', '7월', '8월', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
+                    ['전체', '3Q', '7월', '8월', '1Q', '2Q'] + [f'{m}월' for m in range(1,13)],
                     index=0,
                     key='retail_period')
         else:
@@ -827,7 +840,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             for q in [1, 2, 3]:
                 q_months = range((q-1)*3 + 1, q*3 + 1)
                 q_totals[q] = {key: sum(monthly_data[m][key] for m in q_months) for key in ['파이프라인', '지원신청완료', '취소', '지급신청']}
-            q_totals[3]['취소'] = 288
+            q_totals[3]['취소'] = 468
 
             total_all = {key: sum(q_totals[q][key] for q in [1,2,3]) for key in q_totals[1]}
 
@@ -973,7 +986,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 '7': ['', q3_monthly_data['7'][0], q3_monthly_data['7'][1], '', q3_monthly_data['7'][2]],
                 '8': ['', q3_monthly_data['8'][0], q3_monthly_data['8'][1], '', q3_monthly_data['8'][2]],
                 '9': ['', q3_monthly_data['9'][0], q3_monthly_data['9'][1], '', q3_monthly_data['9'][2]],
-                '계': ['', q3_total_mail, q3_total_apply, 288, q3_total_distribute]
+                '계': ['', q3_total_mail, q3_total_apply, 468, q3_total_distribute]
             }
             retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
@@ -1244,17 +1257,14 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 if option in ('3Q', '3분기'): return 9
                 return selected_date.month
             end_month = get_end_month(period_option)
-            # 현재 날짜가 15일 이전이면 해당 월 데이터 제외
-            if selected_date.day < 15 and end_month == selected_date.month:
-                end_month -= 1
-                # 1월인 경우 0이 되지 않도록 방어
-                if end_month == 0:
-                    end_month = 12
+
+            # 항상 현재 달은 제외하여 '전달'까지만 표시
+            prev_month = selected_date.month - 1 if selected_date.month > 1 else 12
+            end_month = min(end_month, prev_month)
+
             start_month = 2
             months_to_show = list(range(start_month, end_month + 1))
-            # 15일 이전이면 해당 월을 제외 (3Q 포함 모든 경우에 적용)
-            if selected_date.day < 15:
-                months_to_show = [m for m in months_to_show if m < selected_date.month]
+
             if months_to_show:
                 # 월별 파이프라인(메일) 건수 집계 - 6월과 7월 특별 처리
                 pipeline_counts = {}
@@ -1325,54 +1335,54 @@ if viewer_option == '내부' or viewer_option == '테슬라':
     with col8:
         # --- 법인팀 월별 추이 그래프 (내부 뷰어 전용) ---
         if viewer_option == '내부':
-            # 현재 날짜가 15일 이전이면 해당 월 데이터 제외
-            months_to_show_corp = [7]
-            pipeline_values_corp = [july_pipeline]
-            
-            if selected_date.day >= 15:
-                months_to_show_corp.append(8)
-                pipeline_values_corp.append(august_pipeline)
+            # 항상 현재 달은 제외하여 '전달'까지만 표시
+            corp_data = {
+                7: july_pipeline,
+                8: august_pipeline,
+            }
+            months_to_show_corp = sorted([m for m in corp_data.keys() if m < selected_date.month])
+            pipeline_values_corp = [corp_data[m] for m in months_to_show_corp]
 
-            corp_chart_df = pd.DataFrame(
-                {
-                    '월': months_to_show_corp,
-                    '파이프라인 건수': pipeline_values_corp
-                }
-            )
-            corp_chart_df['월 라벨'] = corp_chart_df['월'].astype(str) + '월'
+            if months_to_show_corp:
+                corp_chart_df = pd.DataFrame(
+                    {
+                        '월': months_to_show_corp,
+                        '파이프라인 건수': pipeline_values_corp
+                    }
+                )
+                corp_chart_df['월 라벨'] = corp_chart_df['월'].astype(str) + '월'
 
-            # 막대 그래프
-            bar_corp = alt.Chart(corp_chart_df).mark_bar(size=25, color='#2ca02c').encode(
-                x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show_corp], axis=alt.Axis(labelAngle=0)),
-                y=alt.Y('파이프라인 건수:Q', title='건수')
-            )
-            # 선 그래프 및 포인트
-            line_corp = alt.Chart(corp_chart_df).mark_line(color='#FF5733', strokeWidth=2).encode(
-                x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
-                y='파이프라인 건수:Q'
-            )
-            point_corp = alt.Chart(corp_chart_df).mark_point(color='#FF5733', size=60).encode(
-                x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
-                y='파이프라인 건수:Q'
-            )
-            # 레이블 텍스트
-            text_corp = alt.Chart(corp_chart_df).mark_text(dy=-10, color='black').encode(
-                x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
-                y='파이프라인 건수:Q',
-                text=alt.Text('파이프라인 건수:Q')
-            )
-            
-            # 제목 동적 설정
-            if len(months_to_show_corp) == 1:
-                title_corp = f"{selected_date.year}년 법인팀 파이프라인 추이 (7월)"
-            else:
-                title_corp = f"{selected_date.year}년 법인팀 파이프라인 추이 (7~8월)"
+                # 막대 그래프
+                bar_corp = alt.Chart(corp_chart_df).mark_bar(size=25, color='#2ca02c').encode(
+                    x=alt.X('월 라벨:N', title='월', sort=[f"{m}월" for m in months_to_show_corp], axis=alt.Axis(labelAngle=0)),
+                    y=alt.Y('파이프라인 건수:Q', title='건수')
+                )
+                # 선 그래프 및 포인트
+                line_corp = alt.Chart(corp_chart_df).mark_line(color='#FF5733', strokeWidth=2).encode(
+                    x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
+                    y='파이프라인 건수:Q'
+                )
+                point_corp = alt.Chart(corp_chart_df).mark_point(color='#FF5733', size=60).encode(
+                    x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
+                    y='파이프라인 건수:Q'
+                )
+                # 레이블 텍스트
+                text_corp = alt.Chart(corp_chart_df).mark_text(dy=-10, color='black').encode(
+                    x=alt.X('월 라벨:N', axis=alt.Axis(labelAngle=0)),
+                    y='파이프라인 건수:Q',
+                    text=alt.Text('파이프라인 건수:Q')
+                )
                 
-            corp_combo = (bar_corp + line_corp + point_corp + text_corp).properties(
-                title=title_corp
-            )
-            st.altair_chart(corp_combo, use_container_width=True)
-
+                # 제목 동적 설정
+                if len(months_to_show_corp) == 1:
+                    title_corp = f"{selected_date.year}년 법인팀 파이프라인 추이 ({months_to_show_corp[0]}월)"
+                else:
+                    title_corp = f"{selected_date.year}년 법인팀 파이프라인 추이 ({months_to_show_corp[0]}~{months_to_show_corp[-1]}월)"
+                    
+                corp_combo = (bar_corp + line_corp + point_corp + text_corp).properties(
+                    title=title_corp
+                )
+                st.altair_chart(corp_combo, use_container_width=True)
 # 폴스타 뷰 시작 부분
 if viewer_option == '폴스타':
     show_polestar_viewer(data, today_kst)
