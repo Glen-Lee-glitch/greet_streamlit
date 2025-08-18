@@ -231,7 +231,7 @@ def render_writer_analysis(df_filtered):
                     hole=0.4,
                     color_discrete_sequence=px.colors.sequential.Purples_r
                 )
-                fig_writer.update_traces(textposition='inside', textinfo='percent+label')
+                fig_writer.update_traces(textposition='inside', textinfo='percent+label', textfont_size=17)
                 st.plotly_chart(fig_writer, use_container_width=True)
             else:
                 st.info("데이터 없음")
