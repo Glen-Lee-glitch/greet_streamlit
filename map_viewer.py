@@ -96,7 +96,94 @@ def apply_counts_to_map_optimized(_preprocessed_map, _region_counts):
     return final_geojson, unmatched_df
 
 @st.cache_data
-def create_korea_map(_merged_geojson, map_style, color_scale_name):
+def get_model_column_map():
+	# car_region_dashboard.py와 동일한 매핑 사용
+	return {
+		'Model 3 RWD': 'Model 3 RWD_기본',
+		'Model 3 RWD (2024)': 'Model 3 RWD(2024)_기본',
+		'Model 3 LongRange': 'Model 3 LongRange_기본',
+		'Model 3 Performance': 'Model 3 Performance_기본',
+		'Model Y New RWD': 'Model Y New RWD_기본',
+		'Model Y New LongRange': 'Model Y New LongRange_기본'
+	}
+
+def _normalize_region(name):
+	if pd.isna(name):
+		return ""
+	return str(name).strip()
+
+def _find_subsidy_for_region_name(region_name, subsidy_map):
+	"""지도 지역명(sggnm)에서 df_master 키와 최대한 유사 매칭하여 보조금 딕셔너리 반환"""
+	name = _normalize_region(region_name)
+	if not name:
+		return {}
+	# 1) 직접 일치
+	if name in subsidy_map:
+		return subsidy_map.get(name, {}) or {}
+	# 2) 시/도 분리 및 기본 도시명 후보
+	parts = name.split(" ", 1)
+	sido = parts[0] if len(parts) == 2 else ""
+	key_body = parts[1] if len(parts) == 2 else name
+	m = re.search(r'(.+?시)', str(key_body))
+	base_city = m.group(1) if m else key_body
+	candidates = [key_body, base_city]
+	if sido and base_city:
+		candidates.append(f"{sido} {base_city}")
+	for cand in candidates:
+		cand_norm = _normalize_region(cand)
+		if cand_norm in subsidy_map:
+			return subsidy_map.get(cand_norm, {}) or {}
+	# 3) 후방 일치(… {key}) 형태
+	for key in subsidy_map.keys():
+		key_norm = _normalize_region(key)
+		if name.endswith(" " + key_norm) or name.endswith(key_norm):
+			return subsidy_map.get(key_norm, {}) or {}
+	return {}
+
+def _format_subsidy_value(value):
+	"""NaN 방지용 표시 문자열 반환"""
+	try:
+		if value is None or (isinstance(value, float) and pd.isna(value)):
+			return "-"
+		return f"{float(value):,.0f} 만원"
+	except Exception:
+		return "-"
+
+@st.cache_data
+def build_subsidy_map(df_master):
+	"""
+	df_master['지역'] 기준으로 지역별(키) -> {모델명: 보조금(숫자)} 딕셔너리 생성
+	"""
+	if df_master is None or df_master.empty or '지역' not in df_master.columns:
+		return {}
+
+	model_map = get_model_column_map()
+	subsidy_map = {}
+
+	for _, row in df_master.iterrows():
+		region = _normalize_region(row.get('지역', ''))
+		if not region:
+			continue
+
+		region_subs = {}
+		for model_name, col_name in model_map.items():
+			val = row.get(col_name, None)
+			try:
+				if pd.isna(val) or str(val).strip() == '':
+					continue
+				# "1,000" 등 문자열을 숫자로
+				num = float(str(val).replace(',', ''))
+				if num > 0:
+					region_subs[model_name] = num
+			except Exception:
+				continue
+
+		subsidy_map[region] = region_subs
+
+	return subsidy_map
+
+@st.cache_data
+def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=None, models_to_show=None):
     """Plotly 지도를 생성합니다. (캐시 적용, 성능 최적화)"""
     if not _merged_geojson or not _merged_geojson['features']: 
         return None, pd.DataFrame()
@@ -114,7 +201,26 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name):
     }
     
     plot_df = pd.DataFrame([f['properties'] for f in simplified_geojson['features']])
-    
+
+    # subsidy_map, models_to_show의 기본값 처리 (탭/스페이스 혼용 금지)
+    if subsidy_map is None:
+        subsidy_map = {}
+    if not models_to_show:
+        # 기본 표시 모델(원하면 바꿔도 됨)
+        models_to_show = ['Model 3 RWD', 'Model Y New RWD']
+
+    # 지역명 정규화 및 보조금 매핑(유사 매칭 포함)
+    plot_df['region_key'] = plot_df['sggnm'].map(_normalize_region)
+    for model in models_to_show:
+        raw_col = f"보조금_{model}"
+        disp_col = f"보조금표시_{model}"
+        # 수치값 추출(매칭 실패시 None)
+        plot_df[raw_col] = plot_df['sggnm'].map(
+            lambda n: (_find_subsidy_for_region_name(n, subsidy_map) or {}).get(model, None)
+        )
+        # 표시용 문자열 컬럼 생성("-" 처리 포함)
+        plot_df[disp_col] = plot_df[raw_col].map(_format_subsidy_value)
+
     # 더 단순한 색상 구간으로 변경
     if not plot_df.empty and plot_df['value'].max() > 0:
         bins = [-1, 0, 50, 200, 1000, float('inf')]
@@ -160,11 +266,28 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name):
         showlegend=True,
         legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.01)
     )
-    
     # 지도 성능 최적화
     fig.update_traces(
         marker_line_width=0.5,
         marker_line_color='white'
+    )
+
+    # customdata 구성: [value] + [모델별 보조금 표시 문자열...]
+    custom_cols = ['value'] + [f"보조금표시_{m}" for m in models_to_show]
+    plot_df['value_fmt'] = plot_df['value'].fillna(0).astype(int)
+    fig.update_traces(
+        customdata=plot_df[custom_cols].to_numpy(),
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>"
+            "신청 건수: %{customdata[0]:,} 건<br>"
+            +
+            "<br>".join([
+                f"{m}: %{{customdata[{idx}]}}"
+                for idx, m in enumerate(models_to_show, start=1)
+            ])
+            +
+            "<extra></extra>"
+        )
     )
     
     return fig, plot_df
@@ -189,13 +312,23 @@ def show_map_viewer(data, df_6, use_preloaded=True):
             color_scales = ["Reds","Blues", "Greens", "Viridis"]
             selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
             selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
+            # 툴팁에 표시할 모델 선택 및 보조금 맵 생성
+            model_map = get_model_column_map()
+            model_options = list(model_map.keys())
+            selected_models = st.sidebar.multiselect(
+                "툴팁에 표시할 모델",
+                options=model_options,
+                default=["Model 3 RWD", "Model Y New RWD"]
+            )
+            df_master = data.get("df_master", pd.DataFrame())
+            subsidy_map = build_subsidy_map(df_master)
             
             # 지도와 매칭 정보를 나란히 배치 (9:1 비율)
             map_col, info_col = st.columns([9, 1])
             
             with map_col:
                 # 즉시 지도 표시 (캐시된 데이터 사용)
-                result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
+                result = create_korea_map(final_geojson, map_styles[selected_style], selected_color, subsidy_map, selected_models)
                 if result:
                     fig, df = result
                     st.plotly_chart(fig, use_container_width=True)
@@ -257,13 +390,23 @@ def show_map_viewer(data, df_6, use_preloaded=True):
         color_scales = ["Reds","Blues", "Greens", "Viridis"]
         selected_style = st.sidebar.selectbox("지도 스타일", list(map_styles.keys()))
         selected_color = st.sidebar.selectbox("색상 스케일", color_scales)
+        # 툴팁에 표시할 모델 선택 및 보조금 맵 생성
+        model_map = get_model_column_map()
+        model_options = list(model_map.keys())
+        selected_models = st.sidebar.multiselect(
+            "툴팁에 표시할 모델",
+            options=model_options,
+            default=["Model 3 RWD", "Model Y New RWD"]
+        )
+        df_master = data.get("df_master", pd.DataFrame())
+        subsidy_map = build_subsidy_map(df_master)
         
         # 지도와 매칭 정보를 나란히 배치 (9:1 비율)
         map_col, info_col = st.columns([9, 1])
         
         with map_col:
             # 지도 생성 (캐시됨)
-            result = create_korea_map(final_geojson, map_styles[selected_style], selected_color)
+            result = create_korea_map(final_geojson, map_styles[selected_style], selected_color, subsidy_map, selected_models)
             if result:
                 fig, df = result
                 st.plotly_chart(fig, use_container_width=True)

@@ -217,7 +217,7 @@ def render_writer_analysis(df_filtered):
         metric_cols[2].metric("평균 작성 건수", f"{writer_counts.mean():.1f} 건")
         metric_cols[3].metric("상위 10명 비율", f"{(top_writers.sum() / len(df_filtered) * 100):.1f} %")
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("---")
         
         # 파이차트
         chart_col1, chart_col2 = st.columns(2)
