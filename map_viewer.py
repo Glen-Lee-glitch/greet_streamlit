@@ -293,18 +293,20 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=N
         customdata=plot_df[custom_cols].to_numpy(),
         hovertemplate=(
             "<b>%{hovertext}</b><br>"
+            "────────────────────<br>"
+            "<b>신청 현황</b><br>"
             "신청 건수: %{customdata[0]:,} 건<br>"
-            +
-            "<br>".join([
-                f"{m}: %{{customdata[{idx}]}}"
+            "<br><b>모델별 보조금</b><br>"
+            + "<br>".join([
+                f"• {m}: %{{customdata[{idx}]}}"
                 for idx, m in enumerate(models_to_show, start=1)
             ])
-            +
-            f"<br>%{{customdata[{len(models_to_show) + 1}]}}"  # gender_text
-            +
-            f"<br>%{{customdata[{len(models_to_show) + 2}]}}"  # age_text
-            +
-            "<extra></extra>"
+            + "<br><br><b>성별 비율</b><br>"
+            f"%{{customdata[{len(models_to_show) + 1}]}}"
+            + "<br><br><b>연령대 분포</b><br>"
+            f"%{{customdata[{len(models_to_show) + 2}]}}"
+            + "<br>────────────────────"
+            + "<extra></extra>"
         )
     )
     
