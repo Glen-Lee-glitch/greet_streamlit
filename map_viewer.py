@@ -207,7 +207,7 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=N
         subsidy_map = {}
     if not models_to_show:
         # 기본 표시 모델(원하면 바꿔도 됨)
-        models_to_show = ['Model 3 RWD', 'Model Y New RWD']
+        models_to_show = ['Model Y New RWD', 'Model 3 RWD']
 
     # 지역명 정규화 및 보조금 매핑(유사 매칭 포함)
     plot_df['region_key'] = plot_df['sggnm'].map(_normalize_region)
@@ -264,7 +264,13 @@ def create_korea_map(_merged_geojson, map_style, color_scale_name, subsidy_map=N
         margin={'r': 0, 't': 0, 'l': 0, 'b': 0}, 
         legend_title_text='신청 건수',
         showlegend=True,
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.01)
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.01),
+        hoverlabel=dict(
+            font_size=16,  # 폰트 크기
+            font_family="Pretendard, 'Noto Sans KR', Arial",
+            bgcolor="rgba(255,255,255,0.95)",  # 배경색(가독성 향상)
+            bordercolor="#666"  # 테두리색
+        )
     )
     # 지도 성능 최적화
     fig.update_traces(
@@ -296,8 +302,22 @@ def show_map_viewer(data, df_6, use_preloaded=True):
     """지도 뷰어 표시 - 사전 로딩된 데이터 활용 옵션 추가"""
     
     st.header("🗺️ 지도 시각화")
-    quarter_options = ['전체', '1Q', '2Q', '3Q']
-    selected_quarter = st.selectbox("분기 선택", quarter_options)
+    col_q_main, col_q_info = st.columns([8, 2])
+    with col_q_main:
+        quarter_options = ['전체', '1Q', '2Q', '3Q']
+        selected_quarter = st.selectbox("분기 선택", quarter_options)
+    with col_q_info:
+        # df_6의 신청일자 기준 전체 데이터 기간 표시
+        if df_6 is not None and not df_6.empty and '신청일자' in df_6.columns:
+            date_series = pd.to_datetime(df_6['신청일자'], errors='coerce')
+            if not date_series.dropna().empty:
+                min_date = date_series.min().date()
+                max_date = date_series.max().date()
+                st.markdown(f"<div style='text-align:right; font-size:17px; color:#555;'>조회 기간<br><b>{min_date} ~ {max_date}</b></div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='text-align:right; font-size:17px; color:#888;'>조회 기간<br><b>-</b></div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='text-align:right; font-size:17px; color:#888;'>조회 기간<br><b>데이터 없음</b></div>", unsafe_allow_html=True)
     
     # 사전 로딩된 데이터 사용
     if use_preloaded and hasattr(st.session_state, 'map_preloaded_data'):
