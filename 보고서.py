@@ -1194,21 +1194,24 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         html_corp += '</tr></thead><tbody>'
 
         # --- 데이터 행 ---
-        rows = ['파이프라인', '지원신청완료', '취소', '지급신청']
+        rows = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
         for i, row_name in enumerate(rows):
             row_style = 'style="background-color: #fafafa;"' if i % 2 == 1 else ''
             html_corp += f'<tr {row_style}>'
             html_corp += f'<th style="background-color: #f7f7f9;">{row_name}</th>'
-            html_corp += f'<td>{july_data[row_name]}</td>'
-            html_corp += f'<td>{august_data[row_name]}</td>'
-            html_corp += f'<td style="background-color: #ffe0b2;">{total_data[row_name]}</td>'
+            
+            if row_name == '타겟 (진척률)':
+                # 타겟 행은 colspan="3"으로 병합하여 하나의 셀로 표시
+                html_corp += f'<td colspan="3" style="background-color:#e0f7fa;">{target_text}</td>'
+            else:
+                # 일반 데이터 행은 7월, 8월, 계 각각 별도 셀로 표시
+                html_corp += f'<td>{july_data[row_name]}</td>'
+                html_corp += f'<td>{august_data[row_name]}</td>'
+                html_corp += f'<td style="background-color: #ffe0b2;">{total_data[row_name]}</td>'
+            
             html_corp += '</tr>'
 
-        # --- 타겟 (진척률) 행 (가장 아래) ---
-        html_corp += '<tr><th style="background-color: #f7f7f9;">타겟 (진척률)</th>'
-        html_corp += f'<td colspan="3" style="background-color:#e0f7fa;">{target_text}</td>'
-        html_corp += '</tr>'
-
+    
         html_corp += '</tbody></table>'
 
         # 빈 셀들을 공백으로 표시
