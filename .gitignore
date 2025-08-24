@@ -10,7 +10,6 @@ venv/
 # DB
 *.db
 # pickle
-*.pkl
 *.gz
 # Mac
 .DS_Store
