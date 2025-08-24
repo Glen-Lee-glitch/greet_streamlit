@@ -449,25 +449,89 @@ corporate_metrics = get_corporate_metrics(df_3, df_4, start_date, end_date)
 # --- 특이사항 추출 ---
 def extract_special_memo(df_fail_q3, today):
     """
-    오늘 날짜의 df_fail_q3에서 'Greet Note'별 건수를 ['내용', '건수'] 형태로 한 줄씩 리스트로 반환합니다.
+    오늘 날짜의 df_fail_q3에서 'Greet Note'별 건수를 집계하여 
+    ['내용', '건수'] 컬럼을 가진 데이터프레임으로 반환합니다.
     """
     # '날짜' 컬럼이 datetime이 아닐 경우 변환
     if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
         df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
+        
     # 오늘 날짜 필터링
-    today_fail = df_fail_q3[df_fail_q3['날짜'].dt.date == today]
+    today_fail = df_fail_q3[df_fail_q3['날짜'].dt.date == today].copy()
+    
     # 'Greet Note' 컬럼명을 유연하게 찾기 (공백·대소문자 무시)
     lowered_cols = {c.lower().replace(' ', ''): c for c in today_fail.columns}
-    # 'greetnote' 또는 '노트' 키워드 포함 컬럼 탐색
     note_col = next((orig for key, orig in lowered_cols.items() if 'greetnote' in key or '노트' in key), None)
+    
     if note_col is None:
-        return []
+        return pd.DataFrame(columns=['내용', '건수']) # 컬럼명 맞춰서 빈 DF 반환
+
+    # '내용' 컬럼의 NaN 값을 "내용 없음"으로 대체
+    today_fail[note_col] = today_fail[note_col].fillna("내용 없음")
+
     # value_counts
     note_counts = today_fail[note_col].astype(str).value_counts().reset_index()
     note_counts.columns = ['내용', '건수']
-    # 한 줄씩 메모 형태로 변환
-    memo_lines = [f"{row['내용']}: {row['건수']}건" for _, row in note_counts.iterrows()]
-    return memo_lines
+    
+    return note_counts
+
+def format_special_memos(df_notes, year):
+    """
+    '내용' 컬럼에 날짜가 포함된 데이터를 파싱하고 그룹화하여 HTML로 반환합니다.
+    """
+    if df_notes.empty:
+        return "없음"
+
+    # 날짜 추출 및 '기타' 그룹 분리
+    date_pattern = re.compile(r"(\d{1,2}/\d{1,2})[-]?\s*(.*)")
+    
+    dated_items = []
+    other_items = []
+
+    for _, row in df_notes.iterrows():
+        content = row['내용']
+        count = row['건수']
+        match = date_pattern.match(content)
+        
+        if match:
+            date_str, rest_of_content = match.groups()
+            try:
+                # '8/25' -> datetime 객체로 변환 (연도는 현재 연도 사용)
+                parsed_date = datetime.strptime(f"{year}/{date_str}", "%Y/%m/%d").date()
+                dated_items.append((parsed_date, f"{rest_of_content.strip()}: {count}건"))
+            except ValueError:
+                other_items.append(f"{content}: {count}건")
+        else:
+            other_items.append(f"{content}: {count}건")
+
+    # 날짜순으로 정렬
+    dated_items.sort(key=lambda x: x[0])
+
+    # HTML 생성
+    html_parts = []
+    
+    # 날짜 그룹
+    if dated_items:
+        # 날짜별로 그룹화 (itertools.groupby 사용)
+        from itertools import groupby
+        for date_obj, group in groupby(dated_items, key=lambda x: x[0]):
+            
+            # 날짜 헤더 (예: 8/25)
+            date_header = date_obj.strftime("%-m/%-d")
+            html_parts.append(f"<b>[{date_header}]</b>")
+
+            # 해당 날짜의 항목들 추가
+            items_for_date = [item[1] for item in group]
+            html_parts.extend(items_for_date)
+            
+    # '기타' 그룹
+    if other_items:
+        if dated_items: # 날짜 항목이 있었으면 구분선 추가
+             html_parts.append("---")
+        html_parts.append("<b>[기타]</b>")
+        html_parts.extend(other_items)
+        
+    return "<br>".join(html_parts)
 
 if viewer_option == '내부' or viewer_option == '테슬라':
 
@@ -693,7 +757,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         else:
             st.warning("법인팀 실적을 계산하기 위한 필수 컬럼이 누락되었습니다.")
     
-    # --- 메모 영역 ---
+    # --- 미신청건 영역 ---
     with col3:
 
         def load_memo_file(path:str):
@@ -710,23 +774,25 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         # 특이사항 메모 (자동 추가)
         st.subheader("미신청건")
 
-        # 오늘 기준 자동 추출된 특이사항 라인들
-        auto_special_lines = extract_special_memo(df_fail_q3, selected_date)
-        if not auto_special_lines:
-            auto_special_lines = ["없음"]
-        auto_special_text = "\n".join(auto_special_lines)
-
+        # 오늘 기준 자동 추출된 특이사항 데이터프레임
+        df_auto_special = extract_special_memo(df_fail_q3, selected_date)
+        
+        # 날짜별로 그룹화하고 서식 지정
+        year_for_memo = selected_date.year
+        auto_special_html = format_special_memos(df_auto_special, year_for_memo)
+        
         # memo_special.txt 에 저장된 사용자 메모
         memo_special_saved = load_memo_file("memo_special.txt")
-
-        # 디폴트 값: 자동 특이사항 + 저장된 사용자 메모(있다면 이어붙임)
-        default_special = auto_special_text
+        
+        # 최종 HTML 콘텐츠 생성
+        final_html_content = auto_special_html
         if memo_special_saved.strip():
-            default_special += ("\n" if default_special else "") + memo_special_saved.strip()
+            # 사용자 메모가 있으면 구분선과 함께 추가
+            final_html_content += "<br>---<br>" + memo_special_saved.strip().replace("\n", "<br>")
 
         # CSS로 폰트 크기 16px, 줄바꿈 유지, 배경 연초록색(#e0f7fa), 텍스트 Bold로 표출
         st.markdown(
-            f"<div style='font-size:16px; white-space:pre-wrap; background-color:#e0f7fa; border-radius:8px; padding:10px'><b>{default_special}</b></div>",
+            f"<div style='font-size:14px; white-space:pre-wrap; background-color:#e0f7fa; border-radius:8px; padding:10px; column-count: 2; column-gap: 20px;'>{final_html_content}</div>",
             unsafe_allow_html=True,
         )
     

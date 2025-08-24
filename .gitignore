@@ -1,1 +1,16 @@
 *.xlsx
+# Python
+*.pyc
+__pycache__/
+venv/
+.env
+# IDE
+.vscode/
+.idea/
+# DB
+*.db
+# pickle
+*.pkl
+*.gz
+# Mac
+.DS_Store
