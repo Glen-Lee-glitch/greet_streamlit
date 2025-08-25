@@ -1,0 +1,194 @@
+import streamlit as st
+from datetime import datetime
+import calendar
+import html
+
+def get_custom_tooltip_css():
+    """커스텀 툴팁을 위한 CSS 스타일을 반환합니다."""
+    return """
+    <style>
+        .tooltip-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 24px;
+            width: 100%;
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            width: 180px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%; /* 툴팁 위치를 날짜 위로 조정 */
+            left: 50%;
+            margin-left: -90px; /* 툴팁을 중앙에 위치시키기 위해 너비의 절반만큼 이동 */
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 14px; /* 폰트 크기 증가 */
+            white-space: pre-wrap; /* 줄바꿈 문자(\n)를 인식하도록 설정 */
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
+            cursor: default;
+        }
+
+        /* 툴팁의 꼬리표(화살표) 스타일 */
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+
+        /* 컨테이너에 마우스를 올렸을 때 툴팁을 보이게 함 */
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+    """
+
+def create_mini_calendar(data_for_month: dict = None):
+    """
+    Streamlit 컬럼에 넣기 좋은 작은 월간 캘린더 UI를 생성합니다.
+    - st.session_state를 사용하여 상태를 관리합니다.
+    - 현재 날짜를 하이라이트하여 표시합니다.
+    - 날짜에 마우스를 올리면 커스텀 UI 툴팁으로 데이터를 보여줍니다.
+
+    Args:
+        data_for_month (dict, optional): {day: "tooltip_text"} 형태의 딕셔너리. Defaults to None.
+    """
+    # 페이지가 다시 렌더링될 때 CSS가 중복으로 주입되는 것을 방지
+    if 'custom_tooltip_css_injected' not in st.session_state:
+        st.markdown(get_custom_tooltip_css(), unsafe_allow_html=True)
+        st.session_state.custom_tooltip_css_injected = True
+
+    # session_state에 날짜가 없으면 초기화합니다.
+    # 키를 고유하게 만들어 다른 위젯과 충돌하지 않도록 합니다.
+    if 'mini_calendar_date' not in st.session_state:
+        st.session_state.mini_calendar_date = datetime.now()
+    
+    current_date = st.session_state.mini_calendar_date
+
+    # --- 헤더 ---
+    header_cols = st.columns([1, 2, 1])
+    
+    with header_cols[0]:
+        if st.button("◀", key="mini_cal_prev", use_container_width=True):
+            if current_date.month == 1:
+                st.session_state.mini_calendar_date = current_date.replace(year=current_date.year - 1, month=12, day=1)
+            else:
+                st.session_state.mini_calendar_date = current_date.replace(month=current_date.month - 1, day=1)
+            st.rerun()
+
+    with header_cols[1]:
+        st.markdown(
+            f"<p style='text-align: center; font-weight: bold; font-size: 1em; margin-bottom:0;'>{current_date.year}년 {current_date.month}월</p>",
+            unsafe_allow_html=True
+        )
+
+    with header_cols[2]:
+        if st.button("▶", key="mini_cal_next", use_container_width=True):
+            if current_date.month == 12:
+                st.session_state.mini_calendar_date = current_date.replace(year=current_date.year + 1, month=1, day=1)
+            else:
+                st.session_state.mini_calendar_date = current_date.replace(month=current_date.month + 1, day=1)
+            st.rerun()
+
+    st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+
+    # --- 캘린더 그리드 ---
+    days = ["월", "화", "수", "목", "금", "토", "일"]
+    day_cols = st.columns(7)
+    for i, day_name in enumerate(days):
+        day_cols[i].markdown(
+            f"<p style='text-align: center; font-size: 0.8em; font-weight:bold;'>{day_name}</p>",
+            unsafe_allow_html=True
+        )
+
+    cal = calendar.monthcalendar(current_date.year, current_date.month)
+    
+    today = datetime.now()
+
+    for week in cal:
+        week_cols = st.columns(7)
+        for i, day in enumerate(week):
+            with week_cols[i]:
+                if day == 0:
+                    st.markdown("<p style='text-align: center; color: transparent; font-size: 0.8em;'>0</p>", unsafe_allow_html=True)
+                else:
+                    is_today = (
+                        day == today.day and
+                        current_date.month == today.month and
+                        current_date.year == today.year
+                    )
+                    
+                    tooltip_text = ""
+                    if data_for_month and day in data_for_month:
+                        tooltip_text = html.escape(str(data_for_month[day]), quote=True)
+                    
+                    tooltip_span = f"<span class='tooltip-text'>{tooltip_text}</span>" if tooltip_text else ""
+                    
+                    day_style = (
+                        "text-align: center; font-size: 0.8em; background-color: #FF4B4B; "
+                        "color: white; border-radius: 50%; width: 24px; height: 24px; "
+                        "line-height: 24px; margin: auto;"
+                    ) if is_today else (
+                        "text-align: center; font-size: 0.8em; margin: 0; cursor: help;"
+                    )
+
+                    day_html = f"""
+                        <div class='tooltip-container'>
+                            <div style='{day_style}'>
+                                {day}
+                            </div>
+                            {tooltip_span}
+                        </div>
+                    """
+                    st.markdown(day_html, unsafe_allow_html=True)
+
+# --- 예시 사용법 ---
+if __name__ == "__main__":
+    st.set_page_config(layout="wide")
+    st.title("툴팁 기능이 추가된 미니 캘린더")
+    
+    st.write("`st.columns` 안에 미니 캘린더를 넣고, 날짜 위에 마우스를 올려보세요.")
+    
+    cols = st.columns([1, 1, 2])
+    
+    with cols[0]:
+        st.header("캘린더")
+
+        # 툴팁에 표시할 샘플 데이터 (실제 앱에서는 DB나 DataFrame에서 가져옵니다)
+        # 현재 월의 데이터만 생성
+        cal_date = st.session_state.get('mini_calendar_date', datetime.now())
+        
+        sample_data = {
+            5: "5일 데이터: 100건 처리",
+            15: "15일 데이터: 250건 처리\n- 특이사항: 시스템 점검",
+            25: "25일 데이터: 80건 처리",
+            26: 12345, # 숫자 데이터 테스트
+        }
+        # 오늘 날짜에도 데이터 추가
+        if cal_date.month == datetime.now().month and cal_date.year == datetime.now().year:
+            sample_data[datetime.now().day] = f"오늘({datetime.now().day}일) 데이터: 50건 처리"
+
+        create_mini_calendar(data_for_month=sample_data)
+        
+    with cols[1]:
+        st.header("다른 컨텐츠")
+        st.write("이곳에 다른 컴포넌트나 내용을 추가할 수 있습니다.")
+        st.image("https://static.streamlit.io/examples/cat.jpg")
+
+    with cols[2]:
+        st.header("또 다른 컨텐츠")
+        st.info("미니 캘린더는 다른 UI 요소들과 잘 어울립니다.")
