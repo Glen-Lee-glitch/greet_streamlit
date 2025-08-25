@@ -270,6 +270,20 @@ def load_quarterly_counts():
     except:
         return {}
 
+def preprocess_sales_data(df_sales):
+    df_sales = df_sales.copy()
+    if '월' not in df_sales.columns or '대수' not in df_sales.columns:
+        return {}
+    
+    df_sales['월'] = pd.to_numeric(df_sales['월'], errors='coerce')
+    df_sales.dropna(subset=['월'], inplace=True)
+    df_sales['월'] = df_sales['월'].astype(int)
+
+    df_sales['대수'] = pd.to_numeric(df_sales['대수'], errors='coerce').fillna(0)
+
+    sales_by_month = df_sales.set_index('월')['대수'].to_dict()
+    return sales_by_month
+
 if 'quarterly_counts' not in st.session_state:
     st.session_state.quarterly_counts = load_quarterly_counts()
 
@@ -832,6 +846,8 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         august_apply_count = int(df_1.loc[mask_august_1, '개수'].sum())
         august_distribute_count = int(df_2.loc[mask_august_2, '배분'].sum())
 
+        sales_data = preprocess_sales_data(df_sales)
+
         # ----- 기간별 필터링 -----
         def filter_by_period(df):
             if period_option == '3Q' or period_option in ('3분기'):
@@ -899,16 +915,32 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                     apply_count = int(df_1[(df_1['날짜'].dt.month == 9) & (df_1['날짜'].dt.date <= day0)]['개수'].sum())
                     distribute_count = int(df_2[(df_2['날짜'].dt.month == 9) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
                 
-                monthly_data[month] = {'파이프라인': mail_count, '지원신청완료': apply_count, '취소': 0, '지급신청': distribute_count}
+                sales_count = sales_data.get(month, 0)
+                # ratio = f"{(mail_count / sales_count * 100):.1f}%" if sales_count > 0 else "0.0%"
+
+                monthly_data[month] = {'파이프라인': mail_count, '지원신청완료': apply_count, '취소': 0, '지급신청': distribute_count, '판매현황': sales_count} #, '비율': ratio}
 
             # 2. 분기별/전체 합계 계산
             q_totals = {}
             for q in [1, 2, 3]:
                 q_months = range((q-1)*3 + 1, q*3 + 1)
-                q_totals[q] = {key: sum(monthly_data[m][key] for m in q_months) for key in ['파이프라인', '지원신청완료', '취소', '지급신청']}
+                q_totals[q] = {
+                    '파이프라인': sum(monthly_data[m]['파이프라인'] for m in q_months),
+                    '지원신청완료': sum(monthly_data[m]['지원신청완료'] for m in q_months),
+                    '취소': sum(monthly_data[m]['취소'] for m in q_months),
+                    '지급신청': sum(monthly_data[m]['지급신청'] for m in q_months),
+                    '판매현황': sum(monthly_data[m]['판매현황'] for m in q_months)
+                }
+                pipeline_q = q_totals[q]['파이프라인']
+                sales_q = q_totals[q]['판매현황']
+                # q_totals[q]['비율'] = f"{(pipeline_q / sales_q * 100):.1f}%" if sales_q > 0 else "0.0%"
+
             q_totals[3]['취소'] = 468
 
-            total_all = {key: sum(q_totals[q][key] for q in [1,2,3]) for key in q_totals[1]}
+            total_all = {key: sum(q_totals[q][key] for q in [1,2,3]) if isinstance(q_totals[q].get(key), (int, float)) else '' for key in ['파이프라인', '지원신청완료', '취소', '지급신청', '판매현황']}
+            total_pipeline = total_all['파이프라인']
+            total_sales = total_all['판매현황']
+            # total_all['비율'] = f"{(total_pipeline / total_sales * 100):.1f}%" if total_sales > 0 else "0.0%"
 
             # 3. 타겟 및 진척률 계산
             q1_target, q2_target, q3_target = 4300, 10000, 10000
@@ -936,6 +968,8 @@ if viewer_option == '내부' or viewer_option == '테슬라':
 
             # 데이터 행
             rows = ['파이프라인', '지원신청완료', '취소', '지급신청']
+            if viewer_option == '내부':
+                rows.extend(['판매현황']) #, '비율'])
             for i, row_name in enumerate(rows):
                 html_retail += f'<tr style="background-color: #fafafa;">' if (i+1) % 2 == 1 else '<tr>'
                 html_retail += f'<th style="background-color: #f7f7f9;">{row_name}</th>'
@@ -953,13 +987,17 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 month_mail = int(df_5[df_5['날짜'].dt.month == month].shape[0])
                 month_apply = int(df_1[df_1['날짜'].dt.month == month]['개수'].sum())
                 month_distribute = int(df_2[df_2['날짜'].dt.month == month]['배분'].sum())
-                q1_monthly_data[f'{month}'] = [month_mail, month_apply, month_distribute]
+                month_sales = sales_data.get(month, 0)
+                # month_ratio = f"{(month_mail / month_sales * 100):.1f}%" if month_sales > 0 else "0.0%"
+                q1_monthly_data[f'{month}'] = [month_mail, month_apply, month_distribute, month_sales] #, month_ratio]
             
             # Q1 합계 계산
             q1_total_mail = sum(q1_monthly_data[f'{m}'][0] for m in [1, 2, 3])
             q1_total_apply = sum(q1_monthly_data[f'{m}'][1] for m in [1, 2, 3])
             q1_total_distribute = sum(q1_monthly_data[f'{m}'][2] for m in [1, 2, 3])
-            
+            q1_total_sales = sum(q1_monthly_data[f'{m}'][3] for m in [1, 2, 3])
+            # q1_total_ratio = f"{(q1_total_mail / q1_total_sales * 100):.1f}%" if q1_total_sales > 0 else "0.0%"
+
             # 타겟 설정
             q1_target = 4300
             
@@ -973,6 +1011,12 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 '계': ['', q1_total_mail, q1_total_apply, '', q1_total_distribute]
             }
             retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
+            if viewer_option == '내부':
+                retail_index.extend(['판매현황']) #, '비율'])
+                retail_df_data['1'].extend([q1_monthly_data['1'][3]]) #, q1_monthly_data['1'][4]])
+                retail_df_data['2'].extend([q1_monthly_data['2'][3]]) #, q1_monthly_data['2'][4]])
+                retail_df_data['3'].extend([q1_monthly_data['3'][3]]) #, q1_monthly_data['3'][4]])
+                retail_df_data['계'].extend([q1_total_sales]) #, q1_total_ratio])
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
             
         elif period_option == '2Q' or period_option == '2분기':
@@ -996,12 +1040,16 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                     month_apply = int(df_1[df_1['날짜'].dt.month == month]['개수'].sum())
                 
                 month_distribute = int(df_2[df_2['날짜'].dt.month == month]['배분'].sum())
-                q2_monthly_data[f'{month}'] = [month_mail, month_apply, month_distribute]
+                month_sales = sales_data.get(month, 0)
+                # month_ratio = f"{(month_mail / month_sales * 100):.1f}%" if month_sales > 0 else "0.0%"
+                q2_monthly_data[f'{month}'] = [month_mail, month_apply, month_distribute, month_sales] #, month_ratio]
             
             # Q2 합계 계산
             q2_total_mail = sum(q2_monthly_data[f'{m}'][0] for m in [4, 5, 6])
             q2_total_apply = sum(q2_monthly_data[f'{m}'][1] for m in [4, 5, 6])
             q2_total_distribute = sum(q2_monthly_data[f'{m}'][2] for m in [4, 5, 6])
+            q2_total_sales = sum(q2_monthly_data[f'{m}'][3] for m in [4, 5, 6])
+            # q2_total_ratio = f"{(q2_total_mail / q2_total_sales * 100):.1f}%" if q2_total_sales > 0 else "0.0%"
             
             # 타겟 설정
             q2_target = 10000
@@ -1017,6 +1065,12 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 '계': ['', q2_total_mail, q2_total_apply, '', q2_total_distribute]
             }
             retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
+            if viewer_option == '내부':
+                retail_index.extend(['판매현황']) #, '비율'])
+                retail_df_data['4'].extend([q2_monthly_data['4'][3]]) #, q2_monthly_data['4'][4]])
+                retail_df_data['5'].extend([q2_monthly_data['5'][3]]) #, q2_monthly_data['5'][4]])
+                retail_df_data['6'].extend([q2_monthly_data['6'][3]]) #, q2_monthly_data['6'][4]])
+                retail_df_data['계'].extend([q2_total_sales]) #, q2_total_ratio])
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
         elif period_option in ('3Q', '3분기'):
             # --- 3Q 월별 데이터 계산 (수정된 로직) ---
@@ -1026,25 +1080,35 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             q3_monthly_data['7'] = [
                 int(df_5[(df_5['날짜'].dt.date >= june_24) & (df_5['날짜'].dt.date <= july_31)].shape[0]),
                 int(df_1[(df_1['날짜'].dt.date >= june_24) & (df_1['날짜'].dt.date <= july_31)]['개수'].sum()),
-                int(df_2[(df_2['날짜'].dt.date >= july_1) & (df_2['날짜'].dt.date <= july_31)]['배분'].sum())
+                int(df_2[(df_2['날짜'].dt.date >= july_1) & (df_2['날짜'].dt.date <= july_31)]['배분'].sum()),
+                sales_data.get(7, 0)
             ]
+            # q3_monthly_data['7'].append(f"{(q3_monthly_data['7'][0] / q3_monthly_data['7'][3] * 100):.1f}%" if q3_monthly_data['7'][3] > 0 else "0.0%")
+            
             # 8월 데이터 (월초 ~ 현재)
             q3_monthly_data['8'] = [
                 int(df_5[(df_5['날짜'].dt.date >= august_1) & (df_5['날짜'].dt.date <= day0)].shape[0]),
                 int(df_1[(df_1['날짜'].dt.date >= august_1) & (df_1['날짜'].dt.date <= day0)]['개수'].sum()),
-                int(df_2[(df_2['날짜'].dt.date >= august_1) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
+                int(df_2[(df_2['날짜'].dt.date >= august_1) & (df_2['날짜'].dt.date <= day0)]['배분'].sum()),
+                sales_data.get(8, 0)
             ]
+            # q3_monthly_data['8'].append(f"{(q3_monthly_data['8'][0] / q3_monthly_data['8'][3] * 100):.1f}%" if q3_monthly_data['8'][3] > 0 else "0.0%")
+
             # 9월 데이터 (월초 ~ 현재)
             q3_monthly_data['9'] = [
                 int(df_5[(df_5['날짜'].dt.date >= september_1) & (df_5['날짜'].dt.date <= day0)].shape[0]),
                 int(df_1[(df_1['날짜'].dt.month.isin([9])) & (df_1['날짜'].dt.date <= day0)]['개수'].sum()),
-                int(df_2[(df_2['날짜'].dt.month.isin([9])) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
+                int(df_2[(df_2['날짜'].dt.month.isin([9])) & (df_2['날짜'].dt.date <= day0)]['배분'].sum()),
+                sales_data.get(9, 0)
             ]
-            
+            # q3_monthly_data['9'].append(f"{(q3_monthly_data['9'][0] / q3_monthly_data['9'][3] * 100):.1f}%" if q3_monthly_data['9'][3] > 0 else "0.0%")
+
             q3_total_mail = sum(q3_monthly_data[m][0] for m in ['7', '8', '9'])
             q3_total_apply = sum(q3_monthly_data[m][1] for m in ['7', '8', '9'])
             q3_total_distribute = sum(q3_monthly_data[m][2] for m in ['7', '8', '9'])
-            
+            q3_total_sales = sum(q3_monthly_data[m][3] for m in ['7', '8', '9'])
+            # q3_total_ratio = f"{(q3_total_mail / q3_total_sales * 100):.1f}%" if q3_total_sales > 0 else "0.0%"
+
             q3_target = 10000
             q3_progress = q3_total_mail / q3_target if q3_target > 0 else 0
             
@@ -1055,6 +1119,12 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 '계': ['', q3_total_mail, q3_total_apply, 468, q3_total_distribute]
             }
             retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
+            if viewer_option == '내부':
+                retail_index.extend(['판매현황']) #, '비율'])
+                retail_df_data['7'].extend([q3_monthly_data['7'][3]]) #, q3_monthly_data['7'][4]])
+                retail_df_data['8'].extend([q3_monthly_data['8'][3]]) #, q3_monthly_data['8'][4]])
+                retail_df_data['9'].extend([q3_monthly_data['9'][3]]) #, q3_monthly_data['9'][4]])
+                retail_df_data['계'].extend([q3_total_sales]) #, q3_total_ratio])
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
         else:
             # 기존 로직 유지 (다른 기간 선택 시)
@@ -1064,8 +1134,21 @@ if viewer_option == '내부' or viewer_option == '테슬라':
             mail_total = int(df5_p.shape[0])
             apply_total = int(df1_p['개수'].sum())
             distribute_total = int(df2_p['배분'].sum())
+
+            try:
+                selected_month = int(period_option[:-1])
+                sales_total = sales_data.get(selected_month, 0)
+                # ratio_total = f"{(mail_total / sales_total * 100):.1f}%" if sales_total > 0 else "0.0%"
+            except (ValueError, TypeError):
+                selected_month = None
+                sales_total = ''
+                # ratio_total = ''
+
             retail_df_data = {period_option: [mail_total, apply_total, distribute_total]}
             retail_index = ['파이프라인', '신청', '지급신청']
+            if viewer_option == '내부':
+                retail_index.extend(['판매현황']) #, '비율'])
+                retail_df_data[period_option].extend([sales_total]) #, ratio_total])
             retail_df = pd.DataFrame(retail_df_data, index=retail_index)
 
         # --- HTML 변환 및 스타일링 ---
