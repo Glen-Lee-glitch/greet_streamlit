@@ -972,7 +972,10 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                 rows.extend(['판매현황']) #, '비율'])
             for i, row_name in enumerate(rows):
                 html_retail += f'<tr style="background-color: #fafafa;">' if (i+1) % 2 == 1 else '<tr>'
-                html_retail += f'<th style="background-color: #f7f7f9;">{row_name}</th>'
+                if row_name == '판매현황':
+                    html_retail += f'<th style="background-color: #d4edda; color: #155724;">{row_name}</th>'
+                else:
+                    html_retail += f'<th style="background-color: #f7f7f9;">{row_name}</th>'
                 for q in [1, 2, 3]:
                     for month in range((q-1)*3 + 1, q*3 + 1):
                         html_retail += f'<td>{monthly_data[month][row_name]}</td>'
@@ -1154,6 +1157,8 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         # --- HTML 변환 및 스타일링 ---
         if period_option != '전체':
             html_retail = retail_df.to_html(classes='custom_table', border=0, escape=False)
+            if viewer_option == '내부':
+                    html_retail = html_retail.replace('<th>판매현황</th>', '<th style="background-color: #d4edda; color: #155724;">판매현황</th>')
 
         # 이미지 형태에 맞는 스타일링 적용
         if period_option in ['1Q', '1분기', '2Q', '2분기', '3Q', '3분기']:
