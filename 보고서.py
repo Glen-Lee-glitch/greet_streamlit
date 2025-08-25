@@ -531,7 +531,7 @@ def format_special_memos(df_notes, year):
         for date_obj, group in groupby(dated_items, key=lambda x: x[0]):
             
             # 날짜 헤더 (예: 8/25)
-            date_header = date_obj.strftime("%-m/%-d")
+            date_header = date_obj.strftime("%#m/%#d")
             html_parts.append(f"<b>[{date_header}]</b>")
 
             # 해당 날짜의 항목들 추가
