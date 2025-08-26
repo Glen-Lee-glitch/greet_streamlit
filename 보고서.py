@@ -284,6 +284,101 @@ def preprocess_sales_data(df_sales):
     sales_by_month = df_sales.set_index('월')['대수'].to_dict()
     return sales_by_month
 
+def calculate_retail_summary(view_option, start_date, end_date, day0, day1, q3_start_default, q3_start_distribute, df_1, df_2, df_5, df_fail_q3, df_2_fail_q3):
+    """
+    리테일 현황 요약 데이터를 계산하여 DataFrame으로 반환합니다.
+    """
+    is_period_view = view_option == '기간별 조회'
+
+    # 날짜 컬럼 타입 보정 (함수 내에서 안전하게 처리)
+    for df in [df_fail_q3, df_2_fail_q3]:
+        if '날짜' in df.columns and not pd.api.types.is_datetime64_any_dtype(df['날짜']):
+            df['날짜'] = pd.to_datetime(df['날짜'], errors='coerce')
+
+    if is_period_view:
+        # 기간별 조회: 선택한 기간의 합계와 누적 총계만 표시
+        cnt_period_mail = ((df_5['날짜'].dt.date >= start_date) & (df_5['날짜'].dt.date <= end_date)).sum()
+        cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= end_date)).sum()
+
+        cnt_period_apply = int(df_1.loc[(df_1['날짜'].dt.date >= start_date) & (df_1['날짜'].dt.date <= end_date), '개수'].sum())
+        cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= end_date), '개수'].sum())
+
+        cnt_period_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= start_date) & (df_2['날짜'].dt.date <= end_date), '배분'].sum())
+        cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= end_date), '배분'].sum())
+
+        cnt_period_request = int(df_2.loc[(df_2['날짜'].dt.date >= start_date) & (df_2['날짜'].dt.date <= end_date), '신청'].sum())
+        cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= end_date), '신청'].sum())
+
+        cnt_period_fail = int(((df_fail_q3['날짜'].dt.date >= start_date) & (df_fail_q3['날짜'].dt.date <= end_date)).sum())
+        cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= end_date)).sum())
+
+        cnt_period_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= start_date) & (df_2_fail_q3['날짜'].dt.date <= end_date), '미신청건'].sum())
+        cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= end_date), '미신청건'].sum())
+
+        table_data = pd.DataFrame({
+            ('지원', '파이프라인', '메일 건수'): [cnt_period_mail, cnt_total_mail],
+            ('지원', '신청', '신청 건수'): [cnt_period_apply, cnt_total_apply],
+            ('지원', '신청', '미신청건'): [cnt_period_fail, cnt_total_fail],
+            ('지급', '지급 처리', '지급 배분건'): [cnt_period_distribute, cnt_total_distribute],
+            ('지급', '지급 처리', '지급신청 건수'): [cnt_period_request, cnt_total_request],
+            ('지급', '지급 처리', '미신청건'): [cnt_period_fail_2, cnt_total_fail_2]
+        }, index=['선택기간', '누적 총계 (3분기)'])
+
+    else:
+        # 기존 로직: 금일/전일/누적 표시
+        cnt_today_mail = (df_5['날짜'].dt.date == day0).sum()
+        cnt_yesterday_mail = (df_5['날짜'].dt.date == day1).sum()
+        cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= day0)).sum()
+
+        cnt_today_apply = int(df_1.loc[df_1['날짜'].dt.date == day0, '개수'].sum())
+        cnt_yesterday_apply = int(df_1.loc[df_1['날짜'].dt.date == day1, '개수'].sum())
+        cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= day0), '개수'].sum())
+
+        cnt_today_distribute = int(df_2.loc[df_2['날짜'].dt.date == day0, '배분'].sum())
+        cnt_yesterday_distribute = int(df_2.loc[df_2['날짜'].dt.date == day1, '배분'].sum())
+        cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '배분'].sum())
+
+        cnt_today_request = int(df_2.loc[df_2['날짜'].dt.date == day0, '신청'].sum())
+        cnt_yesterday_request = int(df_2.loc[df_2['날짜'].dt.date == day1, '신청'].sum())
+        cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '신청'].sum())
+
+        cnt_yesterday_fail = int((df_fail_q3['날짜'].dt.date == day1).sum())
+        cnt_today_fail = int((df_fail_q3['날짜'].dt.date == day0).sum())
+        cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= day0)).sum())
+
+        cnt_yesterday_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day1, '미신청건'].sum())
+        cnt_today_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day0, '미신청건'].sum())
+        cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= day0), '미신청건'].sum())
+
+        delta_mail = cnt_today_mail - cnt_yesterday_mail
+        delta_apply = cnt_today_apply - cnt_yesterday_apply
+        delta_fail = cnt_today_fail - cnt_yesterday_fail
+        delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
+        delta_request = cnt_today_request - cnt_yesterday_request
+        delta_fail_2 = cnt_today_fail_2 - cnt_yesterday_fail_2
+
+        def format_delta(value):
+            if value > 0: return f'<span style="color:blue;">+{value}</span>'
+            elif value < 0: return f'<span style="color:red;">{value}</span>'
+            return str(value)
+
+        table_data = pd.DataFrame({
+            ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
+            ('지원', '신청', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
+            ('지원', '신청', '미신청건'): [cnt_yesterday_fail, cnt_today_fail, cnt_total_fail],
+            ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
+            ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request],
+            ('지급', '지급 처리', '미신청건'): [cnt_yesterday_fail_2, cnt_today_fail_2, cnt_total_fail_2]
+        }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계 (3분기)'])
+
+        table_data.loc['변동'] = [
+            format_delta(delta_mail), format_delta(delta_apply), format_delta(delta_fail),
+            format_delta(delta_distribute), format_delta(delta_request), format_delta(delta_fail_2)
+        ]
+
+    return table_data
+
+
 if 'quarterly_counts' not in st.session_state:
     st.session_state.quarterly_counts = load_quarterly_counts()
 
@@ -555,119 +650,22 @@ if viewer_option == '내부' or viewer_option == '테슬라':
     with col1:
         st.write("### 1. 리테일 금일/전일 요약")
 
+        # 날짜 변수 정의
         selected_date = end_date
         day0 = selected_date
         day1 = (pd.to_datetime(selected_date) - cbd).date()
-
         year = selected_date.year
         q3_start_default = datetime(year, 6, 24).date()
         q3_start_distribute = datetime(year, 7, 1).date()
 
-        # 기간별 조회인지 확인
-        is_period_view = view_option == '기간별 조회'
+        # 분리된 함수 호출
+        table_data = calculate_retail_summary(
+            view_option, start_date, end_date, day0, day1,
+            q3_start_default, q3_start_distribute,
+            df_1, df_2, df_5, df_fail_q3, df_2_fail_q3
+        )
 
-        if is_period_view:
-            # 기간별 조회: 선택한 기간의 합계와 누적 총계만 표시
-            cnt_period_mail = ((df_5['날짜'].dt.date >= start_date) & (df_5['날짜'].dt.date <= end_date)).sum()
-            cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= end_date)).sum()
-
-            cnt_period_apply = int(df_1.loc[(df_1['날짜'].dt.date >= start_date) & (df_1['날짜'].dt.date <= end_date), '개수'].sum())
-            cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= end_date), '개수'].sum())
-
-            cnt_period_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= start_date) & (df_2['날짜'].dt.date <= end_date), '배분'].sum())
-            cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= end_date), '배분'].sum())
-
-            cnt_period_request = int(df_2.loc[(df_2['날짜'].dt.date >= start_date) & (df_2['날짜'].dt.date <= end_date), '신청'].sum())
-            cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= end_date), '신청'].sum())
-
-            # df_fail_q3, df_2_fail_q3 날짜 타입 보정
-            if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
-                df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
-            if not pd.api.types.is_datetime64_any_dtype(df_2_fail_q3['날짜']):
-                df_2_fail_q3['날짜'] = pd.to_datetime(df_2_fail_q3['날짜'], errors='coerce')
-
-            # 미신청건 계산 (기간별)
-            cnt_period_fail = int(((df_fail_q3['날짜'].dt.date >= start_date) & (df_fail_q3['날짜'].dt.date <= end_date)).sum())
-            cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= end_date)).sum())
-
-            # 지급 미신청건 계산 (기간별)
-            cnt_period_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= start_date) & (df_2_fail_q3['날짜'].dt.date <= end_date), '미신청건'].sum())
-            cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= end_date), '미신청건'].sum())
-
-            table_data = pd.DataFrame({
-                ('지원', '파이프라인', '메일 건수'): [cnt_period_mail, cnt_total_mail],
-                ('지원', '신청', '신청 건수'): [cnt_period_apply, cnt_total_apply],
-                ('지원', '신청', '미신청건'): [cnt_period_fail, cnt_total_fail],
-                ('지급', '지급 처리', '지급 배분건'): [cnt_period_distribute, cnt_total_distribute],
-                ('지급', '지급 처리', '지급신청 건수'): [cnt_period_request, cnt_total_request],
-                ('지급', '지급 처리', '미신청건'): [cnt_period_fail_2, cnt_total_fail_2]
-            }, index=['선택기간', '누적 총계 (3분기)'])
-
-        else:
-            # 기존 로직: 금일/전일/누적 표시
-            cnt_today_mail = (df_5['날짜'].dt.date == day0).sum()
-            cnt_yesterday_mail = (df_5['날짜'].dt.date == day1).sum()
-            cnt_total_mail = ((df_5['날짜'].dt.date >= q3_start_default) & (df_5['날짜'].dt.date <= day0)).sum()
-
-            cnt_today_apply = int(df_1.loc[df_1['날짜'].dt.date == day0, '개수'].sum())
-            cnt_yesterday_apply = int(df_1.loc[df_1['날짜'].dt.date == day1, '개수'].sum())
-            cnt_total_apply = int(df_1.loc[(df_1['날짜'].dt.date >= q3_start_default) & (df_1['날짜'].dt.date <= day0), '개수'].sum())
-
-            cnt_today_distribute = int(df_2.loc[df_2['날짜'].dt.date == day0, '배분'].sum())
-            cnt_yesterday_distribute = int(df_2.loc[df_2['날짜'].dt.date == day1, '배분'].sum())
-            cnt_total_distribute = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '배분'].sum())
-
-            cnt_today_request = int(df_2.loc[df_2['날짜'].dt.date == day0, '신청'].sum())
-            cnt_yesterday_request = int(df_2.loc[df_2['날짜'].dt.date == day1, '신청'].sum())
-            cnt_total_request = int(df_2.loc[(df_2['날짜'].dt.date >= q3_start_distribute) & (df_2['날짜'].dt.date <= day0), '신청'].sum())
-
-            # df_fail_q3, df_2_fail_q3 날짜 타입 보정
-            if not pd.api.types.is_datetime64_any_dtype(df_fail_q3['날짜']):
-                df_fail_q3['날짜'] = pd.to_datetime(df_fail_q3['날짜'], errors='coerce')
-            if not pd.api.types.is_datetime64_any_dtype(df_2_fail_q3['날짜']):
-                df_2_fail_q3['날짜'] = pd.to_datetime(df_2_fail_q3['날짜'], errors='coerce')
-
-            # 미신청건 계산
-            cnt_yesterday_fail = int((df_fail_q3['날짜'].dt.date == day1).sum())
-            cnt_today_fail = int((df_fail_q3['날짜'].dt.date == day0).sum())
-            cnt_total_fail = int(((df_fail_q3['날짜'].dt.date >= q3_start_default) & (df_fail_q3['날짜'].dt.date <= day0)).sum())
-
-            # 지급 미신청건 계산
-            cnt_yesterday_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day1, '미신청건'].sum())
-            cnt_today_fail_2 = int(df_2_fail_q3.loc[df_2_fail_q3['날짜'].dt.date == day0, '미신청건'].sum())
-            cnt_total_fail_2 = int(df_2_fail_q3.loc[(df_2_fail_q3['날짜'].dt.date >= q3_start_default) & (df_2_fail_q3['날짜'].dt.date <= day0), '미신청건'].sum())
-
-            delta_mail = cnt_today_mail - cnt_yesterday_mail
-            delta_apply = cnt_today_apply - cnt_yesterday_apply
-            delta_fail = cnt_today_fail - cnt_yesterday_fail
-            delta_distribute = cnt_today_distribute - cnt_yesterday_distribute
-            delta_request = cnt_today_request - cnt_yesterday_request
-            delta_fail_2 = cnt_today_fail_2 - cnt_yesterday_fail_2
-
-            def format_delta(value):
-                if value > 0: return f'<span style="color:blue;">+{value}</span>'
-                elif value < 0: return f'<span style="color:red;">{value}</span>'
-                return str(value)
-
-            table_data = pd.DataFrame({
-                ('지원', '파이프라인', '메일 건수'): [cnt_yesterday_mail, cnt_today_mail, cnt_total_mail],
-                ('지원', '신청', '신청 건수'): [cnt_yesterday_apply, cnt_today_apply, cnt_total_apply],
-                ('지원', '신청', '미신청건'): [cnt_yesterday_fail, cnt_today_fail, cnt_total_fail],
-                ('지급', '지급 처리', '지급 배분건'): [cnt_yesterday_distribute, cnt_today_distribute, cnt_total_distribute],
-                ('지급', '지급 처리', '지급신청 건수'): [cnt_yesterday_request, cnt_today_request, cnt_total_request],
-                ('지급', '지급 처리', '미신청건'): [cnt_yesterday_fail_2, cnt_today_fail_2, cnt_total_fail_2]
-            }, index=[f'전일 ({day1})', f'금일 ({day0})', '누적 총계 (3분기)'])
-
-            # 변동(Delta) 행 추가
-            table_data.loc['변동'] = [
-                format_delta(delta_mail),
-                format_delta(delta_apply),
-                format_delta(delta_fail),
-                format_delta(delta_distribute),
-                format_delta(delta_request),
-                format_delta(delta_fail_2)
-            ]
-
+        # 결과 표시
         html_table = table_data.to_html(classes='custom_table', border=0, escape=False)
         st.markdown(html_table, unsafe_allow_html=True)
 
