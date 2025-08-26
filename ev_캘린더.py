@@ -180,33 +180,46 @@ def data_processing():
     df = pd.read_excel('Q3.xlsx', sheet_name='미신청건')
 
     # 1. 날짜 관련 데이터만 필터링
-    # 'Greet Note' 컬럼의 값이 문자열이고, '/'와 '-'를 모두 포함하는 행만 선택
     filtered_df = df[df['Greet Note'].apply(lambda x: isinstance(x, str) and '/' in x and '-' in x)].copy()
 
-    # 2. 정규표현식으로 날짜(월, 일) 추출
-    # (\d{1,2})\s*/\s*(\d{1,2}) 패턴: (숫자)/(숫자) 형식을 찾음. 08/26, 8/26, 8 / 26 등 공백이 있어도 인식
-    date_parts = filtered_df['Greet Note'].str.extract(r'(\d{1,2})\s*/\s*(\d{1,2})')
+    # 2. 정규표현식으로 날짜와 내용(도시명 등) 추출
+    extract_pattern = r'(\d{1,2}\s*/\s*\d{1,2})([^,]+)'
+    extracted_data = filtered_df['Greet Note'].str.extract(extract_pattern)
     
-    # 추출된 월(0)과 일(1) 데이터를 숫자로 변환하여 새로운 컬럼에 저장
-    filtered_df['month'] = pd.to_numeric(date_parts[0])
-    filtered_df['day'] = pd.to_numeric(date_parts[1])
+    filtered_df['date_str'] = extracted_data[0].str.replace(r'\s', '')
+    filtered_df['note_content'] = extracted_data[1].str.strip().str.lstrip('-').str.strip()
 
-    # 날짜 정보가 없는 행은 제거
-    filtered_df.dropna(subset=['month', 'day'], inplace=True)
-    
-    # month와 day 컬럼을 정수형으로 변환 (소수점 방지)
-    filtered_df['month'] = filtered_df['month'].astype(int)
+    filtered_df.dropna(subset=['date_str', 'note_content'], inplace=True)
+
+    # 3. 날짜와 내용 기준으로 그룹화하여 건수 집계 (툴팁용)
+    tooltip_counts = filtered_df.groupby(['date_str', 'note_content']).size()
+
+    # 4. 툴팁 딕셔너리 생성
+    tooltip_data = {}
+    for (date_str, content), count in tooltip_counts.items():
+        try:
+            day = int(date_str.split('/')[1])
+            tooltip_text = f"{date_str}-{content}: {count}건"
+            
+            if day in tooltip_data:
+                tooltip_data[day] += f"\n{tooltip_text}"
+            else:
+                tooltip_data[day] = tooltip_text
+        except (IndexError, ValueError):
+            # 날짜 형식 (e.g., "8/26")이 잘못된 경우 건너뜀
+            continue
+
+    # 5. 날짜 아래에 표시할 숫자 데이터 집계
+    # 'date_str'에서 'day'를 추출하여 사용
+    filtered_df['day'] = filtered_df['date_str'].apply(lambda x: int(x.split('/')[1]) if '/' in str(x) else None)
+    filtered_df.dropna(subset=['day'], inplace=True)
     filtered_df['day'] = filtered_df['day'].astype(int)
-
-    # 3. 'day'를 기준으로 데이터 건수 집계
-    # 결과는 Series 형태가 됨 (인덱스: day, 값: count)
+    
     daily_counts = filtered_df.groupby('day').size()
-
-    # 캘린더 함수에 전달하기 위해 Series를 딕셔너리로 변환
-    # {26: 2, 27: 5, ...} 와 같은 형태
     number_data = daily_counts.to_dict()
 
-    return number_data
+    # 6. 두 개의 딕셔너리 반환
+    return number_data, tooltip_data
 
 # --- 예시 사용법 ---
 if __name__ == "__main__":
@@ -216,15 +229,17 @@ if __name__ == "__main__":
     st.write("`st.columns` 안에 미니 캘린더를 넣고, 날짜 위에 마우스를 올려보세요.")
     
     cols = st.columns([1, 1, 2])
-    processed_number_data = data_processing()
+    
+    # 데이터 처리 함수 호출
+    processed_number_data, processed_tooltip_data = data_processing()
     
     with cols[0]:
         st.header("캘린더")
 
         # 기존 샘플 데이터 대신 실제 데이터 사용
         create_mini_calendar(
-            tooltip_data={}, # 툴팁용 데이터 전달 (임시로 비움)
-            number_data=processed_number_data    # 숫자 표시용 데이터 전달
+            tooltip_data=processed_tooltip_data,
+            number_data=processed_number_data
         )
         
     with cols[1]:
