@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime
 import calendar
 import html
+import pandas as pd
 
 def get_custom_tooltip_css():
     """커스텀 툴팁을 위한 CSS 스타일을 반환합니다."""
@@ -176,7 +177,36 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
                     st.markdown(day_html, unsafe_allow_html=True)
 
 def data_processing():
-    pass
+    df = pd.read_excel('Q3.xlsx', sheet_name='미신청건')
+
+    # 1. 날짜 관련 데이터만 필터링
+    # 'Greet Note' 컬럼의 값이 문자열이고, '/'와 '-'를 모두 포함하는 행만 선택
+    filtered_df = df[df['Greet Note'].apply(lambda x: isinstance(x, str) and '/' in x and '-' in x)].copy()
+
+    # 2. 정규표현식으로 날짜(월, 일) 추출
+    # (\d{1,2})\s*/\s*(\d{1,2}) 패턴: (숫자)/(숫자) 형식을 찾음. 08/26, 8/26, 8 / 26 등 공백이 있어도 인식
+    date_parts = filtered_df['Greet Note'].str.extract(r'(\d{1,2})\s*/\s*(\d{1,2})')
+    
+    # 추출된 월(0)과 일(1) 데이터를 숫자로 변환하여 새로운 컬럼에 저장
+    filtered_df['month'] = pd.to_numeric(date_parts[0])
+    filtered_df['day'] = pd.to_numeric(date_parts[1])
+
+    # 날짜 정보가 없는 행은 제거
+    filtered_df.dropna(subset=['month', 'day'], inplace=True)
+    
+    # month와 day 컬럼을 정수형으로 변환 (소수점 방지)
+    filtered_df['month'] = filtered_df['month'].astype(int)
+    filtered_df['day'] = filtered_df['day'].astype(int)
+
+    # 3. 'day'를 기준으로 데이터 건수 집계
+    # 결과는 Series 형태가 됨 (인덱스: day, 값: count)
+    daily_counts = filtered_df.groupby('day').size()
+
+    # 캘린더 함수에 전달하기 위해 Series를 딕셔너리로 변환
+    # {26: 2, 27: 5, ...} 와 같은 형태
+    number_data = daily_counts.to_dict()
+
+    return number_data
 
 # --- 예시 사용법 ---
 if __name__ == "__main__":
@@ -186,34 +216,16 @@ if __name__ == "__main__":
     st.write("`st.columns` 안에 미니 캘린더를 넣고, 날짜 위에 마우스를 올려보세요.")
     
     cols = st.columns([1, 1, 2])
+    processed_number_data = data_processing()
     
     with cols[0]:
         st.header("캘린더")
 
-        # 툴팁에 표시할 샘플 데이터 (실제 앱에서는 DB나 DataFrame에서 가져옵니다)
-        # 현재 월의 데이터만 생성
-        cal_date = st.session_state.get('mini_calendar_date', datetime.now())
-        
-        # 1. 툴팁에 표시할 샘플 데이터
-        sample_tooltip_data = {
-            5: "5일 데이터: 100건 처리",
-            15: "15일 데이터: 250건 처리\n- 특이사항: 시스템 점검",
-            25: "25일 상세 정보: 보고서 제출",
-            26: "26일 상세 정보: 오후 3시 미팅",
-        }
-
-        # 2. 날짜 아래에 빨간 숫자로 표시할 샘플 데이터
-        sample_number_data = {
-            25: 3,
-        }
-        
-        # 오늘 날짜에도 데이터 추가
-        if cal_date.month == datetime.now().month and cal_date.year == datetime.now().year:
-            today = datetime.now().day
-            sample_tooltip_data[today] = f"오늘({today}일) 데이터: 50건 처리"
-            sample_number_data[today] = 1 # 오늘 날짜 테스트용 숫자
-
-        create_mini_calendar(tooltip_data=sample_tooltip_data, number_data=sample_number_data)
+        # 기존 샘플 데이터 대신 실제 데이터 사용
+        create_mini_calendar(
+            tooltip_data={}, # 툴팁용 데이터 전달 (임시로 비움)
+            number_data=processed_number_data    # 숫자 표시용 데이터 전달
+        )
         
     with cols[1]:
         st.header("다른 컨텐츠")
