@@ -58,7 +58,7 @@ def get_custom_tooltip_css():
     </style>
     """
 
-def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
+def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None, key: str = "mini_calendar"):
     """
     Streamlit 컬럼에 넣기 좋은 작은 월간 캘린더 UI를 생성합니다.
     - st.session_state를 사용하여 상태를 관리합니다.
@@ -68,26 +68,28 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
     Args:
         tooltip_data (dict, optional): {day: "tooltip_text"} 형태의 툴팁 데이터. Defaults to None.
         number_data (dict, optional): {day: [num1, num2]} 형태의 숫자 데이터. Defaults to None.
+        key (str, optional): 캘린더의 상태를 관리하기 위한 고유 키. Defaults to "mini_calendar".
     """
     # rerun 시에도 CSS가 매번 주입되도록 세션 상태 체크 로직 제거
     st.markdown(get_custom_tooltip_css(), unsafe_allow_html=True)
 
     # session_state에 날짜가 없으면 초기화합니다.
-    # 키를 고유하게 만들어 다른 위젯과 충돌하지 않도록 합니다.
-    if 'mini_calendar_date' not in st.session_state:
-        st.session_state.mini_calendar_date = datetime.now()
+    # 제공된 key를 사용하여 고유한 세션 상태 키를 만듭니다.
+    date_key = f"{key}_date"
+    if date_key not in st.session_state:
+        st.session_state[date_key] = datetime.now()
     
-    current_date = st.session_state.mini_calendar_date
+    current_date = st.session_state[date_key]
 
     # --- 헤더 ---
     header_cols = st.columns([1, 2, 1])
     
     with header_cols[0]:
-        if st.button("◀", key="mini_cal_prev", use_container_width=True):
+        if st.button("◀", key=f"{key}_prev", use_container_width=True):
             if current_date.month == 1:
-                st.session_state.mini_calendar_date = current_date.replace(year=current_date.year - 1, month=12, day=1)
+                st.session_state[date_key] = current_date.replace(year=current_date.year - 1, month=12, day=1)
             else:
-                st.session_state.mini_calendar_date = current_date.replace(month=current_date.month - 1, day=1)
+                st.session_state[date_key] = current_date.replace(month=current_date.month - 1, day=1)
             st.rerun()
 
     with header_cols[1]:
@@ -97,11 +99,11 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
         )
 
     with header_cols[2]:
-        if st.button("▶", key="mini_cal_next", use_container_width=True):
+        if st.button("▶", key=f"{key}_next", use_container_width=True):
             if current_date.month == 12:
-                st.session_state.mini_calendar_date = current_date.replace(year=current_date.year + 1, month=1, day=1)
+                st.session_state[date_key] = current_date.replace(year=current_date.year + 1, month=1, day=1)
             else:
-                st.session_state.mini_calendar_date = current_date.replace(month=current_date.month + 1, day=1)
+                st.session_state[date_key] = current_date.replace(month=current_date.month + 1, day=1)
             st.rerun()
 
     st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)

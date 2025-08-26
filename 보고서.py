@@ -1169,27 +1169,31 @@ if viewer_option == '내부' or viewer_option == '테슬라':
         if viewer_option == '내부':
             st.subheader("추후신청건")
             
-            # 캘린더 날짜 상태 관리 (고유 키 사용)
-            if 'report_calendar_date' not in st.session_state:
-                st.session_state.report_calendar_date = selected_date
-            
-            # ev_cal 모듈의 create_mini_calendar가 내부적으로 'mini_calendar_date'를 사용하므로
-            # 충돌을 피하기 위해 세션 상태 키를 일시적으로 맞춰줌
-            st.session_state.mini_calendar_date = st.session_state.report_calendar_date
+            # 1. 캘린더를 위한 고유 상태 키 정의
+            calendar_key = "report_calendar"
+            date_key = f"{calendar_key}_date"
 
-            current_calendar_date = st.session_state.mini_calendar_date
+            # 2. 사이드바의 날짜(selected_date)가 변경되었는지 확인
+            # 'last_selected_date'는 사이드바 날짜의 이전 값을 저장하기 위함
+            if 'last_selected_date' not in st.session_state:
+                st.session_state.last_selected_date = None
             
-            # 데이터 처리
+            # 사이드바 날짜가 바뀌었거나, 캘린더 날짜가 아직 설정되지 않았다면
+            # 캘린더의 날짜를 사이드바 날짜로 초기화/업데이트
+            if st.session_state.last_selected_date != selected_date or date_key not in st.session_state:
+                st.session_state[date_key] = selected_date
+                st.session_state.last_selected_date = selected_date
+
+            # 3. 데이터 처리 및 캘린더 생성
+            # 이제 캘린더는 내부적으로 date_key를 사용하여 스스로 상태를 관리함
+            current_calendar_date = st.session_state[date_key]
             number_data, tooltip_data = ev_cal.data_processing(df_fail_q3, current_calendar_date.year, current_calendar_date.month)
             
-            # 캘린더 생성
             ev_cal.create_mini_calendar(
                 tooltip_data=tooltip_data,
-                number_data=number_data
+                number_data=number_data,
+                key=calendar_key # 고유 키 전달
             )
-            
-            # 원래 키로 상태 복원 (다른 위젯과의 충돌 방지)
-            st.session_state.report_calendar_date = st.session_state.mini_calendar_date
 
         elif viewer_option == '테슬라':
             # 특이사항 메모 (자동 추가)
