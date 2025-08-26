@@ -706,7 +706,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
                 distribute_count = int(df_2[(df_2['날짜'].dt.month == 9) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
             
             sales_count = sales_data.get(month, 0)
-            monthly_data[month] = {'파이프라인': mail_count, '지원신청완료': apply_count, '취소': 0, '지급신청': distribute_count, '판매현황': sales_count}
+            monthly_data[month] = {'파이프라인': mail_count, '지원신청완료': apply_count, '취소': 0, '지급신청': distribute_count, '판매현황': sales_count, 'Pipe/판매(%)': 0}
 
         q_totals = {}
         for q in [1, 2, 3]:
@@ -716,10 +716,11 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
                 '지원신청완료': sum(monthly_data[m]['지원신청완료'] for m in q_months),
                 '취소': sum(monthly_data[m]['취소'] for m in q_months),
                 '지급신청': sum(monthly_data[m]['지급신청'] for m in q_months),
-                '판매현황': sum(monthly_data[m]['판매현황'] for m in q_months)
+                '판매현황': sum(monthly_data[m]['판매현황'] for m in q_months),
+                'Pipe/판매(%)': sum(monthly_data[m]['Pipe/판매(%)'] for m in q_months)
             }
         q_totals[3]['취소'] = 468
-        total_all = {key: sum(q_totals[q][key] for q in [1,2,3]) if isinstance(q_totals[q].get(key), (int, float)) else '' for key in ['파이프라인', '지원신청완료', '취소', '지급신청', '판매현황']}
+        total_all = {key: sum(q_totals[q][key] for q in [1,2,3]) if isinstance(q_totals[q].get(key), (int, float)) else '' for key in ['파이프라인', '지원신청완료', '취소', '지급신청', '판매현황', 'Pipe/판매(%)']}
         
         q1_target, q2_target, q3_target = 4300, 10000, 10000
         q_targets = {1: q1_target, 2: q2_target, 3: q3_target}
@@ -741,7 +742,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
         html_retail += f'<td style="background-color:#e6e8f0;">{sum(q_targets.values())}</td></tr>'
         rows = ['파이프라인', '지원신청완료', '취소', '지급신청']
         if viewer_option == '내부':
-            rows.extend(['판매현황'])
+            rows.extend(['판매현황', 'Pipe/판매(%)'])
         for i, row_name in enumerate(rows):
             html_retail += f'<tr style="background-color: #fafafa;">' if (i+1) % 2 == 1 else '<tr>'
             if row_name == '판매현황':
