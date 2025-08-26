@@ -57,7 +57,7 @@ def get_custom_tooltip_css():
     </style>
     """
 
-def create_mini_calendar(data_for_month: dict = None):
+def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
     """
     Streamlit 컬럼에 넣기 좋은 작은 월간 캘린더 UI를 생성합니다.
     - st.session_state를 사용하여 상태를 관리합니다.
@@ -65,7 +65,8 @@ def create_mini_calendar(data_for_month: dict = None):
     - 날짜에 마우스를 올리면 커스텀 UI 툴팁으로 데이터를 보여줍니다.
 
     Args:
-        data_for_month (dict, optional): {day: "tooltip_text"} 형태의 딕셔너리. Defaults to None.
+        tooltip_data (dict, optional): {day: "tooltip_text"} 형태의 툴팁 데이터. Defaults to None.
+        number_data (dict, optional): {day: [num1, num2]} 형태의 숫자 데이터. Defaults to None.
     """
     # 페이지가 다시 렌더링될 때 CSS가 중복으로 주입되는 것을 방지
     if 'custom_tooltip_css_injected' not in st.session_state:
@@ -132,22 +133,26 @@ def create_mini_calendar(data_for_month: dict = None):
                         current_date.year == today.year
                     )
                     
+                                        # 1. 툴팁 데이터 처리
                     tooltip_text = ""
-                    if data_for_month and day in data_for_month:
-                        # 이 부분을 수정하여 툴팁 내용을 원하는 형태로 만듭니다.
-                        data = data_for_month[day]
-                        
-                        # 예시: 데이터가 리스트인 경우, 각 항목을 줄바꿈으로 보여주기
-                        if isinstance(data, list):
-                            tooltip_text = "\\n".join(map(str, data))
-                        # 그 외의 경우, 단순 텍스트로 변환
-                        else:
-                            tooltip_text = str(data)
-                        
-                        # HTML에 맞게 특수문자를 변환합니다.
-                        tooltip_text = html.escape(tooltip_text, quote=True)
+                    if tooltip_data and day in tooltip_data:
+                        # 툴팁 데이터는 항상 문자열로 변환
+                        text = str(tooltip_data[day])
+                        tooltip_text = html.escape(text, quote=True)
                     
                     tooltip_span = f"<span class='tooltip-text'>{tooltip_text}</span>" if tooltip_text else ""
+
+                    # 2. 날짜 아래 숫자 데이터 처리
+                    extra_html = ""
+                    # 정렬을 위한 빈 공간(플레이스홀더)
+                    placeholder_html = "<div style='height: 1em; font-size: 0.7em;'></div>" 
+
+                    if number_data and day in number_data and isinstance(number_data[day], (int, float)):
+                        # 숫자 데이터인 경우, 빨간 글씨로 변환
+                        extra_html = f"<div style='color: red; font-size: 0.7em; text-align: center;'>{number_data[day]}</div>"
+                    else:
+                        # 숫자 데이터가 없거나 타입이 맞지 않으면 빈 공간을 넣어 높이를 맞춤
+                        extra_html = placeholder_html
                     
                     day_style = (
                         "text-align: center; font-size: 0.8em; background-color: #FF4B4B; "
@@ -159,13 +164,19 @@ def create_mini_calendar(data_for_month: dict = None):
 
                     day_html = f"""
                         <div class='tooltip-container'>
-                            <div style='{day_style}'>
-                                {day}
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <div style='{day_style}'>
+                                    {day}
+                                </div>
+                                {extra_html}
                             </div>
                             {tooltip_span}
                         </div>
                     """
                     st.markdown(day_html, unsafe_allow_html=True)
+
+def data_processing():
+    pass
 
 # --- 예시 사용법 ---
 if __name__ == "__main__":
@@ -183,17 +194,26 @@ if __name__ == "__main__":
         # 현재 월의 데이터만 생성
         cal_date = st.session_state.get('mini_calendar_date', datetime.now())
         
-        sample_data = {
+        # 1. 툴팁에 표시할 샘플 데이터
+        sample_tooltip_data = {
             5: "5일 데이터: 100건 처리",
-            15: "15일 데이터: 250건 처리\\n- 특이사항: 시스템 점검",
-            25: ["보고서 제출", "오후 3시 미팅"], # 리스트 데이터
-            26: [3, 5], # 숫자 리스트 데이터
+            15: "15일 데이터: 250건 처리\n- 특이사항: 시스템 점검",
+            25: "25일 상세 정보: 보고서 제출",
+            26: "26일 상세 정보: 오후 3시 미팅",
         }
+
+        # 2. 날짜 아래에 빨간 숫자로 표시할 샘플 데이터
+        sample_number_data = {
+            25: 3,
+        }
+        
         # 오늘 날짜에도 데이터 추가
         if cal_date.month == datetime.now().month and cal_date.year == datetime.now().year:
-            sample_data[datetime.now().day] = f"오늘({datetime.now().day}일) 데이터: 50건 처리"
+            today = datetime.now().day
+            sample_tooltip_data[today] = f"오늘({today}일) 데이터: 50건 처리"
+            sample_number_data[today] = 1 # 오늘 날짜 테스트용 숫자
 
-        create_mini_calendar(data_for_month=sample_data)
+        create_mini_calendar(tooltip_data=sample_tooltip_data, number_data=sample_number_data)
         
     with cols[1]:
         st.header("다른 컨텐츠")
