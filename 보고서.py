@@ -745,7 +745,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
             rows.extend(['판매현황', 'Pipe/판매(%)'])
         for i, row_name in enumerate(rows):
             html_retail += f'<tr style="background-color: #fafafa;">' if (i+1) % 2 == 1 else '<tr>'
-            if row_name == '판매현황':
+            if row_name == '판매현황' or row_name == 'Pipe/판매(%)':
                 html_retail += f'<th style="background-color: #d4edda; color: #155724;">{row_name}</th>'
             else:
                 html_retail += f'<th style="background-color: #f7f7f9;">{row_name}</th>'
