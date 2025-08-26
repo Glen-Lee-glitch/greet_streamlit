@@ -244,6 +244,17 @@ def load_memo():
     except FileNotFoundError:
         return ""
 
+def load_memo_file(path:str):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+
+def save_memo_file(path:str, content:str):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
 # --- 데이터 로딩 ---
 data = load_data()
 df = data["df"]
@@ -1155,16 +1166,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
     # --- 미신청건 영역 ---
     with col3:
 
-        def load_memo_file(path:str):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return f.read()
-            except FileNotFoundError:
-                return ""
-
-        def save_memo_file(path:str, content:str):
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
+        
 
         # 특이사항 메모 (자동 추가)
         st.subheader("미신청건")
