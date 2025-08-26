@@ -213,7 +213,7 @@ def data_processing(year: int, month: int):
             tooltip_text = f"{date_str}-{content}: {count}건"
             
             if day in tooltip_data:
-                tooltip_data[day] += f"\\n{tooltip_text}"
+                tooltip_data[day] += f"\n{tooltip_text}"
             else:
                 tooltip_data[day] = tooltip_text
         except (IndexError, ValueError):
