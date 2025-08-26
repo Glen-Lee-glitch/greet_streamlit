@@ -706,21 +706,36 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
                 distribute_count = int(df_2[(df_2['날짜'].dt.month == 9) & (df_2['날짜'].dt.date <= day0)]['배분'].sum())
             
             sales_count = sales_data.get(month, 0)
-            monthly_data[month] = {'파이프라인': mail_count, '지원신청완료': apply_count, '취소': 0, '지급신청': distribute_count, '판매현황': sales_count, 'Pipe/판매(%)': 0}
+            pipe_sales_ratio = f"{(mail_count / sales_count * 100):.1f}" if sales_count > 0 else "0.0"
+            monthly_data[month] = {'파이프라인': mail_count, '지원신청완료': apply_count, '취소': 0, '지급신청': distribute_count, '판매현황': sales_count, 'Pipe/판매(%)': pipe_sales_ratio}
 
         q_totals = {}
         for q in [1, 2, 3]:
             q_months = range((q-1)*3 + 1, q*3 + 1)
+            
+            q_pipeline = sum(monthly_data[m]['파이프라인'] for m in q_months)
+            q_sales = sum(monthly_data[m]['판매현황'] for m in q_months)
+            q_ratio = f"{(q_pipeline / q_sales * 100):.1f}" if q_sales > 0 else "0.0"
+
             q_totals[q] = {
-                '파이프라인': sum(monthly_data[m]['파이프라인'] for m in q_months),
+                '파이프라인': q_pipeline,
                 '지원신청완료': sum(monthly_data[m]['지원신청완료'] for m in q_months),
                 '취소': sum(monthly_data[m]['취소'] for m in q_months),
                 '지급신청': sum(monthly_data[m]['지급신청'] for m in q_months),
-                '판매현황': sum(monthly_data[m]['판매현황'] for m in q_months),
-                'Pipe/판매(%)': sum(monthly_data[m]['Pipe/판매(%)'] for m in q_months)
+                '판매현황': q_sales,
+                'Pipe/판매(%)': q_ratio
             }
         q_totals[3]['취소'] = 468
-        total_all = {key: sum(q_totals[q][key] for q in [1,2,3]) if isinstance(q_totals[q].get(key), (int, float)) else '' for key in ['파이프라인', '지원신청완료', '취소', '지급신청', '판매현황', 'Pipe/판매(%)']}
+        # '총계' 계산
+        total_all = {
+            key: sum(q_totals[q][key] for q in [1,2,3]) 
+            for key in ['파이프라인', '지원신청완료', '취소', '지급신청', '판매현황']
+        }
+        
+        total_pipeline = total_all['파이프라인']
+        total_sales = total_all['판매현황']
+        total_ratio = f"{(total_pipeline / total_sales * 100):.1f}" if total_sales > 0 else "0.0"
+        total_all['Pipe/판매(%)'] = total_ratio
         
         q1_target, q2_target, q3_target = 4300, 10000, 10000
         q_targets = {1: q1_target, 2: q2_target, 3: q3_target}
