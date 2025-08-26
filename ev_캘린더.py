@@ -173,7 +173,7 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
                     """
                     st.markdown(day_html, unsafe_allow_html=True)
 
-def data_processing():
+def data_processing(year: int, month: int):
     df = pd.read_excel('Q3.xlsx', sheet_name='미신청건')
 
     # 1. 날짜 관련 데이터만 필터링
@@ -183,13 +183,27 @@ def data_processing():
     extract_pattern = r'(\d{1,2}\s*/\s*\d{1,2})([^,]+)'
     extracted_data = filtered_df['Greet Note'].str.extract(extract_pattern)
     
+    # 추출된 월/일 정보를 숫자 형태로 변환하여 새로운 컬럼에 저장
+    filtered_df['month'] = pd.to_numeric(extracted_data[0].str.split('/').str[0])
+    filtered_df['day'] = pd.to_numeric(extracted_data[0].str.split('/').str[1])
+    
+    # 추출된 문자열 데이터 저장
     filtered_df['date_str'] = extracted_data[0].str.replace(r'\s', '')
+    # [수정] 그룹 인덱스를 2에서 1로 변경
     filtered_df['note_content'] = extracted_data[1].str.strip().str.lstrip('-').str.strip()
 
-    filtered_df.dropna(subset=['date_str', 'note_content'], inplace=True)
+    filtered_df.dropna(subset=['month', 'day', 'date_str', 'note_content'], inplace=True)
+
+    # month와 day 컬럼을 정수형으로 변환
+    filtered_df['month'] = filtered_df['month'].astype(int)
+    filtered_df['day'] = filtered_df['day'].astype(int)
+
+    # --- 추가된 로직: 현재 캘린더의 '월'과 일치하는 데이터만 필터링 ---
+    # 연도 정보는 없으므로 월만 비교
+    monthly_df = filtered_df[filtered_df['month'] == month].copy()
 
     # 3. 날짜와 내용 기준으로 그룹화하여 건수 집계 (툴팁용)
-    tooltip_counts = filtered_df.groupby(['date_str', 'note_content']).size()
+    tooltip_counts = monthly_df.groupby(['date_str', 'note_content']).size()
 
     # 4. 툴팁 딕셔너리 생성
     tooltip_data = {}
@@ -206,11 +220,7 @@ def data_processing():
             continue
 
     # 5. 날짜 아래에 표시할 숫자 데이터 집계
-    filtered_df['day'] = filtered_df['date_str'].apply(lambda x: int(x.split('/')[1]) if '/' in str(x) else None)
-    filtered_df.dropna(subset=['day'], inplace=True)
-    filtered_df['day'] = filtered_df['day'].astype(int)
-    
-    daily_counts = filtered_df.groupby('day').size()
+    daily_counts = monthly_df.groupby('day').size()
     number_data = daily_counts.to_dict()
 
     return number_data, tooltip_data
@@ -224,7 +234,15 @@ if __name__ == "__main__":
     
     cols = st.columns([1, 1, 2])
     
-    processed_number_data, processed_tooltip_data = data_processing()
+    # 현재 캘린더의 연도와 월 가져오기
+    # st.session_state에서 현재 날짜를 가져와 data_processing에 전달
+    cal_date = st.session_state.get('mini_calendar_date', datetime.now())
+    processed_number_data, processed_tooltip_data = data_processing(cal_date.year, cal_date.month)
+    
+    # --- 디버깅 코드 추가 ---
+    st.write("Number Data:", processed_number_data)
+    st.write("Tooltip Data:", processed_tooltip_data)
+    # --- 여기까지 ---
     
     with cols[0]:
         st.header("캘린더")
