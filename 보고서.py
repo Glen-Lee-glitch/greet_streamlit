@@ -1524,6 +1524,7 @@ if viewer_option == '내부' or viewer_option == '테슬라':
                     title=title_corp
                 )
                 st.altair_chart(corp_combo, use_container_width=True)
+
 # 폴스타 뷰 시작 부분
 if viewer_option == '폴스타':
     show_polestar_viewer(data, today_kst)

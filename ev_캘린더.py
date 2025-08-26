@@ -134,7 +134,18 @@ def create_mini_calendar(data_for_month: dict = None):
                     
                     tooltip_text = ""
                     if data_for_month and day in data_for_month:
-                        tooltip_text = html.escape(str(data_for_month[day]), quote=True)
+                        # 이 부분을 수정하여 툴팁 내용을 원하는 형태로 만듭니다.
+                        data = data_for_month[day]
+                        
+                        # 예시: 데이터가 리스트인 경우, 각 항목을 줄바꿈으로 보여주기
+                        if isinstance(data, list):
+                            tooltip_text = "\\n".join(map(str, data))
+                        # 그 외의 경우, 단순 텍스트로 변환
+                        else:
+                            tooltip_text = str(data)
+                        
+                        # HTML에 맞게 특수문자를 변환합니다.
+                        tooltip_text = html.escape(tooltip_text, quote=True)
                     
                     tooltip_span = f"<span class='tooltip-text'>{tooltip_text}</span>" if tooltip_text else ""
                     
@@ -174,9 +185,9 @@ if __name__ == "__main__":
         
         sample_data = {
             5: "5일 데이터: 100건 처리",
-            15: "15일 데이터: 250건 처리\n- 특이사항: 시스템 점검",
-            25: "25일 데이터: 80건 처리",
-            26: 12345, # 숫자 데이터 테스트
+            15: "15일 데이터: 250건 처리\\n- 특이사항: 시스템 점검",
+            25: ["보고서 제출", "오후 3시 미팅"], # 리스트 데이터
+            26: [3, 5], # 숫자 리스트 데이터
         }
         # 오늘 날짜에도 데이터 추가
         if cal_date.month == datetime.now().month and cal_date.year == datetime.now().year:
