@@ -13,7 +13,7 @@ def get_custom_tooltip_css():
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 24px;
+            height: 48px;
             width: 100%;
         }
 
@@ -134,10 +134,9 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
                         current_date.year == today.year
                     )
                     
-                                        # 1. 툴팁 데이터 처리
+                    # 1. 툴팁 데이터 처리
                     tooltip_text = ""
                     if tooltip_data and day in tooltip_data:
-                        # 툴팁 데이터는 항상 문자열로 변환
                         text = str(tooltip_data[day])
                         tooltip_text = html.escape(text, quote=True)
                     
@@ -145,14 +144,11 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
 
                     # 2. 날짜 아래 숫자 데이터 처리
                     extra_html = ""
-                    # 정렬을 위한 빈 공간(플레이스홀더)
-                    placeholder_html = "<div style='height: 1em; font-size: 0.7em;'></div>" 
+                    placeholder_html = "<div style='height: 1.2em; font-size: 0.7em;'></div>" # 높이 살짝 증가
 
                     if number_data and day in number_data and isinstance(number_data[day], (int, float)):
-                        # 숫자 데이터인 경우, 빨간 글씨로 변환
-                        extra_html = f"<div style='color: red; font-size: 0.7em; text-align: center;'>{number_data[day]}</div>"
+                        extra_html = f"<div style='color: red; font-size: 0.7em; text-align: center; margin-top: 2px;'>{number_data[day]}</div>"
                     else:
-                        # 숫자 데이터가 없거나 타입이 맞지 않으면 빈 공간을 넣어 높이를 맞춤
                         extra_html = placeholder_html
                     
                     day_style = (
@@ -160,12 +156,13 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
                         "color: white; border-radius: 50%; width: 24px; height: 24px; "
                         "line-height: 24px; margin: auto;"
                     ) if is_today else (
-                        "text-align: center; font-size: 0.8em; margin: 0; cursor: help;"
+                        "text-align: center; font-size: 0.8em; margin: 0; cursor: help; height: 24px; line-height: 24px;"
                     )
 
+                    # --- 수정된 HTML 구조 ---
                     day_html = f"""
                         <div class='tooltip-container'>
-                            <div style="display: flex; flex-direction: column; align-items: center;">
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
                                 <div style='{day_style}'>
                                     {day}
                                 </div>
@@ -202,15 +199,13 @@ def data_processing():
             tooltip_text = f"{date_str}-{content}: {count}건"
             
             if day in tooltip_data:
-                tooltip_data[day] += f"\n{tooltip_text}"
+                tooltip_data[day] += f"\\n{tooltip_text}"
             else:
                 tooltip_data[day] = tooltip_text
         except (IndexError, ValueError):
-            # 날짜 형식 (e.g., "8/26")이 잘못된 경우 건너뜀
             continue
 
     # 5. 날짜 아래에 표시할 숫자 데이터 집계
-    # 'date_str'에서 'day'를 추출하여 사용
     filtered_df['day'] = filtered_df['date_str'].apply(lambda x: int(x.split('/')[1]) if '/' in str(x) else None)
     filtered_df.dropna(subset=['day'], inplace=True)
     filtered_df['day'] = filtered_df['day'].astype(int)
@@ -218,7 +213,6 @@ def data_processing():
     daily_counts = filtered_df.groupby('day').size()
     number_data = daily_counts.to_dict()
 
-    # 6. 두 개의 딕셔너리 반환
     return number_data, tooltip_data
 
 # --- 예시 사용법 ---
@@ -230,13 +224,10 @@ if __name__ == "__main__":
     
     cols = st.columns([1, 1, 2])
     
-    # 데이터 처리 함수 호출
     processed_number_data, processed_tooltip_data = data_processing()
     
     with cols[0]:
         st.header("캘린더")
-
-        # 기존 샘플 데이터 대신 실제 데이터 사용
         create_mini_calendar(
             tooltip_data=processed_tooltip_data,
             number_data=processed_number_data
