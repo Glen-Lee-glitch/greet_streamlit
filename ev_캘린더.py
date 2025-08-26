@@ -69,10 +69,8 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
         tooltip_data (dict, optional): {day: "tooltip_text"} 형태의 툴팁 데이터. Defaults to None.
         number_data (dict, optional): {day: [num1, num2]} 형태의 숫자 데이터. Defaults to None.
     """
-    # 페이지가 다시 렌더링될 때 CSS가 중복으로 주입되는 것을 방지
-    if 'custom_tooltip_css_injected' not in st.session_state:
-        st.markdown(get_custom_tooltip_css(), unsafe_allow_html=True)
-        st.session_state.custom_tooltip_css_injected = True
+    # rerun 시에도 CSS가 매번 주입되도록 세션 상태 체크 로직 제거
+    st.markdown(get_custom_tooltip_css(), unsafe_allow_html=True)
 
     # session_state에 날짜가 없으면 초기화합니다.
     # 키를 고유하게 만들어 다른 위젯과 충돌하지 않도록 합니다.
