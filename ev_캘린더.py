@@ -171,19 +171,33 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None):
                     """
                     st.markdown(day_html, unsafe_allow_html=True)
 
-def data_processing(year: int, month: int):
-    df = pd.read_excel('Q3.xlsx', sheet_name='미신청건')
+def data_processing(df_source: pd.DataFrame, year: int, month: int):
+    """
+    주어진 데이터프레임을 가공하여 캘린더에 표시할 데이터를 생성합니다.
+    (기존: 'Q3.xlsx' 파일 직접 읽기 -> 변경: DataFrame을 인자로 받기)
+    """
+    df = df_source.copy()
+
+    # 'Greet Note' 컬럼명을 유연하게 찾기 (보고서.py의 로직과 통일)
+    lowered_cols = {c.lower().replace(' ', ''): c for c in df.columns}
+    note_col = next((orig for key, orig in lowered_cols.items() if 'greetnote' in key or '노트' in key), None)
+    
+    if note_col is None:
+        return {}, {} # 노트 컬럼이 없으면 빈 데이터 반환
 
     # 1. 날짜 관련 데이터만 필터링
-    filtered_df = df[df['Greet Note'].apply(lambda x: isinstance(x, str) and '/' in x and '-' in x)].copy()
+    filtered_df = df[df[note_col].apply(lambda x: isinstance(x, str) and '/' in x and '-' in x)].copy()
 
     # 2. 정규표현식으로 날짜와 내용(도시명 등) 추출
     extract_pattern = r'(\d{1,2}\s*/\s*\d{1,2})([^,]+)'
-    extracted_data = filtered_df['Greet Note'].str.extract(extract_pattern)
+    extracted_data = filtered_df[note_col].str.extract(extract_pattern)
+
+    if extracted_data.shape[1] < 2:
+        return {}, {}
     
     # 추출된 월/일 정보를 숫자 형태로 변환하여 새로운 컬럼에 저장
-    filtered_df['month'] = pd.to_numeric(extracted_data[0].str.split('/').str[0])
-    filtered_df['day'] = pd.to_numeric(extracted_data[0].str.split('/').str[1])
+    filtered_df['month'] = pd.to_numeric(extracted_data[0].str.split('/').str[0], errors='coerce')
+    filtered_df['day'] = pd.to_numeric(extracted_data[0].str.split('/').str[1], errors='coerce')
     
     # 추출된 문자열 데이터 저장
     filtered_df['date_str'] = extracted_data[0].str.replace(r'\s', '')
@@ -192,12 +206,14 @@ def data_processing(year: int, month: int):
 
     filtered_df.dropna(subset=['month', 'day', 'date_str', 'note_content'], inplace=True)
 
+    if filtered_df.empty:
+        return {}, {}
+
     # month와 day 컬럼을 정수형으로 변환
     filtered_df['month'] = filtered_df['month'].astype(int)
     filtered_df['day'] = filtered_df['day'].astype(int)
 
     # --- 추가된 로직: 현재 캘린더의 '월'과 일치하는 데이터만 필터링 ---
-    # 연도 정보는 없으므로 월만 비교
     monthly_df = filtered_df[filtered_df['month'] == month].copy()
 
     # 3. 날짜와 내용 기준으로 그룹화하여 건수 집계 (툴팁용)
@@ -235,8 +251,15 @@ if __name__ == "__main__":
     # 현재 캘린더의 연도와 월 가져오기
     # st.session_state에서 현재 날짜를 가져와 data_processing에 전달
     cal_date = st.session_state.get('mini_calendar_date', datetime.now())
-    processed_number_data, processed_tooltip_data = data_processing(cal_date.year, cal_date.month)
     
+    try:
+        # 테스트를 위해 'Q3.xlsx' 파일 로드
+        df_excel = pd.read_excel('Q3.xlsx', sheet_name='미신청건')
+        processed_number_data, processed_tooltip_data = data_processing(df_excel, cal_date.year, cal_date.month)
+    except FileNotFoundError:
+        st.error("'Q3.xlsx' 파일을 찾을 수 없습니다. 이 스크립트를 단독으로 테스트하려면 파일이 필요합니다.")
+        processed_number_data, processed_tooltip_data = {}, {}
+
     # --- 디버깅 코드 추가 ---
     st.write("Number Data:", processed_number_data)
     st.write("Tooltip Data:", processed_tooltip_data)

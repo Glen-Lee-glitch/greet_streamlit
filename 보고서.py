@@ -20,6 +20,7 @@ import pytz
 from polestar_viewer import show_polestar_viewer
 from map_viewer import show_map_viewer, apply_counts_to_map_optimized
 from car_region_dashboard import show_car_region_dashboard
+import ev_캘린더 as ev_cal # 캘린더 모듈 임포트
 
 
 # 기존 import 섹션 뒤에 추가
@@ -1165,33 +1166,56 @@ if viewer_option == '내부' or viewer_option == '테슬라':
     
     # --- 미신청건 영역 ---
     with col3:
+        if viewer_option == '내부':
+            st.subheader("추후신청건")
+            
+            # 캘린더 날짜 상태 관리 (고유 키 사용)
+            if 'report_calendar_date' not in st.session_state:
+                st.session_state.report_calendar_date = selected_date
+            
+            # ev_cal 모듈의 create_mini_calendar가 내부적으로 'mini_calendar_date'를 사용하므로
+            # 충돌을 피하기 위해 세션 상태 키를 일시적으로 맞춰줌
+            st.session_state.mini_calendar_date = st.session_state.report_calendar_date
 
-        
+            current_calendar_date = st.session_state.mini_calendar_date
+            
+            # 데이터 처리
+            number_data, tooltip_data = ev_cal.data_processing(df_fail_q3, current_calendar_date.year, current_calendar_date.month)
+            
+            # 캘린더 생성
+            ev_cal.create_mini_calendar(
+                tooltip_data=tooltip_data,
+                number_data=number_data
+            )
+            
+            # 원래 키로 상태 복원 (다른 위젯과의 충돌 방지)
+            st.session_state.report_calendar_date = st.session_state.mini_calendar_date
 
-        # 특이사항 메모 (자동 추가)
-        st.subheader("미신청건")
+        elif viewer_option == '테슬라':
+            # 특이사항 메모 (자동 추가)
+            st.subheader("미신청건")
 
-        # 오늘 기준 자동 추출된 특이사항 데이터프레임
-        df_auto_special = extract_special_memo(df_fail_q3, selected_date)
-        
-        # 날짜별로 그룹화하고 서식 지정
-        year_for_memo = selected_date.year
-        auto_special_html = format_special_memos(df_auto_special, year_for_memo)
-        
-        # memo_special.txt 에 저장된 사용자 메모
-        memo_special_saved = load_memo_file("memo_special.txt")
-        
-        # 최종 HTML 콘텐츠 생성
-        final_html_content = auto_special_html
-        if memo_special_saved.strip():
-            # 사용자 메모가 있으면 구분선과 함께 추가
-            final_html_content += "<br>---<br>" + memo_special_saved.strip().replace("\n", "<br>")
+            # 오늘 기준 자동 추출된 특이사항 데이터프레임
+            df_auto_special = extract_special_memo(df_fail_q3, selected_date)
+            
+            # 날짜별로 그룹화하고 서식 지정
+            year_for_memo = selected_date.year
+            auto_special_html = format_special_memos(df_auto_special, year_for_memo)
+            
+            # memo_special.txt 에 저장된 사용자 메모
+            memo_special_saved = load_memo_file("memo_special.txt")
+            
+            # 최종 HTML 콘텐츠 생성
+            final_html_content = auto_special_html
+            if memo_special_saved.strip():
+                # 사용자 메모가 있으면 구분선과 함께 추가
+                final_html_content += "<br>---<br>" + memo_special_saved.strip().replace("\n", "<br>")
 
-        # CSS로 폰트 크기 16px, 줄바꿈 유지, 배경 연초록색(#e0f7fa), 텍스트 Bold로 표출
-        st.markdown(
-            f"<div style='font-size:14px; white-space:pre-wrap; background-color:#e0f7fa; border-radius:8px; padding:10px; column-count: 2; column-gap: 20px;'>{final_html_content}</div>",
-            unsafe_allow_html=True,
-        )
+            # CSS로 폰트 크기 16px, 줄바꿈 유지, 배경 연초록색(#e0f7fa), 텍스트 Bold로 표출
+            st.markdown(
+                f"<div style='font-size:14px; white-space:pre-wrap; background-color:#e0f7fa; border-radius:8px; padding:10px; column-count: 2; column-gap: 20px;'>{final_html_content}</div>",
+                unsafe_allow_html=True,
+            )
     
     st.markdown("<hr style='margin-top:1rem;margin-bottom:1rem;'>", unsafe_allow_html=True)
 
