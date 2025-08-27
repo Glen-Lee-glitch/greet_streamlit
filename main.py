@@ -42,6 +42,7 @@ class DatabaseManagementApp(QMainWindow):
         self.create_pipeline_tab()
         self.create_support_tab()
         self.create_special_tab()
+        self.create_tesla_tab()
         
         # 기본 폰트 설정
         font = QFont()
@@ -83,7 +84,7 @@ class DatabaseManagementApp(QMainWindow):
         # 테이블 위젯
         self.pipeline_table = QTableWidget()
         self.pipeline_table.setColumnCount(2)
-        self.pipeline_table.setHorizontalHeaderLabels(['날짜', '파이프라인'])
+        self.pipeline_table.setHorizontalHeaderLabels(['날짜', '파이프라인', '테슬라_지급'])
         
         # 8월 전체 날짜 (31일) + 합계 행 생성
         self.pipeline_table.setRowCount(32)  # 31일 + 합계행
@@ -114,6 +115,51 @@ class DatabaseManagementApp(QMainWindow):
         layout.addWidget(self.pipeline_table)
         
         self.tab_widget.addTab(tab, '파이프라인')
+    
+    def create_tesla_tab(self):
+        """테슬라_지급 탭 생성"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 테이블 위젯
+        self.tesla_table = QTableWidget()
+        self.tesla_table.setColumnCount(4)
+        self.tesla_table.setHorizontalHeaderLabels([
+            '날짜', '배분', '신청', '지급_잔여'
+        ])
+        
+        # 8월 전체 날짜 (31일) + 합계 행 생성
+        self.tesla_table.setRowCount(32)  # 31일 + 합계행
+        
+        # 날짜 자동 채우기
+        for day in range(1, 32):
+            date_str = f"2025-08-{day:02d}"
+            date_item = QTableWidgetItem(date_str)
+            date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # 날짜는 수정 불가
+            self.tesla_table.setItem(day-1, 0, date_item)
+            
+            # 나머지 컬럼들 (기본 0)
+            for col in range(1, 4):
+                item = QTableWidgetItem("0")
+                self.tesla_table.setItem(day-1, col, item)
+        
+        # 합계 행 추가
+        total_date_item = QTableWidgetItem("합계")
+        total_date_item.setFlags(total_date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.tesla_table.setItem(31, 0, total_date_item)
+        
+        # 각 컬럼별 합계 초기화
+        for col in range(1, 4):
+            total_item = QTableWidgetItem("0")
+            total_item.setFlags(total_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tesla_table.setItem(31, col, total_item)
+            
+        # 테이블 설정
+        self.setup_table(self.tesla_table)
+        self.style_total_row(self.tesla_table, 31)
+        layout.addWidget(self.tesla_table)
+        
+        self.tab_widget.addTab(tab, '테슬라_지급')
     
     def create_support_tab(self):
         """지원신청 탭 생성"""
@@ -269,6 +315,19 @@ class DatabaseManagementApp(QMainWindow):
                 total_item = table.item(31, col)
                 if total_item:
                     total_item.setText(str(total))
+
+        # 테슬라_지급 테이블 합계 계산
+        elif table == self.tesla_table:
+            for col in range(1, 4):  # 각 숫자 컬럼별로 합계 계산
+                total = 0
+                for row in range(31): # 합계 행 제외
+                    item_value = table.item(row, col)
+                    if item_value and item_value.text().isdigit():
+                        total += int(item_value.text())
+                
+                total_item = table.item(31, col)
+                if total_item:
+                    total_item.setText(str(total))
     
     def calculate_pipeline_total(self):
         """파이프라인 테이블 합계 계산"""
@@ -281,6 +340,19 @@ class DatabaseManagementApp(QMainWindow):
         total_item = self.pipeline_table.item(31, 1)
         if total_item:
             total_item.setText(str(total))
+
+    def calculate_tesla_total(self):
+        """테슬라_지급 테이블 합계 계산"""
+        for col in range(1, 4):  # 각 숫자 컬럼별로 합계 계산
+            total = 0
+            for row in range(31):  # 합계 행 제외
+                item_value = self.tesla_table.item(row, col)
+                if item_value and item_value.text().isdigit():
+                    total += int(item_value.text())
+            
+            total_item = self.tesla_table.item(31, col)
+            if total_item:
+                total_item.setText(str(total))
     
     def calculate_support_total(self):
         """지원신청 테이블 합계 계산"""
@@ -349,12 +421,19 @@ class DatabaseManagementApp(QMainWindow):
                 table.setItem(new_row, 0, QTableWidgetItem(""))
                 for col in range(1, 6):
                     table.setItem(new_row, col, QTableWidgetItem("0"))
+            elif table == self.tesla_table:
+                # 테슬라_지급 테이블
+                table.setItem(new_row, 0, QTableWidgetItem(""))
+                for col in range(1, 4):
+                    table.setItem(new_row, col, QTableWidgetItem("0"))
             
             # 합계 재계산
             if table == self.pipeline_table:
                 self.calculate_pipeline_total()
             elif table == self.support_table:
                 self.calculate_support_total()
+            elif table == self.tesla_table:
+                self.calculate_tesla_total()
                 
             QMessageBox.information(self, '완료', f'{date_str} 행이 제거되었습니다.')
         else:
@@ -423,6 +502,7 @@ class DatabaseManagementApp(QMainWindow):
             self.set_table_editable(self.pipeline_table, True)
             self.set_table_editable(self.support_table, True)
             self.set_table_editable(self.special_table, True, exclude_date=False)
+            self.set_table_editable(self.tesla_table, True)
             
         else:
             # 수정 모드 비활성화
@@ -433,6 +513,7 @@ class DatabaseManagementApp(QMainWindow):
             self.set_table_editable(self.pipeline_table, False)
             self.set_table_editable(self.support_table, False)
             self.set_table_editable(self.special_table, False)
+            self.set_table_editable(self.tesla_table, False)
     
     def set_table_editable(self, table, editable, exclude_date=True):
         """테이블의 수정 가능 상태 설정"""
@@ -508,6 +589,23 @@ class DatabaseManagementApp(QMainWindow):
             # 지원신청 합계 계산
             self.calculate_support_total()
             
+            # 테슬라_지급 데이터 로드
+            tesla_data = self.db_manager.get_tesla_data()
+            tesla_dict = {}
+            for row in tesla_data:
+                tesla_dict[row[1]] = [row[2], row[3], row[4]] # 날짜: [배분, 신청, 지급_잔여]
+            
+            for row in range(31): # 합계 행 제외하고 로드
+                date_item = self.tesla_table.item(row, 0)
+                if date_item:
+                    date_str = date_item.text()
+                    tesla_values = tesla_dict.get(date_str, [0, 0, 0])
+                    for col in range(1, 4):
+                        self.tesla_table.setItem(row, col, QTableWidgetItem(str(tesla_values[col-1])))
+
+            # 테슬라_지급 합계 계산
+            self.calculate_tesla_total()
+
             # 특이사항 데이터 로드
             special_data = self.db_manager.get_special_data()
             self.special_table.setRowCount(len(special_data))
@@ -556,6 +654,23 @@ class DatabaseManagementApp(QMainWindow):
                     cursor.execute('DELETE FROM 지원신청 WHERE 날짜 = ?', (date_str,))
                     self.db_manager.insert_support_data(date_str, *values)
             
+            # 테슬라_지급 데이터 업데이트 (합계 행 제외)
+            for row in range(31): # 합계 행 제외
+                date_item = self.tesla_table.item(row, 0)
+
+                if date_item:
+                    date_str = date_item.text()
+                    values = []
+
+                    for col in range(1, 4):
+                        item = self.tesla_table.item(row, col)
+                        values.append(int(item.text() or 0) if item else 0)
+
+                    # 기존 데이터 삭제 후 새로 삽입
+                    cursor = self.db_manager.connection.cursor()
+                    cursor.execute('DELETE FROM 테슬라_지급 WHERE 날짜 = ?', (date_str,))
+                    self.db_manager.insert_tesla_data(date_str, *values)
+
             # 특이사항 데이터 업데이트 (전체 삭제 후 재삽입)
             cursor = self.db_manager.connection.cursor()
             cursor.execute('DELETE FROM 특이사항')

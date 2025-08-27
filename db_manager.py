@@ -62,6 +62,17 @@ class DatabaseManager:
                 )
             ''')
             
+            # 4. 테슬라_지급 테이블
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS 테슬라_지급 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    날짜 TEXT NOT NULL UNIQUE,
+                    배분 INTEGER DEFAULT 0,
+                    신청 INTEGER DEFAULT 0,
+                    지급_잔여 INTEGER DEFAULT 0
+                )
+            ''')
+
             self.connection.commit()
             print("모든 테이블이 성공적으로 생성되었습니다.")
             
@@ -106,6 +117,19 @@ class DatabaseManager:
             print(f"특이사항 데이터 삽입 완료: {날짜}, {특이사항}")
         except sqlite3.Error as e:
             print(f"특이사항 데이터 삽입 오류: {e}")
+
+    def insert_tesla_data(self, 날짜, 배분, 신청, 지급_잔여):
+        """테슬라_지급 테이블에 데이터 삽입"""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO 테슬라_지급 (날짜, 배분, 신청, 지급_잔여)
+                VALUES (?, ?, ?, ?)
+            ''', (날짜, 배분, 신청, 지급_잔여))
+            self.connection.commit()
+            print(f"테슬라_지급 데이터 삽입 완료: {날짜}")
+        except sqlite3.Error as e:
+            print(f"테슬라_지급 데이터 삽입 오류: {e}")
     
     def get_pipeline_data(self, start_date=None, end_date=None):
         """파이프라인 데이터 조회"""
@@ -159,6 +183,24 @@ class DatabaseManager:
             return cursor.fetchall()
         except sqlite3.Error as e:
             print(f"특이사항 데이터 조회 오류: {e}")
+            return []
+
+    def get_tesla_data(self, start_date=None, end_date=None):
+        """테슬라_지급 데이터 조회"""
+        cursor = self.connection.cursor()
+        try:
+            if start_date and end_date:
+                cursor.execute('''
+                    SELECT * FROM 테슬라_지급 
+                    WHERE 날짜 BETWEEN ? AND ?
+                    ORDER BY 날짜
+                ''', (start_date, end_date))
+            else:
+                cursor.execute('SELECT * FROM 테슬라_지급 ORDER BY 날짜')
+            
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            print(f"테슬라_지급 데이터 조회 오류: {e}")
             return []
     
     def close(self):

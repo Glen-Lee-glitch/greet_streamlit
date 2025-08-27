@@ -5,6 +5,8 @@ import sqlite3
 from datetime import datetime
 import json
 
+conn = sqlite3.connect('data.db')
+
 def preprocess_and_save_data():
     """
     Q3.xlsx, Q2.xlsx 파일에서 필요한 시트를 로드하여 전처리한 뒤
@@ -17,9 +19,12 @@ def preprocess_and_save_data():
         q1_file = "Q1.xlsx"
 
         # 3분기 시트
-        df_1_q3 = pd.read_excel(q3_file, sheet_name="지원_EV")      # 지원 데이터 (3분기)
-        df_2_q3 = pd.read_excel(q3_file, sheet_name="지급")         # 지급 데이터 (3분기)
-        df_5_q3 = pd.read_excel(q3_file, sheet_name="PipeLine")     # 파이프라인 데이터 (3분기)
+        # df_1_q3 = pd.read_excel(q3_file, sheet_name="지원_EV")      # 지원 데이터 (3분기)
+        df_1_q3 = pd.read_sql_query('SELECT * FROM 테슬라_지원신청', conn)
+        # df_2_q3 = pd.read_excel(q3_file, sheet_name="지급")         # 지급 데이터 (3분기)
+        df_2_q3 = pd.read_sql_query('SELECT * FROM 테슬라_지급', conn)
+        # df_5_q3 = pd.read_excel(q3_file, sheet_name="PipeLine")     # 파이프라인 데이터 (3분기)
+        df_5_q3 = pd.read_sql_query('SELECT * FROM pipeline', conn)
 
         # 2분기 시트
         df_1_q2 = pd.read_excel(q2_file, sheet_name="지원_EV")      # 지원 데이터 (2분기)
@@ -32,7 +37,7 @@ def preprocess_and_save_data():
         df_5_q1_raw = pd.read_excel(q1_file, sheet_name="PipeLine") # 파이프라인 데이터 (1분기, 집계형)
 
         df_fail_q3 = pd.read_excel(q3_file, sheet_name="미신청건")
-        df_2_fail_q3 = pd.read_excel(q3_file, sheet_name="지급_미지급건")
+        df_2_fail_q3 = pd.read_sql_query("SELECT 날짜, 지급_잔여 AS 미신청건 FROM 테슬라_지급", conn)
 
         # 1분기 PipeLine 시트는 날짜별 '개수'가 누적되어 있어 개수만큼 행을 복제하여 확장합니다.
         df_5_q1_list = []
@@ -53,7 +58,6 @@ def preprocess_and_save_data():
             def load_polestar_from_db():
                 """data.db에서 폴스타 데이터를 DataFrame으로 로드"""
                 try:
-                    conn = sqlite3.connect('data.db')
                     
                     # 파이프라인 데이터 조회
                     pipeline_query = '''
