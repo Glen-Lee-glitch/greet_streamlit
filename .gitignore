@@ -13,3 +13,5 @@ venv/
 *.gz
 # Mac
 .DS_Store
+data.db
+"data.db"  
