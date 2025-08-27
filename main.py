@@ -83,7 +83,7 @@ class DatabaseManagementApp(QMainWindow):
         
         # 테이블 위젯
         self.pipeline_table = QTableWidget()
-        self.pipeline_table.setColumnCount(2)
+        self.pipeline_table.setColumnCount(3)
         self.pipeline_table.setHorizontalHeaderLabels(['날짜', '파이프라인', '테슬라_지급'])
         
         # 8월 전체 날짜 (31일) + 합계 행 생성
@@ -560,7 +560,12 @@ class DatabaseManagementApp(QMainWindow):
         try:
             # 파이프라인 데이터 로드
             pipeline_data = self.db_manager.get_pipeline_data()
-            pipeline_dict = {row[1]: row[2] for row in pipeline_data}  # 날짜: 파이프라인
+            pipeline_dict = {}
+            for row in pipeline_data:
+                if len(row) < 3:
+                    print(f"Skipping malformed row in 파이프라인: {row}")
+                    continue
+                pipeline_dict[row[1]] = row[2]  # 날짜: 파이프라인
             
             for row in range(31):  # 합계 행 제외하고 로드
                 date_item = self.pipeline_table.item(row, 0)
@@ -576,6 +581,9 @@ class DatabaseManagementApp(QMainWindow):
             support_data = self.db_manager.get_support_data()
             support_dict = {}
             for row in support_data:
+                if len(row) < 7:
+                    print(f"Skipping malformed row in 지원신청: {row}")
+                    continue
                 support_dict[row[1]] = [row[2], row[3], row[4], row[5], row[6]]  # 날짜: [지원신청, PAK내부지원, 접수후취소, 미신청건, 보완]
             
             for row in range(31):  # 합계 행 제외하고 로드
@@ -593,6 +601,9 @@ class DatabaseManagementApp(QMainWindow):
             tesla_data = self.db_manager.get_tesla_data()
             tesla_dict = {}
             for row in tesla_data:
+                if len(row) < 5:
+                    print(f"Skipping malformed row in 테슬라_지급: {row}")
+                    continue
                 tesla_dict[row[1]] = [row[2], row[3], row[4]] # 날짜: [배분, 신청, 지급_잔여]
             
             for row in range(31): # 합계 행 제외하고 로드
@@ -608,12 +619,18 @@ class DatabaseManagementApp(QMainWindow):
 
             # 특이사항 데이터 로드
             special_data = self.db_manager.get_special_data()
-            self.special_table.setRowCount(len(special_data))
+            self.special_table.setRowCount(0) # 다시 로드하기 전에 테이블 비우기
             
-            for row, data in enumerate(special_data):
-                self.special_table.setItem(row, 0, QTableWidgetItem(data[1]))  # 날짜
-                self.special_table.setItem(row, 1, QTableWidgetItem(data[2]))  # 특이사항
-                self.special_table.setItem(row, 2, QTableWidgetItem(str(data[3])))  # 건
+            for data in special_data:
+                if len(data) < 4:
+                    print(f"Skipping malformed row in 특이사항: {data}")
+                    continue
+                
+                row_count = self.special_table.rowCount()
+                self.special_table.insertRow(row_count)
+                self.special_table.setItem(row_count, 0, QTableWidgetItem(data[1]))  # 날짜
+                self.special_table.setItem(row_count, 1, QTableWidgetItem(data[2]))  # 특이사항
+                self.special_table.setItem(row_count, 2, QTableWidgetItem(str(data[3])))  # 건
             
             print("데이터가 성공적으로 로드되었습니다.")
             

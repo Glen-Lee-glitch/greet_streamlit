@@ -11,7 +11,7 @@ class DatabaseManager:
         self.db_path = db_path
         self.connection = None
         self.connect()
-        self.create_tables()
+        self.update_schema()
     
     def connect(self):
         """데이터베이스에 연결"""
@@ -20,6 +20,56 @@ class DatabaseManager:
             print(f"데이터베이스 '{self.db_path}'에 연결되었습니다.")
         except sqlite3.Error as e:
             print(f"데이터베이스 연결 오류: {e}")
+
+    def update_schema(self):
+        """데이터베이스 스키마를 확인하고 마이그레이션합니다."""
+        if not self.connection:
+            print("데이터베이스 연결이 없습니다.")
+            return
+        
+        self.create_tables()  # 모든 테이블이 존재하는지 기본적으로 확인
+        
+        cursor = self.connection.cursor()
+        
+        try:
+            # '테슬라_지급' 테이블의 스키마 확인
+            cursor.execute("PRAGMA table_info(테슬라_지급)")
+            columns_info = cursor.fetchall()
+            columns = [info[1] for info in columns_info]
+            
+            # 'id' 컬럼이 없거나 PRIMARY KEY가 아니면 마이그레이션 필요
+            is_migration_needed = 'id' not in columns
+
+            if is_migration_needed:
+                print("'테슬라_지급' 테이블의 스키마가 올바르지 않아 마이그레이션을 시작합니다.")
+                
+                # 1. 기존 테이블 이름 변경
+                cursor.execute("ALTER TABLE 테슬라_지급 RENAME TO 테슬라_지급_old")
+                print("기존 '테슬라_지급' 테이블을 '테슬라_지급_old'로 변경했습니다.")
+                
+                # 2. 올바른 스키마로 새 테이블 생성 (create_tables 재사용)
+                self.create_tables()
+                print("새로운 '테슬라_지급' 테이블을 생성했습니다.")
+                
+                # 3. 기존 데이터 복사 (id 제외)
+                cursor.execute("""
+                    INSERT INTO 테슬라_지급 (날짜, 배분, 신청, 지급_잔여)
+                    SELECT 날짜, 배분, 신청, 지급_잔여 FROM 테슬라_지급_old
+                """)
+                print("'테슬라_지급_old'에서 새로운 '테슬라_지급'으로 데이터를 복사했습니다.")
+                
+                # 4. 기존 테이블 삭제
+                cursor.execute("DROP TABLE 테슬라_지급_old")
+                print("'테슬라_지급_old' 테이블을 삭제했습니다.")
+                
+                self.connection.commit()
+                print("스키마 마이그레이션이 완료되었습니다.")
+            else:
+                print("'테슬라_지급' 테이블 스키마가 이미 최신 버전입니다.")
+
+        except sqlite3.Error as e:
+            print(f"스키마 업데이트/마이그레이션 오류: {e}")
+            self.connection.rollback()
     
     def create_tables(self):
         """모든 테이블 생성"""

@@ -4,8 +4,60 @@ import numpy as np
 import sqlite3
 from datetime import datetime
 import json
+import subprocess
+import os
 
 conn = sqlite3.connect('data.db')
+
+def git_push_generated_files():
+    """전처리 스크립트로 생성된 데이터 파일들을 Git에 자동으로 커밋하고 푸시합니다."""
+    
+    files_to_push = ["preprocessed_data.pkl"]
+    existing_files_to_push = [f for f in files_to_push if os.path.exists(f)]
+
+    if not existing_files_to_push:
+        print("푸시할 데이터 파일이 존재하지 않습니다.")
+        return
+
+    try:
+        # 1. 변경 사항 확인
+        status_command = ["git", "status", "--porcelain"] + existing_files_to_push
+        status_result = subprocess.run(
+            status_command,
+            capture_output=True, text=True, check=True, encoding='utf-8'
+        )
+
+        # 변경 사항이 없으면 함수 종료
+        if not status_result.stdout.strip():
+            print(f"{', '.join(existing_files_to_push)} 파일에 변경 사항이 없어 Git push를 건너뜁니다.")
+            return
+
+        # 2. Git 작업 수행
+        print(f"{', '.join(existing_files_to_push)} 파일 변경 사항을 감지하여 Git에 푸시합니다.")
+        
+        # Git Pull
+        print("원격 저장소의 변경 사항을 먼저 가져옵니다 (git pull)...")
+        subprocess.run(["git", "pull"], check=True)
+        
+        # Git Add
+        add_command = ["git", "add"] + existing_files_to_push
+        subprocess.run(add_command, check=True)
+        
+        # Git Commit
+        commit_message = "docs: 데이터 파일 자동 업데이트 (preprocessed_data.pkl 등)"
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        
+        # Git Push
+        print("원격 저장소로 푸시합니다 (git push)...")
+        subprocess.run(["git", "push"], check=True)
+        
+        print("데이터 파일이 성공적으로 GitHub에 푸시되었습니다.")
+
+    except subprocess.CalledProcessError as e:
+        error_output = e.stderr or e.stdout
+        print(f"Git 작업 중 오류 발생: {e.stdout.decode('utf-8', errors='ignore')} {e.stderr.decode('utf-8', errors='ignore')}")
+    except FileNotFoundError:
+        print("Git command를 찾을 수 없습니다. Git이 설치되어 있고 PATH에 등록되어 있는지 확인하세요.")
 
 def preprocess_and_save_data():
     """
@@ -467,6 +519,9 @@ def preprocess_and_save_data():
                     print("df_tesla_ev.pkl.gz 저장(압축, 경량화) 완료")
         except Exception as e:
             print(f"개별 pkl 저장 중 오류: {e}")
+
+        # 모든 파일 저장 후 Git에 푸시
+        git_push_generated_files()
 
     except Exception as e:
         print(f"전처리 중 오류: {e}")
