@@ -201,12 +201,11 @@ def data_processing(df_source: pd.DataFrame, year: int, month: int):
     filtered_df['month'] = pd.to_numeric(extracted_data[0].str.split('/').str[0], errors='coerce')
     filtered_df['day'] = pd.to_numeric(extracted_data[0].str.split('/').str[1], errors='coerce')
     
-    # 추출된 문자열 데이터 저장
-    filtered_df['date_str'] = extracted_data[0].str.replace(r'\s', '')
     # [수정] 그룹 인덱스를 2에서 1로 변경
     filtered_df['note_content'] = extracted_data[1].str.strip().str.lstrip('-').str.strip()
 
-    filtered_df.dropna(subset=['month', 'day', 'date_str', 'note_content'], inplace=True)
+    # 월/일, 내용이 없는 데이터 제거
+    filtered_df.dropna(subset=['month', 'day', 'note_content'], inplace=True)
 
     if filtered_df.empty:
         return {}, {}
@@ -214,6 +213,9 @@ def data_processing(df_source: pd.DataFrame, year: int, month: int):
     # month와 day 컬럼을 정수형으로 변환
     filtered_df['month'] = filtered_df['month'].astype(int)
     filtered_df['day'] = filtered_df['day'].astype(int)
+    
+    # --- 날짜 형식 정규화 ('M/D' 형식으로 통일) ---
+    filtered_df['date_str'] = filtered_df.apply(lambda row: f"{row['month']}/{row['day']}", axis=1)
 
     # --- 추가된 로직: 현재 캘린더의 '월'과 일치하는 데이터만 필터링 ---
     monthly_df = filtered_df[filtered_df['month'] == month].copy()
