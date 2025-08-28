@@ -737,7 +737,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
                 '판매현황': q_sales,
                 'Pipe/판매(%)': q_ratio
             }
-        q_totals[3]['취소'] = 468
+        q_totals[3]['취소'] = 500
         # '총계' 계산
         total_all = {
             key: sum(q_totals[q][key] for q in [1,2,3]) 
