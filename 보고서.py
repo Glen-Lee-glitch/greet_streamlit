@@ -701,7 +701,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
                 apply_count = int(df_1[df_1['날짜'].dt.month == month]['개수'].sum())
                 distribute_count = int(df_2[df_2['날짜'].dt.month == month]['배분'].sum())
             elif month == 6:
-                mail_count = int(df_5[df_5['날짜'].dt.month == month].shape[0])
+                mail_count = int(df_5[(df_5['날짜'].dt.month == 6) & (df_5['날짜'].dt.date <= june_23)].shape[0])
                 apply_count = int(df_1[(df_1['날짜'].dt.month == 6) & (df_1['날짜'].dt.date <= june_23)]['개수'].sum())
                 distribute_count = int(df_2[df_2['날짜'].dt.month == month]['배분'].sum())
             elif month == 7:
@@ -875,6 +875,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
             retail_df_data['6'].extend([q2_monthly_data['6'][3]]) #, q2_monthly_data['6'][4]])
             retail_df_data['계'].extend([q2_total_sales]) #, q2_total_ratio])
         retail_df = pd.DataFrame(retail_df_data, index=retail_index)
+    
     elif period_option in ('3Q', '3분기'):
         # --- 3Q 월별 데이터 계산 (수정된 로직) ---
         q3_monthly_data = {}
@@ -929,6 +930,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
             retail_df_data['9'].extend([q3_monthly_data['9'][3]]) #, q3_monthly_data['9'][4]])
             retail_df_data['계'].extend([q3_total_sales]) #, q3_total_ratio])
         retail_df = pd.DataFrame(retail_df_data, index=retail_index)
+    
     else:
         # 기존 로직 유지 (다른 기간 선택 시)
         df5_p = filter_by_period(df_5)
