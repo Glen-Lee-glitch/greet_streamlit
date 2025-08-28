@@ -159,7 +159,6 @@ def create_mini_calendar(tooltip_data: dict = None, number_data: dict = None, ke
                         "text-align: center; font-size: 0.8em; margin: 0; cursor: help; height: 24px; line-height: 24px;"
                     )
 
-                    # --- 수정된 HTML 구조 ---
                     day_html = f"""
                         <div class='tooltip-container'>
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
@@ -237,8 +236,8 @@ def data_processing(df_source: pd.DataFrame, year: int, month: int):
         except (IndexError, ValueError):
             continue
 
-    # 5. 날짜 아래에 표시할 숫자 데이터 집계
-    daily_counts = monthly_df.groupby('day').size()
+    # 5. 날짜 아래에 표시할 숫자 데이터 집계 (고유 항목 수 기준)
+    daily_counts = monthly_df.groupby('day')['note_content'].nunique()
     number_data = daily_counts.to_dict()
 
     return number_data, tooltip_data
