@@ -13,7 +13,7 @@ def get_custom_tooltip_css():
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 48px;
+            height: 40px;
             width: 100%;
         }
 
