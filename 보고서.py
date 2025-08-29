@@ -920,7 +920,7 @@ def calculate_retail_monthly_summary(period_option, viewer_option, day0, df_1, d
             '7': ['', q3_monthly_data['7'][0], q3_monthly_data['7'][1], '', q3_monthly_data['7'][2]],
             '8': ['', q3_monthly_data['8'][0], q3_monthly_data['8'][1], '', q3_monthly_data['8'][2]],
             '9': ['', q3_monthly_data['9'][0], q3_monthly_data['9'][1], '', q3_monthly_data['9'][2]],
-            '계': ['', q3_total_mail, q3_total_apply, 468, q3_total_distribute]
+            '계': ['', q3_total_mail, q3_total_apply, 500, q3_total_distribute]
         }
         retail_index = ['타겟 (진척률)', '파이프라인', '지원신청완료', '취소', '지급신청']
         if viewer_option == '내부':
